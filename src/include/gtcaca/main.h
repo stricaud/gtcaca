@@ -3,6 +3,8 @@
 
 #include <caca.h>
 
+#include <gtcaca/utlist.h>
+
 /* gtcaca main object */
 struct _gmo_t {
   caca_canvas_t *cv;
