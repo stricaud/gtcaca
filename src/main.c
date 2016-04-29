@@ -4,6 +4,7 @@
 
 #include <gtcaca/theme.h>
 #include <gtcaca/main.h>
+#include <gtcaca/window.h>
 
 int gtcaca_init(int *argc, char ***argv)
 {

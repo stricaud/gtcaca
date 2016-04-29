@@ -4,7 +4,7 @@
 #include <caca.h>
 
 #include <gtcaca/theme.h>
-#include <gtcaca/window.h>
+#include <gtcaca/widget.h>
 #include <gtcaca/utlist.h>
 
 /* gtcaca main object */

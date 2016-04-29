@@ -3,6 +3,7 @@
 
 #include <caca.h>
 
+#include <gtcaca/window.h>
 #include <gtcaca/main.h>
 
 gtcaca_window_widget_t *gtcaca_window_new(char *window_title, int x, int y, int width, int height)

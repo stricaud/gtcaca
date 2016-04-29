@@ -17,6 +17,7 @@ set(GTCACA_LIB_SRC
   # progressbar.c
   # radiobutton.c
   # statusbar.c
+  textlist.c
   # textview.c
   theme.c
   # widget.c
