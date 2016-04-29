@@ -11,6 +11,9 @@ static long _get_file_size(char *filename)
   long size;
 
   fp = fopen(filename, "r");
+  if (!fp) {
+    return -1;
+  }
   fseek(fp, 0L, SEEK_END);
   size = ftell(fp);
   fseek(fp, 0L, SEEK_SET);
@@ -201,6 +204,7 @@ ini_t *ini_parse_file(char *filename)
   ini_t *ini;
 
   size = _get_file_size(filename);
+  if (size < 0) { return NULL; }
 
   fp = fopen(filename, "r");
   buffer = malloc(size + 1);

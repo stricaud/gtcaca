@@ -62,6 +62,7 @@ else()
 endif()
 
 pkg_check_modules(LIBCACA REQUIRED caca)
+message("libcaca link library: ${LIBCACA_LDFLAGS}")
 
 message("CMake system: ${CMAKE_SYSTEM_NAME}")
 # Mac OS Specifics
@@ -82,10 +83,10 @@ set(GTCACA_INCLUDE_DIRS "${gtcaca-project_SOURCE_DIR}/src/include/" "${gtcaca-pr
 
 set(GTCACA_LIBRARY gtcaca)
 if(WIN32)
-	set(GTCACA_LIBRARY "${gtcaca-project_BINARY_DIR}/src/lib/${CMAKE_BUILD_TYPE}/gtcaca_static.lib")
+	set(GTCACA_LIBRARY "${gtcaca-project_BINARY_DIR}/src/${CMAKE_BUILD_TYPE}/gtcaca_static.lib")
 endif(WIN32)
 if(APPLE)
-	set(GTCACA_LIBRARY "${gtcaca-project_BINARY_DIR}/src/lib/libgtcaca.dylib")
+	set(GTCACA_LIBRARY "${gtcaca-project_BINARY_DIR}/src/libgtcaca.dylib")
 endif(APPLE)
 
 # Set our env variables
