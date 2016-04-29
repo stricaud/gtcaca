@@ -4,6 +4,7 @@
 
 #include <gtcaca/theme.h>
 #include <gtcaca/main.h>
+#include <gtcaca/textlist.h>
 #include <gtcaca/window.h>
 
 int gtcaca_init(int *argc, char ***argv)
@@ -36,6 +37,7 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
     gtcaca_window_draw((gtcaca_window_widget_t *)widget);
     break;
   case GTCACA_WIDGET_TEXTLIST:
+    gtcaca_textlist_draw((gtcaca_textlist_widget_t *)widget);
     break;
   case GTCACA_WIDGET_BUTTON:
     break;
@@ -77,9 +79,6 @@ void gtcaca_redraw(void)
 
   LL_FOREACH(gmo.widgets_list, widget) {
     _gtcaca_widget_redraw(widget);
-    /* if (widget->type == GTCACA_WIDGET_WINDOW) { */
-      
-    /* gtcaca_window_draw(win); */
   }
 
   caca_refresh_display(gmo.dp);
