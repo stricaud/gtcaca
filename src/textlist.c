@@ -6,6 +6,21 @@
 #include <gtcaca/textlist.h>
 #include <gtcaca/main.h>
 
+
+/* Private functions */
+static int _gtcaca_textlist_private_key_press(gtcaca_textlist_widget_t *widget, int key, void *userdata)
+{
+  switch(key) {
+  case CACA_KEY_UP:
+    gtcaca_textlist_selection_up(widget);
+    break;
+  case CACA_KEY_DOWN:
+    gtcaca_textlist_selection_down(widget);
+    break;
+  }  
+}
+
+/* Public functions */
 gtcaca_textlist_widget_t *gtcaca_textlist_new(int x, int y)
 {
   gtcaca_textlist_widget_t *textlist;
@@ -25,15 +40,22 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(int x, int y)
   textlist->height = -1;
   textlist->type = GTCACA_WIDGET_TEXTLIST;
   textlist->children = NULL;
-
+  
   textlist->selected_item = 0;
   textlist->list_len = 0;
+  textlist->private_key_cb = _gtcaca_textlist_private_key_press;
+  textlist->key_cb = NULL;
   
   gtcaca_textlist_draw(textlist);
 
   LL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)textlist);
 
   return textlist;
+}
+
+int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_textlist_key_cb_t key_cb)
+{
+  widget->key_cb = key_cb;
 }
 
 void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item)
@@ -54,14 +76,20 @@ void gtcaca_textlist_selection_up(gtcaca_textlist_widget_t *textlist)
 
 void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist)
 {
-  if (textlist->selected_item == textlist->list_len) { return; }
-  textlist->selected_item--;
+  if (textlist->selected_item == textlist->list_len - 1) { return; }
+  textlist->selected_item++;
 }
 
+char *gtcaca_textlist_get_selected(gtcaca_textlist_widget_t *textlist)
+{
+  return textlist->list[textlist->selected_item];
+}
 
 void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
 {
   unsigned int i;
+
+  /* caca_printf(gmo.cv, textlist->x, textlist->y + 20, "selected: %d", textlist->selected_item); */
 
   for (i = 0; i < textlist->list_len; i++) {
     if (i == textlist->selected_item) {

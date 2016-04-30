@@ -26,7 +26,7 @@ gtcaca_window_widget_t *gtcaca_window_new(char *window_title, int x, int y, int 
   win->height = height;
   win->type = GTCACA_WIDGET_WINDOW;
   win->children = NULL;
-
+  
   gtcaca_window_draw(win);
 
   LL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)win);
