@@ -67,6 +67,16 @@ enum caca_color gtcaca_theme_string_to_caca_color(char *str)
   return CACA_DEFAULT;
 }
 
+void gtcaca_theme_default(void)
+{
+  gmo.theme._default.bg = CACA_BLACK;
+  gmo.theme._default.fg = CACA_WHITE;
+  gmo.theme.window.bg = CACA_BLUE;
+  gmo.theme.window.fg = CACA_YELLOW;
+  gmo.theme.text.bg = CACA_BLUE;
+  gmo.theme.text.fg = CACA_YELLOW;
+}
+
 int gtcaca_theme_parse_ini(char *theme)
 {
   char *theme_fullpath;
@@ -80,36 +90,36 @@ int gtcaca_theme_parse_ini(char *theme)
   ini = ini_parse_file(theme_fullpath);
   if (!ini) {
     fprintf(stderr, "Error, cannot open theme file %s\n", theme_fullpath);
-    free(theme_fullpath);
-    return -1;
-  }
 
-  for (count = 0; count < ini->n_items; count += 2) {
-    char *k = ini->keyvals[count];
-    char *v = ini->keyvals[count+1];   
-
-    if (!strcmp(k, "gtcaca_theme.default_bg")) {
-      gmo.theme._default.bg = gtcaca_theme_string_to_caca_color(v);
+    /* We are not stoping the machine because we cannot parse theme from a file! */
+    gtcaca_theme_default();
+  } else {
+    for (count = 0; count < ini->n_items; count += 2) {
+      char *k = ini->keyvals[count];
+      char *v = ini->keyvals[count+1];   
+      
+      if (!strcmp(k, "gtcaca_theme.default_bg")) {
+	gmo.theme._default.bg = gtcaca_theme_string_to_caca_color(v);
+      }
+      if (!strcmp(k, "gtcaca_theme.default_fg")) {
+	gmo.theme._default.fg = gtcaca_theme_string_to_caca_color(v);
+      }
+      if (!strcmp(k, "gtcaca_theme.window_bg")) {
+	gmo.theme.window.bg = gtcaca_theme_string_to_caca_color(v);
+      }
+      if (!strcmp(k, "gtcaca_theme.window_fg")) {
+	gmo.theme.window.fg = gtcaca_theme_string_to_caca_color(v);
+      }
+      if (!strcmp(k, "gtcaca_theme.text_bg")) {
+	gmo.theme.text.bg = gtcaca_theme_string_to_caca_color(v);
+      }
+      if (!strcmp(k, "gtcaca_theme.text_fg")) {
+	gmo.theme.text.fg = gtcaca_theme_string_to_caca_color(v);
+      }
     }
-    if (!strcmp(k, "gtcaca_theme.default_fg")) {
-      gmo.theme._default.fg = gtcaca_theme_string_to_caca_color(v);
-    }
-    if (!strcmp(k, "gtcaca_theme.window_bg")) {
-      gmo.theme.window.bg = gtcaca_theme_string_to_caca_color(v);
-    }
-    if (!strcmp(k, "gtcaca_theme.window_fg")) {
-      gmo.theme.window.fg = gtcaca_theme_string_to_caca_color(v);
-    }
-    if (!strcmp(k, "gtcaca_theme.text_bg")) {
-      gmo.theme.text.bg = gtcaca_theme_string_to_caca_color(v);
-    }
-    if (!strcmp(k, "gtcaca_theme.text_fg")) {
-      gmo.theme.text.fg = gtcaca_theme_string_to_caca_color(v);
-    }
-
+    ini_free(ini);
   }
   
   free(theme_fullpath);
-  ini_free(ini);
   return 0;
 }
