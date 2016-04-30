@@ -13,6 +13,7 @@ struct _gtcaca_theme_t {
   gtcaca_theme_color_t _default;
   gtcaca_theme_color_t window;
   gtcaca_theme_color_t text;
+  gtcaca_theme_color_t button;
 };
 typedef struct _gtcaca_theme_t gtcaca_theme_t;
 

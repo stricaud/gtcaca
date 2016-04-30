@@ -5,7 +5,7 @@ set(GTCACA_LIB_SRC
   main.c
   iniparse.c
   
-  # button.c
+  button.c
   # calendar.c
   # combobox.c
   # dialog.c

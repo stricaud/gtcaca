@@ -5,3 +5,5 @@ window_fg = yellow
 window_bg = blue
 text_fg = yellow
 text_bg = blue
+button_fg = black
+button_bg = red

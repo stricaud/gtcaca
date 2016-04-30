@@ -75,6 +75,8 @@ void gtcaca_theme_default(void)
   gmo.theme.window.fg = CACA_YELLOW;
   gmo.theme.text.bg = CACA_BLUE;
   gmo.theme.text.fg = CACA_YELLOW;
+  gmo.theme.button.bg = CACA_RED;
+  gmo.theme.button.fg = CACA_YELLOW;
 }
 
 int gtcaca_theme_parse_ini(char *theme)
@@ -115,6 +117,12 @@ int gtcaca_theme_parse_ini(char *theme)
       }
       if (!strcmp(k, "gtcaca_theme.text_fg")) {
 	gmo.theme.text.fg = gtcaca_theme_string_to_caca_color(v);
+      }
+      if (!strcmp(k, "gtcaca_theme.button_bg")) {
+	gmo.theme.button.bg = gtcaca_theme_string_to_caca_color(v);
+      }
+      if (!strcmp(k, "gtcaca_theme.button_fg")) {
+	gmo.theme.button.fg = gtcaca_theme_string_to_caca_color(v);
       }
     }
     ini_free(ini);

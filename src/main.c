@@ -6,6 +6,7 @@
 #include <gtcaca/main.h>
 #include <gtcaca/textlist.h>
 #include <gtcaca/window.h>
+#include <gtcaca/button.h>
 
 int gtcaca_init(int *argc, char ***argv)
 {
@@ -40,6 +41,7 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
     gtcaca_textlist_draw((gtcaca_textlist_widget_t *)widget);
     break;
   case GTCACA_WIDGET_BUTTON:
+    gtcaca_button_draw((gtcaca_button_widget_t *)widget);
     break;
   case GTCACA_WIDGET_CALENDAR:
     break;
