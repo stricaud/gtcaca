@@ -77,6 +77,8 @@ void gtcaca_theme_default(void)
   gmo.theme.text.fg = CACA_YELLOW;
   gmo.theme.button.bg = CACA_RED;
   gmo.theme.button.fg = CACA_YELLOW;
+  gmo.theme.label.bg = CACA_BLACK;
+  gmo.theme.label.fg = CACA_YELLOW;
 }
 
 int gtcaca_theme_parse_ini(char *theme)

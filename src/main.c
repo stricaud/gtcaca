@@ -7,6 +7,7 @@
 #include <gtcaca/textlist.h>
 #include <gtcaca/window.h>
 #include <gtcaca/button.h>
+#include <gtcaca/label.h>
 
 int gtcaca_init(int *argc, char ***argv)
 {
@@ -54,6 +55,7 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
   case GTCACA_WIDGET_IMAGE:
     break;
   case GTCACA_WIDGET_LABEL:
+    gtcaca_label_draw((gtcaca_label_widget_t *)widget);
     break;
   case GTCACA_WIDGET_MENU:
     break;
@@ -87,6 +89,7 @@ void gtcaca_redraw(void)
 int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
 {
   gtcaca_textlist_widget_t *textlist;
+  gtcaca_button_widget_t *button;
 
   if (!widget->has_focus) { return 0; }
   
@@ -103,6 +106,12 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
     gtcaca_redraw();
     break;
   case GTCACA_WIDGET_BUTTON:
+    button = (gtcaca_button_widget_t *)widget;
+
+    if (button->key_cb) {
+      button->key_cb(button, key, NULL);
+    }
+    gtcaca_redraw();
     break;
   case GTCACA_WIDGET_CALENDAR:
     break;

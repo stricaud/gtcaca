@@ -7,3 +7,5 @@ text_fg = yellow
 text_bg = blue
 button_fg = black
 button_bg = red
+label_fg = yellow
+label_bg = black

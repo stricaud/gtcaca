@@ -2,6 +2,7 @@
 #include <gtcaca/window.h>
 #include <gtcaca/textlist.h>
 #include <gtcaca/button.h>
+#include <gtcaca/label.h>
 
 int textlist_key_press(gtcaca_textlist_widget_t *widget, int key, void *userdata)
 {
@@ -25,7 +26,8 @@ int main(int argc, char **argv)
 {
   gtcaca_textlist_widget_t *textlist;
   gtcaca_button_widget_t *button;
-  
+  gtcaca_label_widget_t *label;
+
   gtcaca_init(&argc, &argv);
 
   gtcaca_window_new("coucou", 1, 1, 50, 20);
@@ -40,6 +42,8 @@ int main(int argc, char **argv)
   button = gtcaca_button_new("Press me", 5, 5);
   gtcaca_button_key_cb_register(button, button_key_press);
 
+  label = gtcaca_label_new("Hello", 15, 15);
+  
   gtcaca_main();
   return 0;
 }

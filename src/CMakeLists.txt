@@ -12,7 +12,7 @@ set(GTCACA_LIB_SRC
   # entry.c
   # filechooserdialog.c
   # image.c
-  # label.c
+  label.c
   # menu.c
   # progressbar.c
   # radiobutton.c
