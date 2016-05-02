@@ -6,9 +6,10 @@
 #include <gtcaca/window.h>
 #include <gtcaca/main.h>
 
-gtcaca_window_widget_t *gtcaca_window_new(char *window_title, int x, int y, int width, int height)
+gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_title, int x, int y, int width, int height)
 {
   gtcaca_window_widget_t *win;
+  gtcaca_widget_t *widget = NULL;
   int i;
 
   win = malloc(sizeof(gtcaca_window_widget_t));
@@ -25,18 +26,29 @@ gtcaca_window_widget_t *gtcaca_window_new(char *window_title, int x, int y, int 
   win->width = width;
   win->height = height;
   win->type = GTCACA_WIDGET_WINDOW;
+  win->parent = parent;
   win->children = NULL;
-  
-  gtcaca_window_draw(win);
 
+  gtcaca_window_set_focus(win);
+  
   LL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)win);
+
+  /* if (parent) { */
+  /*   LL_APPEND(parent->children, (gtcaca_widget_t *)win); */
+  /* } */
+
+  gtcaca_window_draw(win);
 
   return win;
 }
 
 void gtcaca_window_draw(gtcaca_window_widget_t *win)
 {
-  caca_set_color_ansi(gmo.cv, gmo.theme.window.fg, gmo.theme.window.bg);
+  if (win->has_focus) {
+    caca_set_color_ansi(gmo.cv, gmo.theme.windowfocus.fg, gmo.theme.windowfocus.bg);
+  } else {
+    caca_set_color_ansi(gmo.cv, gmo.theme.window.fg, gmo.theme.window.bg);
+  }
   caca_fill_box(gmo.cv, win->x, win->y, win->width, win->height, ' ');
   caca_draw_cp437_box(gmo.cv, win->x, win->y, win->width, win->height);
 
@@ -45,4 +57,17 @@ void gtcaca_window_draw(gtcaca_window_widget_t *win)
   }
 
   caca_refresh_display(gmo.dp);
+}
+
+void gtcaca_window_set_focus(gtcaca_window_widget_t *win)
+{
+  gtcaca_widget_t *widget;
+  
+  /* Disable focus of previous windows, since this one takes it */
+  LL_FOREACH(gmo.widgets_list, widget) {
+    if (widget->type == GTCACA_WIDGET_WINDOW) {
+      widget->has_focus = 0;
+    }
+  }
+  win->has_focus = 1;
 }

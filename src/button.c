@@ -7,7 +7,7 @@
 #include <gtcaca/button.h>
 #include <gtcaca/main.h>
 
-gtcaca_button_widget_t *gtcaca_button_new(char *button_label, int x, int y)
+gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_label, int x, int y)
 {
   gtcaca_button_widget_t *button;
   int i;
@@ -26,7 +26,11 @@ gtcaca_button_widget_t *gtcaca_button_new(char *button_label, int x, int y)
   button->width = strlen(button_label) + 2;
   button->height = 3;
   button->type = GTCACA_WIDGET_BUTTON;
+  button->parent = parent;
   button->children = NULL;
+  /* if (parent) { */
+  /*   LL_APPEND(parent->children, (gtcaca_widget_t *)button); */
+  /* } */
 
   button->key_cb = NULL;
 
@@ -45,8 +49,13 @@ int gtcaca_button_key_cb_register(gtcaca_button_widget_t *widget, gtcaca_button_
 void gtcaca_button_draw(gtcaca_button_widget_t *button)
 {
   int i;
-  
-  caca_set_color_ansi(gmo.cv, gmo.theme.button.fg, gmo.theme.button.bg);
+
+  if (button->has_focus) {
+    caca_set_color_ansi(gmo.cv, gmo.theme.buttonfocus.fg, gmo.theme.buttonfocus.bg);
+  } else {
+    caca_set_color_ansi(gmo.cv, gmo.theme.button.fg, gmo.theme.button.bg);
+  }
+    
   caca_fill_box(gmo.cv, button->x, button->y, button->width, button->height, ' ');
   caca_draw_cp437_box(gmo.cv, button->x, button->y, button->width, button->height);
 
@@ -61,7 +70,7 @@ void gtcaca_button_draw(gtcaca_button_widget_t *button)
   caca_put_char(gmo.cv, button->x + button->width, button->y + 2, ' ');
   caca_put_char(gmo.cv, button->x + button->width, button->y + 1, ' ');
     
-  caca_set_color_ansi(gmo.cv, gmo.theme.button.fg, gmo.theme.button.bg);
+  /* caca_set_color_ansi(gmo.cv, gmo.theme.button.fg, gmo.theme.button.bg); */
 
 
   caca_refresh_display(gmo.dp);

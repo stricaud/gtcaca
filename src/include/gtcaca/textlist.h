@@ -22,7 +22,8 @@ struct _gtcaca_textlist_widget_t {
   int y;
   int width;
   int height;
-  void *children; // Any widget can be a children
+  gtcaca_widget_t *parent;
+  gtcaca_widget_t *children; // Any widget can be a children
   struct _gtcaca_textlist_widget_t *next;
 
   /* Widget callbacks */
@@ -38,7 +39,7 @@ struct _gtcaca_textlist_widget_t {
 /*
  * Functions
  */
-gtcaca_textlist_widget_t *gtcaca_textlist_new(int x, int y);
+gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, int y);
 int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_textlist_key_cb_t key_cb);
 void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item);
 void gtcaca_textlist_selection_up(gtcaca_textlist_widget_t *textlist);

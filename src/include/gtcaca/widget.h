@@ -2,6 +2,7 @@
 #define _GTCACA_WIDGET_H_
 
 enum _gtcaca_widget_type_t {
+  GTCACA_WIDGET_APPLICATION,
   GTCACA_WIDGET_WINDOW,
   GTCACA_WIDGET_TEXTLIST,
   GTCACA_WIDGET_BUTTON,
@@ -28,7 +29,9 @@ struct _gtcaca_widget_t {
   int y;
   int width;
   int height;
-  void *children; // Any widget can be a children
+  struct _gtcaca_widget_t *parent;
+  struct _gtcaca_widget_t *children; // Any widget can be a children
+  
   struct _gtcaca_widget_t *next;
 };
 typedef struct _gtcaca_widget_t gtcaca_widget_t;

@@ -12,9 +12,11 @@ typedef struct _gtcaca_theme_color_t gtcaca_theme_color_t;
 struct _gtcaca_theme_t {
   gtcaca_theme_color_t _default;
   gtcaca_theme_color_t window;
+  gtcaca_theme_color_t windowfocus;
   gtcaca_theme_color_t text;
+  gtcaca_theme_color_t textfocus;
   gtcaca_theme_color_t button;
-  gtcaca_theme_color_t label;
+  gtcaca_theme_color_t buttonfocus;
 };
 typedef struct _gtcaca_theme_t gtcaca_theme_t;
 

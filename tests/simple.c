@@ -24,25 +24,31 @@ int button_key_press(gtcaca_button_widget_t *widget, int key, void *userdata)
 
 int main(int argc, char **argv)
 {
+  gtcaca_application_widget_t *app;
   gtcaca_textlist_widget_t *textlist;
   gtcaca_button_widget_t *button;
   gtcaca_label_widget_t *label;
 
   gtcaca_init(&argc, &argv);
 
-  gtcaca_window_new("coucou", 1, 1, 50, 20);
+  app = gtcaca_application_new("The simple test");
+  
+  gtcaca_window_new((gtcaca_widget_t *)app, "coucou", app->x, app->y, app->width/2, app->height);
+  gtcaca_window_new((gtcaca_widget_t *)app, "I steal the focus", app->x + app->width/2, app->y, app->width/2, app->height);
 
-  textlist = gtcaca_textlist_new(2, 2);
-  gtcaca_textlist_append(textlist, "myfirst");
-  gtcaca_textlist_append(textlist, "mysecond");
-  gtcaca_textlist_append(textlist, "mythird");
+  /* label = gtcaca_label_new(NULL, "Hello", 15, 15); */
+  
+  /* textlist = gtcaca_textlist_new(2, 2); */
+  /* gtcaca_textlist_append(textlist, "myfirst"); */
+  /* gtcaca_textlist_append(textlist, "mysecond"); */
+  /* gtcaca_textlist_append(textlist, "mythird"); */
 
-  gtcaca_textlist_key_cb_register(textlist, textlist_key_press);
+  /* gtcaca_textlist_key_cb_register(textlist, textlist_key_press); */
 
-  button = gtcaca_button_new("Press me", 5, 5);
-  gtcaca_button_key_cb_register(button, button_key_press);
+  /* button = gtcaca_button_new("Press me", 5, 5); */
+  /* gtcaca_button_key_cb_register(button, button_key_press); */
 
-  label = gtcaca_label_new("Hello", 15, 15);
+  /* label = gtcaca_label_new("Hello", 15, 15); */
   
   gtcaca_main();
   return 0;

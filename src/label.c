@@ -7,7 +7,7 @@
 #include <gtcaca/label.h>
 #include <gtcaca/main.h>
 
-gtcaca_label_widget_t *gtcaca_label_new(char *text, int x, int y)
+gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int x, int y)
 {
   gtcaca_label_widget_t *label;
   int i;
@@ -26,7 +26,11 @@ gtcaca_label_widget_t *gtcaca_label_new(char *text, int x, int y)
   label->width = strlen(text);
   label->height = 1;
   label->type = GTCACA_WIDGET_LABEL;
+  label->parent = parent;
   label->children = NULL;
+  /* if (parent) { */
+  /*   LL_APPEND(parent->children, (gtcaca_widget_t *)label); */
+  /* } */
 
   gtcaca_label_draw(label);
 
@@ -39,8 +43,9 @@ gtcaca_label_widget_t *gtcaca_label_new(char *text, int x, int y)
 void gtcaca_label_draw(gtcaca_label_widget_t *label)
 {
   int i;
-  
-  caca_set_color_ansi(gmo.cv, gmo.theme.label.fg, gmo.theme.label.bg);
+
+  /* Can never have focus*/
+  caca_set_color_ansi(gmo.cv, gmo.theme.text.fg, gmo.theme.text.bg);
   caca_printf(gmo.cv, label->x + 1, label->y, "%s", label->label);
 
   caca_refresh_display(gmo.dp);

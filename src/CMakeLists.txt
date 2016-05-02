@@ -4,7 +4,8 @@ include_directories(AFTER ${LIBCACA_INCLUDE_DIRS})
 set(GTCACA_LIB_SRC
   main.c
   iniparse.c
-  
+
+  application.c
   button.c
   # calendar.c
   # combobox.c

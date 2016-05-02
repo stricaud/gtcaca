@@ -14,7 +14,8 @@ struct _gtcaca_label_widget_t {
   int y;
   int width;
   int height;
-  void *children; // Any widget can be a children
+  gtcaca_widget_t *parent;
+  gtcaca_widget_t *children; // Any widget can be a children
   struct _gtcaca_label_widget_t *next;
   
   /* Now starts custom widget properties */
@@ -22,7 +23,7 @@ struct _gtcaca_label_widget_t {
 };
 typedef struct _gtcaca_label_widget_t gtcaca_label_widget_t;
 
-gtcaca_label_widget_t *gtcaca_label_new(char *text, int x, int y);
+gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int x, int y);
 void gtcaca_label_draw(gtcaca_label_widget_t *label);
 
 #endif // _GTCACA_LABEL_H_

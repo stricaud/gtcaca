@@ -8,6 +8,7 @@
 #include <gtcaca/window.h>
 #include <gtcaca/button.h>
 #include <gtcaca/label.h>
+#include <gtcaca/application.h>
 
 int gtcaca_init(int *argc, char ***argv)
 {
@@ -35,6 +36,9 @@ int gtcaca_init(int *argc, char ***argv)
 void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
 {
   switch (widget->type) {
+  case GTCACA_WIDGET_APPLICATION:
+    gtcaca_application_draw((gtcaca_application_widget_t *)widget);
+    break;
   case GTCACA_WIDGET_WINDOW:
     gtcaca_window_draw((gtcaca_window_widget_t *)widget);
     break;
@@ -90,10 +94,16 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
 {
   gtcaca_textlist_widget_t *textlist;
   gtcaca_button_widget_t *button;
-
-  if (!widget->has_focus) { return 0; }
+  gtcaca_application_widget_t *application;
   
+  if (!widget->has_focus) { return 0; }
+
   switch (widget->type) {
+  case GTCACA_WIDGET_APPLICATION:
+    application = (gtcaca_application_widget_t *)widget;
+    application->private_key_cb(application, key, NULL);
+    gtcaca_redraw();
+    break;
   case GTCACA_WIDGET_WINDOW:    
     break;
   case GTCACA_WIDGET_TEXTLIST:
@@ -137,9 +147,9 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
     break;
   }
 
-  if (widget->children) {
-    _gtcaca_widget_handle_key_press((gtcaca_widget_t *)widget->children, key);
-  }
+  /* if (widget->children) { */
+  /*   _gtcaca_widget_handle_key_press((gtcaca_widget_t *)widget->children, key); */
+  /* } */
 
 }
 
@@ -160,7 +170,7 @@ void gtcaca_main(void)
 {
   int quit = 0;
   int key;
-  
+
     while (!quit) {
     caca_event_t ev;
     

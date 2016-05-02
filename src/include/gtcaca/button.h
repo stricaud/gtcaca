@@ -21,7 +21,8 @@ struct _gtcaca_button_widget_t {
   int y;
   int width;
   int height;
-  void *children; // Any widget can be a children
+  gtcaca_widget_t *parent;
+  gtcaca_widget_t *children; // Any widget can be a children
   struct _gtcaca_button_widget_t *next;
 
   /* Widget callbacks */
@@ -32,7 +33,7 @@ struct _gtcaca_button_widget_t {
 };
 typedef struct _gtcaca_button_widget_t gtcaca_button_widget_t;
 
-gtcaca_button_widget_t *gtcaca_button_new(char *button_label, int x, int y);
+gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_label, int x, int y);
 int gtcaca_button_key_cb_register(gtcaca_button_widget_t *widget, gtcaca_button_key_cb_t key_cb);
 void gtcaca_button_draw(gtcaca_button_widget_t *button);
 

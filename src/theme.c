@@ -71,14 +71,21 @@ void gtcaca_theme_default(void)
 {
   gmo.theme._default.bg = CACA_BLACK;
   gmo.theme._default.fg = CACA_WHITE;
-  gmo.theme.window.bg = CACA_BLUE;
+
+  gmo.theme.windowfocus.bg = CACA_BLUE;
+  gmo.theme.windowfocus.fg = CACA_YELLOW;
+  gmo.theme.window.bg = CACA_LIGHTBLUE;
   gmo.theme.window.fg = CACA_YELLOW;
+  
+  gmo.theme.textfocus.bg = CACA_YELLOW;
+  gmo.theme.textfocus.fg = CACA_BLUE;
   gmo.theme.text.bg = CACA_BLUE;
   gmo.theme.text.fg = CACA_YELLOW;
-  gmo.theme.button.bg = CACA_RED;
+
+  gmo.theme.buttonfocus.bg = CACA_RED;
+  gmo.theme.buttonfocus.fg = CACA_YELLOW;
+  gmo.theme.button.bg = CACA_LIGHTRED;
   gmo.theme.button.fg = CACA_YELLOW;
-  gmo.theme.label.bg = CACA_BLACK;
-  gmo.theme.label.fg = CACA_YELLOW;
 }
 
 int gtcaca_theme_parse_ini(char *theme)

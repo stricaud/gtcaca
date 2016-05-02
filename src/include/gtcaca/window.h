@@ -14,7 +14,8 @@ struct _gtcaca_window_widget_t {
   int y;
   int width;
   int height;
-  void *children; // Any widget can be a children
+  gtcaca_widget_t *parent;
+  gtcaca_widget_t *children; // Any widget can be a children
   struct _gtcaca_window_widget_t *next;
 
   /* Now starts custom widget properties */
@@ -22,7 +23,8 @@ struct _gtcaca_window_widget_t {
 };
 typedef struct _gtcaca_window_widget_t gtcaca_window_widget_t;
 
-gtcaca_window_widget_t *gtcaca_window_new(char *window_title, int x, int y, int width, int height);
+gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_title, int x, int y, int width, int height);
 void gtcaca_window_draw(gtcaca_window_widget_t *win);
+void gtcaca_window_set_focus(gtcaca_window_widget_t *win);
 
 #endif // _GTCACA_WINDOW_H_

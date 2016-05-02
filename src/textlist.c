@@ -21,7 +21,7 @@ static int _gtcaca_textlist_private_key_press(gtcaca_textlist_widget_t *widget, 
 }
 
 /* Public functions */
-gtcaca_textlist_widget_t *gtcaca_textlist_new(int x, int y)
+gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, int y)
 {
   gtcaca_textlist_widget_t *textlist;
   int i;
@@ -39,8 +39,12 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(int x, int y)
   textlist->width = -1;
   textlist->height = -1;
   textlist->type = GTCACA_WIDGET_TEXTLIST;
+  textlist->parent = parent;
   textlist->children = NULL;
-  
+  /* if (parent) { */
+  /*   LL_APPEND(parent->children, (gtcaca_widget_t *)textlist); */
+  /* } */
+
   textlist->selected_item = 0;
   textlist->list_len = 0;
   textlist->private_key_cb = _gtcaca_textlist_private_key_press;
@@ -93,7 +97,7 @@ void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
 
   for (i = 0; i < textlist->list_len; i++) {
     if (i == textlist->selected_item) {
-      caca_set_color_ansi(gmo.cv, gmo.theme.text.bg, gmo.theme.text.fg);
+      caca_set_color_ansi(gmo.cv, gmo.theme.textfocus.fg, gmo.theme.textfocus.bg);
     } else {
       caca_set_color_ansi(gmo.cv, gmo.theme.text.fg, gmo.theme.text.bg);
     }

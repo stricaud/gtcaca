@@ -3,6 +3,7 @@
 
 #include <caca.h>
 
+#include <gtcaca/application.h>
 #include <gtcaca/theme.h>
 #include <gtcaca/widget.h>
 #include <gtcaca/utlist.h>
@@ -17,8 +18,8 @@ struct _gmo_t {
   gtcaca_widget_t *widgets_list;
 };
 typedef struct _gmo_t gmo_t;
-gmo_t gmo;
 
+gmo_t gmo;
 
 int gtcaca_init(int *argc, char ***argv);
 void gtcaca_main(void);
