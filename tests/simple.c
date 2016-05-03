@@ -25,6 +25,7 @@ int button_key_press(gtcaca_button_widget_t *widget, int key, void *userdata)
 int main(int argc, char **argv)
 {
   gtcaca_application_widget_t *app;
+  gtcaca_window_widget_t *win;
   gtcaca_textlist_widget_t *textlist;
   gtcaca_button_widget_t *button;
   gtcaca_label_widget_t *label;
@@ -34,7 +35,7 @@ int main(int argc, char **argv)
   app = gtcaca_application_new("The simple test");
   
   gtcaca_window_new((gtcaca_widget_t *)app, "coucou", app->x, app->y, app->width/2, app->height);
-  gtcaca_window_new((gtcaca_widget_t *)app, "I steal the focus", app->x + app->width/2, app->y, app->width/2, app->height);
+  win = gtcaca_window_new((gtcaca_widget_t *)app, "I steal the focus", app->x + app->width/2, app->y, app->width/2, app->height);
 
   /* label = gtcaca_label_new(NULL, "Hello", 15, 15); */
   
@@ -45,8 +46,8 @@ int main(int argc, char **argv)
 
   /* gtcaca_textlist_key_cb_register(textlist, textlist_key_press); */
 
-  /* button = gtcaca_button_new("Press me", 5, 5); */
-  /* gtcaca_button_key_cb_register(button, button_key_press); */
+  button = gtcaca_button_new((gtcaca_widget_t *)win, "Press me", 5, 5);
+  gtcaca_button_key_cb_register(button, button_key_press);
 
   /* label = gtcaca_label_new("Hello", 15, 15); */
   

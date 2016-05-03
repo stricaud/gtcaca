@@ -16,6 +16,7 @@ struct _gtcaca_label_widget_t {
   int height;
   gtcaca_widget_t *parent;
   gtcaca_widget_t *children; // Any widget can be a children
+  struct _gtcaca_application_widget_t *prev;
   struct _gtcaca_label_widget_t *next;
   
   /* Now starts custom widget properties */

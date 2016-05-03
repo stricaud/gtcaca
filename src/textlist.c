@@ -42,7 +42,7 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   textlist->parent = parent;
   textlist->children = NULL;
   /* if (parent) { */
-  /*   LL_APPEND(parent->children, (gtcaca_widget_t *)textlist); */
+  /*   CDL_APPEND(parent->children, (gtcaca_widget_t *)textlist); */
   /* } */
 
   textlist->selected_item = 0;
@@ -52,7 +52,7 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   
   gtcaca_textlist_draw(textlist);
 
-  LL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)textlist);
+  CDL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)textlist);
 
   return textlist;
 }

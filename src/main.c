@@ -83,8 +83,10 @@ void gtcaca_redraw(void)
 {
   gtcaca_widget_t *widget = NULL;
 
-  LL_FOREACH(gmo.widgets_list, widget) {
-    _gtcaca_widget_redraw(widget);
+  CDL_FOREACH(gmo.widgets_list, widget) {
+    if (widget->is_visible) {
+      _gtcaca_widget_redraw(widget);
+    }
   }
 
   caca_refresh_display(gmo.dp);
@@ -117,6 +119,7 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
     break;
   case GTCACA_WIDGET_BUTTON:
     button = (gtcaca_button_widget_t *)widget;
+    button->private_key_cb(button, key, NULL);
 
     if (button->key_cb) {
       button->key_cb(button, key, NULL);
@@ -158,7 +161,7 @@ int gtcaca_widgets_handle_key_press(int key)
 {
   gtcaca_widget_t *widget = NULL;
 
-  LL_FOREACH(gmo.widgets_list, widget) {
+  CDL_FOREACH(gmo.widgets_list, widget) {
     _gtcaca_widget_handle_key_press(widget, key);
   }
 

@@ -23,9 +23,11 @@ struct _gtcaca_button_widget_t {
   int height;
   gtcaca_widget_t *parent;
   gtcaca_widget_t *children; // Any widget can be a children
+  struct _gtcaca_application_widget_t *prev;
   struct _gtcaca_button_widget_t *next;
 
   /* Widget callbacks */
+  gtcaca_button_key_cb_t private_key_cb;
   gtcaca_button_key_cb_t key_cb;
   
   /* Now starts custom widget properties */
@@ -35,6 +37,7 @@ typedef struct _gtcaca_button_widget_t gtcaca_button_widget_t;
 
 gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_label, int x, int y);
 int gtcaca_button_key_cb_register(gtcaca_button_widget_t *widget, gtcaca_button_key_cb_t key_cb);
+void gtcaca_button_draw_press_noshade(gtcaca_button_widget_t *button);
 void gtcaca_button_draw(gtcaca_button_widget_t *button);
 
 #endif // _GTCACA_BUTTON_H_

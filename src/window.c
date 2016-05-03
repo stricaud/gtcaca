@@ -31,10 +31,10 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
 
   gtcaca_window_set_focus(win);
   
-  LL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)win);
+  CDL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)win);
 
   /* if (parent) { */
-  /*   LL_APPEND(parent->children, (gtcaca_widget_t *)win); */
+  /*   CDL_APPEND(parent->children, (gtcaca_widget_t *)win); */
   /* } */
 
   gtcaca_window_draw(win);
@@ -64,7 +64,7 @@ void gtcaca_window_set_focus(gtcaca_window_widget_t *win)
   gtcaca_widget_t *widget;
   
   /* Disable focus of previous windows, since this one takes it */
-  LL_FOREACH(gmo.widgets_list, widget) {
+  CDL_FOREACH(gmo.widgets_list, widget) {
     if (widget->type == GTCACA_WIDGET_WINDOW) {
       widget->has_focus = 0;
     }

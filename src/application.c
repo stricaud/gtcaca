@@ -19,38 +19,16 @@ static int _gtcaca_application_private_key_press(gtcaca_application_widget_t *ap
 
   switch(key) {
   case CACA_KEY_TAB:
-    /* First search the current selected window */
-    LL_FOREACH(gmo.widgets_list, widget) {
+
+    CDL_FOREACH(gmo.widgets_list, widget) {
       if (widget->type == GTCACA_WIDGET_WINDOW) {
-    	if (widget->has_focus) {
-    	  break;
+    	if (!widget->has_focus) {
+      	  gtcaca_window_set_focus((gtcaca_window_widget_t *)widget);
+	  break;
     	}
       }
-      widget_count++;
     }
 
-    /* Step 2: select the following window */
-    /* LL_FOREACH(gmo.widgets_list, widget) { */
-    /*   if (widget_count > counter) { */
-    /*   	if (widget->type == GTCACA_WIDGET_WINDOW) { */
-    /*   	  gtcaca_window_set_focus((gtcaca_window_widget_t *)widget); */
-    /* 	  return 0; */
-    /*   	} */
-    /*   } */
-    /*   counter++; */
-    /* } */
-
-    /* Step 3: there was no following window. We select the first one */
-    if (!found_window) {
-    LL_FOREACH(gmo.widgets_list, widget) {
-	if (widget->type == GTCACA_WIDGET_WINDOW) {
-	  gtcaca_window_set_focus((gtcaca_window_widget_t *)widget);
-	  break;
-	}
-    }
-      
-    }
-    
     break; // case CACA_KEY_TAB:
   } // switch(key) {
 
@@ -62,7 +40,7 @@ int gtcaca_application_exists(void)
   gtcaca_widget_t *widget = NULL;
   int exists = 0;
   
-  LL_FOREACH(gmo.widgets_list, widget) {
+  CDL_FOREACH(gmo.widgets_list, widget) {
     if (widget->type == GTCACA_WIDGET_APPLICATION) {
       exists = 1;
       break;
@@ -99,7 +77,7 @@ gtcaca_application_widget_t *gtcaca_application_new(char *application_title)
 
   caca_set_display_title(gmo.dp, application_title);
   /* gtcaca_application_draw(application); */
-  LL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)application);
+  CDL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)application);
 
   return application;
 

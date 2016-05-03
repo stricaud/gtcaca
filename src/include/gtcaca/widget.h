@@ -32,6 +32,7 @@ struct _gtcaca_widget_t {
   struct _gtcaca_widget_t *parent;
   struct _gtcaca_widget_t *children; // Any widget can be a children
   
+  struct _gtcaca_widget_t *prev;
   struct _gtcaca_widget_t *next;
 };
 typedef struct _gtcaca_widget_t gtcaca_widget_t;

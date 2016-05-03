@@ -18,23 +18,23 @@ gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int
     return NULL;
   }
 
-  label->has_focus = 1;
+  label->has_focus = 0;
   label->is_visible = 1;
   label->label = text;
-  label->x = x;
-  label->y = y;
+  label->x = parent ? parent->x + x : x;
+  label->y = parent ? parent->y + y : y;
   label->width = strlen(text);
   label->height = 1;
   label->type = GTCACA_WIDGET_LABEL;
   label->parent = parent;
   label->children = NULL;
   /* if (parent) { */
-  /*   LL_APPEND(parent->children, (gtcaca_widget_t *)label); */
+  /*   CDL_APPEND(parent->children, (gtcaca_widget_t *)label); */
   /* } */
 
   gtcaca_label_draw(label);
 
-  LL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)label);
+  CDL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)label);
 
   return label;
 }
