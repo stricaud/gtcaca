@@ -1,5 +1,5 @@
-include_directories(AFTER "include/" ${GTCACA_INCLUDE_DIRS})
 include_directories(AFTER ${LIBCACA_INCLUDE_DIRS})
+include_directories(AFTER "include/" ${GTCACA_INCLUDE_DIRS})
 
 set(GTCACA_LIB_SRC
   main.c
@@ -26,7 +26,7 @@ set(GTCACA_LIB_SRC
 )
 
 set(GTCACA_LINK_LIBRARIES
-  ${LIBCACA_LIBRARIES}
+  ${LIBCACA_LDFLAGS}
 )
 
 add_library(gtcaca SHARED ${GTCACA_LIB_SRC})
