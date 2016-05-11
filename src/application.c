@@ -6,6 +6,7 @@
 #include <gtcaca/application.h>
 #include <gtcaca/main.h>
 #include <gtcaca/label.h>
+#include <gtcaca/log.h>
 #include <gtcaca/window.h>
 
 /* Private functions */
@@ -13,23 +14,34 @@ static int _gtcaca_application_private_key_press(gtcaca_application_widget_t *ap
 {
   gtcaca_widget_t *widget;
   gtcaca_window_widget_t *window;
+  gtcaca_window_widget_t *newwindow;
   int found_window = 0;
   int widget_count = 0;
   int counter = 0;
 
   switch(key) {
-  case CACA_KEY_TAB:
-
-    CDL_FOREACH(gmo.widgets_list, widget) {
-      if (widget->type == GTCACA_WIDGET_WINDOW) {
-    	if (!widget->has_focus) {
-      	  gtcaca_window_set_focus((gtcaca_window_widget_t *)widget);
+  case CACA_KEY_CTRL_N:
+    window = gtcaca_window_get_current_focus();
+    if (window) {
+      while(window = (gtcaca_window_widget_t *)window->next) {
+	if (window->type == GTCACA_WIDGET_WINDOW) {
+	  gtcaca_window_set_focus(window);
 	  break;
-    	}
+	}
       }
     }
-
-    break; // case CACA_KEY_TAB:
+    break; // case CACA_KEY_CTRL_N:
+  case CACA_KEY_CTRL_P:
+    window = gtcaca_window_get_current_focus();
+    if (window) {
+      while(window = (gtcaca_window_widget_t *)window->prev) {
+	if (window->type == GTCACA_WIDGET_WINDOW) {
+	  gtcaca_window_set_focus(window);
+	  break;
+	}
+      }
+    }
+    break; // case CACA_KEY_CTRL_P:
   } // switch(key) {
 
   return 0;
@@ -62,6 +74,7 @@ gtcaca_application_widget_t *gtcaca_application_new(char *application_title)
     return NULL;
   }
 
+  application->id = gtcaca_get_newid();
   application->has_focus = 1;
   application->is_visible = 1;
   application->application_title = application_title;

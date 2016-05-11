@@ -8,6 +8,7 @@ struct _gtcaca_window_widget_t {
 
   /* Properties shared accross all widgets */
   gtcaca_widget_type_t type;
+  unsigned int id;
   int has_focus;
   int is_visible;
   int x;
@@ -27,5 +28,7 @@ typedef struct _gtcaca_window_widget_t gtcaca_window_widget_t;
 gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_title, int x, int y, int width, int height);
 void gtcaca_window_draw(gtcaca_window_widget_t *win);
 void gtcaca_window_set_focus(gtcaca_window_widget_t *win);
+gtcaca_window_widget_t *gtcaca_window_get_current_focus(void);
+gtcaca_window_widget_t *gtcaca_window_get_next(gtcaca_window_widget_t *win);
 
 #endif // _GTCACA_WINDOW_H_

@@ -32,6 +32,7 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
     return NULL;
   }
 
+  textlist->id = gtcaca_get_newid();
   textlist->has_focus = 1;
   textlist->is_visible = 1;
   textlist->x = x;

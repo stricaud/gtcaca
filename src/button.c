@@ -30,6 +30,7 @@ gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_
     return NULL;
   }
 
+  button->id = gtcaca_get_newid();
   button->has_focus = 1;
   button->is_visible = 1;
   button->button_label = button_label;

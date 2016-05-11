@@ -4,6 +4,7 @@ include_directories(AFTER "include/" ${GTCACA_INCLUDE_DIRS})
 set(GTCACA_LIB_SRC
   main.c
   iniparse.c
+  log.c
 
   application.c
   button.c
@@ -21,7 +22,7 @@ set(GTCACA_LIB_SRC
   textlist.c
   # textview.c
   theme.c
-  # widget.c
+  widget.c
   window.c
 )
 

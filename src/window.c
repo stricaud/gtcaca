@@ -18,6 +18,7 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
     return NULL;
   }
 
+  win->id = gtcaca_get_newid();
   win->has_focus = 1;
   win->is_visible = 1;
   win->window_title = window_title;
@@ -62,12 +63,45 @@ void gtcaca_window_draw(gtcaca_window_widget_t *win)
 void gtcaca_window_set_focus(gtcaca_window_widget_t *win)
 {
   gtcaca_widget_t *widget;
-  
+
   /* Disable focus of previous windows, since this one takes it */
   CDL_FOREACH(gmo.widgets_list, widget) {
     if (widget->type == GTCACA_WIDGET_WINDOW) {
+      /* gtcaca_log_write("In the widget loop\n"); */
       widget->has_focus = 0;
     }
   }
+
+  /* gtcaca_log_write("win title:%s\n", win->window_title); */
   win->has_focus = 1;
+}
+
+gtcaca_window_widget_t *gtcaca_window_get_current_focus(void)
+{
+  gtcaca_widget_t *widget;
+
+  CDL_FOREACH(gmo.widgets_list, widget) {
+    if (widget->type == GTCACA_WIDGET_WINDOW) {
+      if (widget->has_focus) { return (gtcaca_window_widget_t *)widget; }
+    }
+  }
+
+  return NULL;
+}
+
+gtcaca_window_widget_t *gtcaca_window_get_next(gtcaca_window_widget_t *win)
+{
+  gtcaca_widget_t *widget;
+
+  CDL_FOREACH(gmo.widgets_list, widget) {
+    if (widget->type == GTCACA_WIDGET_WINDOW) {
+      /* if (widget == (gtcaca_widget_t *)win) { */
+      /* if (widget == (gtcaca_widget_t *)win) { */
+	gtcaca_log_write("next title:%s\n", win->next->window_title);
+	return win->next;
+      /* } */
+    }
+  }
+
+  return NULL;
 }

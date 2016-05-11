@@ -15,6 +15,7 @@ struct _gtcaca_button_widget_t {
 
   /* Properties shared accross all widgets */
   gtcaca_widget_type_t type;
+  unsigned int id;
   int has_focus;
   int is_visible;
   int x;

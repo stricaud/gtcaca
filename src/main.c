@@ -27,6 +27,8 @@ int gtcaca_init(int *argc, char ***argv)
   }
 
   gmo.cv = caca_get_canvas(gmo.dp);
+  gmo.log = gtcaca_log_init();
+  gmo.id = 0;
 
   gmo.widgets_list = NULL;
   
@@ -174,7 +176,9 @@ void gtcaca_main(void)
   int quit = 0;
   int key;
 
-    while (!quit) {
+  gtcaca_redraw();
+
+  while (!quit) {
     caca_event_t ev;
     
     while(caca_get_event(gmo.dp, CACA_EVENT_ANY, &ev, 0)) {
@@ -206,3 +210,7 @@ void gtcaca_main(void)
 
 }
 
+unsigned int gtcaca_get_newid(void)
+{
+  return ++gmo.id;
+}

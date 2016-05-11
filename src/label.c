@@ -18,6 +18,7 @@ gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int
     return NULL;
   }
 
+  label->id = gtcaca_get_newid();
   label->has_focus = 0;
   label->is_visible = 1;
   label->label = text;

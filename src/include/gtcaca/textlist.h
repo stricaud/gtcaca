@@ -16,6 +16,7 @@ typedef int (*gtcaca_textlist_key_cb_t)(gtcaca_textlist_widget_t *widget, int ke
 struct _gtcaca_textlist_widget_t {
   /* Properties shared accross all widgets */
   gtcaca_widget_type_t type;
+  unsigned int id;
   int has_focus;
   int is_visible;
   int x;

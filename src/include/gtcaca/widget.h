@@ -23,6 +23,7 @@ typedef enum _gtcaca_widget_type_t gtcaca_widget_type_t;
 /* This MUST be consistent with the preamble of every widget */
 struct _gtcaca_widget_t {
   gtcaca_widget_type_t type;
+  unsigned int id;
   int has_focus;
   int is_visible;
   int x;
@@ -36,5 +37,7 @@ struct _gtcaca_widget_t {
   struct _gtcaca_widget_t *next;
 };
 typedef struct _gtcaca_widget_t gtcaca_widget_t;
+
+void gtcaca_widget_debug(gtcaca_widget_t *widget);
 
 #endif // _GTCACA_WIDGET_H_
