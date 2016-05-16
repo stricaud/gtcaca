@@ -64,6 +64,28 @@ Which will make this:
 
 When the user pressed the RETURN key, we printed the value of the selection.
 
+## Widgets
+
+### Application
+
+This is a special widget, describing your application to which you can attach the other widgets.
+
+### Text List
+
+Choose-able list
+
+### Button
+
+Button
+
+### Label
+
+Label
+
+### Window
+
+A Window.
+
 
 # License
 
