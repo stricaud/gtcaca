@@ -11,3 +11,7 @@ set(GTCACA_LINK_LIBRARIES
 add_executable(simple simple.c)
 target_link_libraries(simple ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(Simple simple)
+
+add_executable(textlist textlist.c)
+target_link_libraries(textlist ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+add_test(Textlist textlist)

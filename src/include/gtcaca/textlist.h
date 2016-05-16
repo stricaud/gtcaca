@@ -4,7 +4,9 @@
 #include <gtcaca/main.h>
 #include <gtcaca/widget.h>
 
-#define GTCACA_TEXTLIST_MAX 255
+#include <gtcaca/utarray.h>
+
+#define GTCACA_TEXTLIST_MAX 1024
 
 typedef struct _gtcaca_textlist_widget_t gtcaca_textlist_widget_t;
 
@@ -34,8 +36,11 @@ struct _gtcaca_textlist_widget_t {
 
   /* Now starts custom widget properties */
   unsigned int selected_item;
-  char *list[GTCACA_TEXTLIST_MAX];
-  unsigned int list_len;
+  UT_array *list;
+  
+  // When we show less than what the widget has
+  unsigned int view_size;
+  unsigned int view_pos;
 };
 
 /*
