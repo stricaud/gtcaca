@@ -40,13 +40,13 @@ struct _gtcaca_textlist_widget_t {
   
   // When we show less than what the widget has
   unsigned int view_size;
-  unsigned int view_pos;
 };
 
 /*
  * Functions
  */
 gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, int y);
+void gtcaca_textlist_widget_set_view_size(gtcaca_textlist_widget_t *widget, unsigned int view_size);
 int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_textlist_key_cb_t key_cb);
 void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item);
 void gtcaca_textlist_selection_up(gtcaca_textlist_widget_t *textlist);

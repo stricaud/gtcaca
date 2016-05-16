@@ -193,12 +193,6 @@ void gtcaca_main(void)
 	default:
 	  gtcaca_widgets_handle_key_press(key);
 	  break;
-	  /* case CACA_KEY_RETURN: */
-	/*   break; */
-	/* case CACA_KEY_UP: */
-	/*   break; */
-	/* case CACA_KEY_DOWN: */
-	/*   break; */
 	}
       }
       

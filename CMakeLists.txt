@@ -76,7 +76,7 @@ endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   add_definitions(-DLINUX=1)
-  set(GTCACA_LINK_LIBRARIES pthread)
+  set(GTCACA_LINK_LIBRARIES pthread m)
 endif()
 
 set(GTCACA_INCLUDE_DIRS "${gtcaca-project_SOURCE_DIR}/src/include/" "${gtcaca-project_BINARY_DIR}/src/include")
