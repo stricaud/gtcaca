@@ -38,10 +38,9 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   textlist->id = gtcaca_get_newid();
   textlist->has_focus = 1;
   textlist->is_visible = 1;
-  textlist->x = x;
-  textlist->y = y;
-  textlist->width = 0;
-  textlist->height = 0;
+
+  gtcaca_widget_position_size_parent(parent, (gtcaca_widget_t *)textlist, x, y);
+
   textlist->type = GTCACA_WIDGET_TEXTLIST;
   textlist->parent = parent;
   textlist->children = NULL;
@@ -55,7 +54,7 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
 
   utarray_new(textlist->list, &ut_str_icd);
 
-  textlist->view_size = 10;	/* Defaults to viewing 10 elements */
+  textlist->view_size = textlist->height - 2;
   textlist->height = textlist->view_size;
   
   gtcaca_textlist_draw(textlist);

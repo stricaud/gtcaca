@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 
 #include <caca.h>
 
@@ -173,14 +174,13 @@ int gtcaca_widgets_handle_key_press(int key)
 
 void gtcaca_main(void)
 {
+  caca_event_t ev;
   int quit = 0;
   int key;
 
   gtcaca_redraw();
 
-  while (!quit) {
-    caca_event_t ev;
-    
+  while (!quit) {  
     while(caca_get_event(gmo.dp, CACA_EVENT_ANY, &ev, 0)) {
       if (caca_get_event_type(&ev) & CACA_EVENT_KEY_PRESS) {
 	key = caca_get_event_key_ch(&ev);
@@ -198,6 +198,7 @@ void gtcaca_main(void)
       
       gtcaca_redraw();
     }
+    //    sleep(0.2);
   }
   
   caca_free_display(gmo.dp);

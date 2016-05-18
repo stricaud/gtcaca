@@ -59,3 +59,18 @@ void gtcaca_widget_debug(gtcaca_widget_t *widget)
   }
   gtcaca_log_write(".\n");
 }
+
+void gtcaca_widget_position_size_parent(gtcaca_widget_t *parent, gtcaca_widget_t *widget, int x, int y)
+{
+  if (parent) {
+    widget->x = parent->x + x;
+    widget->y = parent->y + y;
+    widget->width = parent->width - 3; // 3 = for borders
+    widget->height = parent->height - 3;
+  } else {
+    widget->x = x;
+    widget->y = y;
+    widget->width = 0;
+    widget->height = 0;
+  }
+}
