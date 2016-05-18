@@ -34,10 +34,12 @@ gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_
   button->has_focus = 1;
   button->is_visible = 1;
   button->button_label = button_label;
-  button->x = parent ? parent->x + x : x;
-  button->y = parent ? parent->y + y : y;
+
+  gtcaca_widget_position_size_parent(parent, (gtcaca_widget_t *)button, x, y);
+  /* this widget does not fit the whole parent size */
   button->width = strlen(button_label) + 2;
   button->height = 3;
+
   button->type = GTCACA_WIDGET_BUTTON;
   button->parent = parent;
   button->children = NULL;
