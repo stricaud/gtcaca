@@ -26,6 +26,10 @@ endif()
 #set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_BUILD_TYPE "Debug")
 
+set(GTCACA_VERSION "0.0.0")
+configure_file("${gtcaca-project_SOURCE_DIR}/gtcaca.pc.cmake" "${gtcaca-project_BINARY_DIR}/gtcaca.pc")
+install(FILES "${gtcaca-project_BINARY_DIR}/gtcaca.pc" DESTINATION "include/gtcaca" COMPONENT Headers)
+
 if (DEBUG_MODE)
 add_definitions(-DGTCACA_DEBUG=1)
 set(CMAKE_BUILD_TYPE "Debug")
