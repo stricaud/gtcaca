@@ -27,8 +27,11 @@ endif()
 set(CMAKE_BUILD_TYPE "Debug")
 
 set(GTCACA_VERSION "0.0.0")
+
+include(FindPkgConfig)
 configure_file("${gtcaca-project_SOURCE_DIR}/gtcaca.pc.cmake" "${gtcaca-project_BINARY_DIR}/gtcaca.pc")
-install(FILES "${gtcaca-project_BINARY_DIR}/gtcaca.pc" DESTINATION "include/gtcaca" COMPONENT Headers)
+message("pkg config path:${PKG_CONFIG_PATH}")
+install(FILES "${gtcaca-project_BINARY_DIR}/gtcaca.pc" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig" COMPONENT Headers)
 
 if (DEBUG_MODE)
 add_definitions(-DGTCACA_DEBUG=1)
@@ -52,8 +55,6 @@ include(CheckFunctionExists)
 include(CheckLibraryExists)
 
 include(GNUInstallDirs)
-
-include(FindPkgConfig)
 
 include(TestBigEndian)
 TEST_BIG_ENDIAN(BIGENDIAN)

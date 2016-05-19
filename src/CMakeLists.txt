@@ -26,6 +26,21 @@ set(GTCACA_LIB_SRC
   window.c
 )
 
+set(GTCACA_HEADERS
+  include/gtcaca/application.h
+  include/gtcaca/button.h
+  include/gtcaca/iniparse.h
+  include/gtcaca/label.h
+  include/gtcaca/log.h
+  include/gtcaca/main.h
+  include/gtcaca/textlist.h
+  include/gtcaca/theme.h
+  include/gtcaca/utarray.h
+  include/gtcaca/utlist.h
+  include/gtcaca/widget.h
+  include/gtcaca/window.h
+)
+
 set(GTCACA_LINK_LIBRARIES
   ${LIBCACA_LDFLAGS}
 )
@@ -33,3 +48,6 @@ set(GTCACA_LINK_LIBRARIES
 add_library(gtcaca SHARED ${GTCACA_LIB_SRC})
 set_target_properties(gtcaca PROPERTIES SOVERSION 1)
 target_link_libraries(gtcaca ${GTCACA_LINK_LIBRARIES})
+
+install(TARGETS gtcaca DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR} COMPONENT Libraries)
+install(FILES ${GTCACA_HEADERS} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/gtcaca COMPONENT Headers)
