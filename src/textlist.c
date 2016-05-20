@@ -104,7 +104,7 @@ void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist)
   textlist->selected_item++;
 }
 
-char *gtcaca_textlist_get_selected(gtcaca_textlist_widget_t *textlist)
+char *gtcaca_textlist_get_text_selected(gtcaca_textlist_widget_t *textlist)
 {
   return utarray_eltptr(textlist->list, textlist->selected_item);
 }

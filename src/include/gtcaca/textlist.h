@@ -52,7 +52,7 @@ int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_tex
 void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item);
 void gtcaca_textlist_selection_up(gtcaca_textlist_widget_t *textlist);
 void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist);
-char *gtcaca_textlist_get_selected(gtcaca_textlist_widget_t *textlist);
+char *gtcaca_textlist_get_text_selected(gtcaca_textlist_widget_t *textlist);
 void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist);
 
 #endif // _GTCACA_TEXTLIST_H_
