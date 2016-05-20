@@ -36,6 +36,12 @@ int gtcaca_init(int *argc, char ***argv)
   return 0;
 }
 
+void gtcaca_clear_screen(void)
+{
+  caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_BLACK);
+  caca_fill_box(gmo.cv, 0, 0, caca_get_canvas_width(gmo.cv), caca_get_canvas_height(gmo.cv), ' ');
+}
+
 void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
 {
   switch (widget->type) {
@@ -86,12 +92,14 @@ void gtcaca_redraw(void)
 {
   gtcaca_widget_t *widget = NULL;
 
+  gtcaca_clear_screen();
+
   CDL_FOREACH(gmo.widgets_list, widget) {
     if (widget->is_visible) {
       _gtcaca_widget_redraw(widget);
     }
   }
-
+  
   caca_refresh_display(gmo.dp);
 }
 
@@ -116,7 +124,7 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
     textlist->private_key_cb(textlist, key, NULL);
 
     if (textlist->key_cb) {
-      textlist->key_cb(textlist, key, NULL);
+      textlist->key_cb(textlist, key, textlist->key_cb_userdata);
     }
     gtcaca_redraw();
     break;
@@ -189,6 +197,9 @@ void gtcaca_main(void)
 	case 'Q':
 	case CACA_KEY_ESCAPE:
 	  quit = 1;
+	  break;
+	case CACA_KEY_CTRL_R:
+	  gtcaca_redraw();
 	  break;
 	default:
 	  gtcaca_widgets_handle_key_press(key);

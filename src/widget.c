@@ -65,12 +65,22 @@ void gtcaca_widget_position_size_parent(gtcaca_widget_t *parent, gtcaca_widget_t
   if (parent) {
     widget->x = parent->x + x;
     widget->y = parent->y + y;
-    widget->width = parent->width - 3; // 3 = for borders
-    widget->height = parent->height - 3;
+    widget->width = parent->width - x - 1; // 1 = for borders
+    widget->height = parent->height - y - 1;
   } else {
     widget->x = x;
     widget->y = y;
     widget->width = 0;
     widget->height = 0;
   }
+}
+
+void gtcaca_widget_printall()
+{
+  gtcaca_widget_t *widget = NULL;
+
+  CDL_FOREACH(gmo.widgets_list, widget) {
+    gtcaca_widget_debug(widget);
+  }
+
 }

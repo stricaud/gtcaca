@@ -51,7 +51,8 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   textlist->selected_item = 0;
   textlist->private_key_cb = _gtcaca_textlist_private_key_press;
   textlist->key_cb = NULL;
-
+  textlist->key_cb_userdata;
+  
   utarray_new(textlist->list, &ut_str_icd);
 
   textlist->view_size = textlist->height - 2;
@@ -75,9 +76,10 @@ void gtcaca_textlist_widget_destroy(gtcaca_textlist_widget_t *widget)
   free(widget);
 }
 
-int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_textlist_key_cb_t key_cb)
+int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_textlist_key_cb_t key_cb, void *userdata)
 {
   widget->key_cb = key_cb;
+  widget->key_cb_userdata = userdata;
 }
 
 void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item)

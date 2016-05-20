@@ -33,6 +33,7 @@ struct _gtcaca_textlist_widget_t {
   /* Widget callbacks */
   gtcaca_textlist_key_cb_t private_key_cb; /* Things the widget must do */
   gtcaca_textlist_key_cb_t key_cb;
+  void *key_cb_userdata;
 
   /* Now starts custom widget properties */
   unsigned int selected_item;
@@ -47,7 +48,7 @@ struct _gtcaca_textlist_widget_t {
  */
 gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, int y);
 void gtcaca_textlist_widget_set_view_size(gtcaca_textlist_widget_t *widget, unsigned int view_size);
-int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_textlist_key_cb_t key_cb);
+int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_textlist_key_cb_t key_cb, void *userdata);
 void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item);
 void gtcaca_textlist_selection_up(gtcaca_textlist_widget_t *textlist);
 void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist);

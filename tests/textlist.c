@@ -50,7 +50,7 @@ int main(int argc, char **argv)
   gtcaca_textlist_append(textlist, "my24");
   gtcaca_textlist_append(textlist, "my25");
 
-  gtcaca_textlist_key_cb_register(textlist, textlist_key_press);
+  gtcaca_textlist_key_cb_register(textlist, textlist_key_press, NULL);
 
   gtcaca_main();
   return 0;
