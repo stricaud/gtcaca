@@ -84,3 +84,13 @@ void gtcaca_widget_printall()
   }
 
 }
+
+void gtcaca_widget_colorize(gtcaca_widget_t *widget)
+{
+  if (widget->has_focus) {
+    caca_set_color_ansi(gmo.cv, widget->color_focus_fg, widget->color_focus_bg);
+  } else {
+    caca_set_color_ansi(gmo.cv, widget->color_nonfocus_fg, widget->color_nonfocus_bg);
+  }
+}
+

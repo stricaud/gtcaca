@@ -16,6 +16,10 @@ add_executable(textlist textlist.c)
 target_link_libraries(textlist ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(Textlist textlist)
 
+add_executable(2textlists2windows 2textlists2windows.c)
+target_link_libraries(2textlists2windows ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+add_test(2textlists2windows 2textlists2windows)
+
 add_executable(button button.c)
 target_link_libraries(button ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(Button button)

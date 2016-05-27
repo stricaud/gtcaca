@@ -22,6 +22,10 @@ struct _gtcaca_button_widget_t {
   int y;
   int width;
   int height;
+  uint8_t color_focus_fg;
+  uint8_t color_focus_bg;
+  uint8_t color_nonfocus_fg;
+  uint8_t color_nonfocus_bg;
   gtcaca_widget_t *parent;
   gtcaca_widget_t *children; // Any widget can be a children
   struct _gtcaca_application_widget_t *prev;

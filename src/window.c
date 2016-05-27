@@ -30,6 +30,11 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
   win->parent = parent;
   win->children = NULL;
 
+  win->color_focus_bg = gmo.theme.windowfocus.bg;
+  win->color_focus_fg = gmo.theme.windowfocus.fg;
+  win->color_nonfocus_bg = gmo.theme.window.bg;
+  win->color_nonfocus_fg = gmo.theme.window.fg;
+  
   gtcaca_window_set_focus(win);
   
   CDL_APPEND(gmo.widgets_list, (gtcaca_widget_t *)win);
@@ -45,11 +50,8 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
 
 void gtcaca_window_draw(gtcaca_window_widget_t *win)
 {
-  if (win->has_focus) {
-    caca_set_color_ansi(gmo.cv, gmo.theme.windowfocus.fg, gmo.theme.windowfocus.bg);
-  } else {
-    caca_set_color_ansi(gmo.cv, gmo.theme.window.fg, gmo.theme.window.bg);
-  }
+  gtcaca_widget_colorize(GTCACA_WIDGET(win));
+
   caca_fill_box(gmo.cv, win->x, win->y, win->width, win->height, ' ');
   caca_draw_cp437_box(gmo.cv, win->x, win->y, win->width, win->height);
 
