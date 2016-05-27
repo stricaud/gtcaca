@@ -44,6 +44,12 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   textlist->type = GTCACA_WIDGET_TEXTLIST;
   textlist->parent = parent;
   textlist->children = NULL;
+
+  textlist->color_focus_bg = gmo.theme.textfocus.bg;
+  textlist->color_focus_fg = gmo.theme.textfocus.fg;
+  textlist->color_nonfocus_bg = gmo.theme.text.bg;
+  textlist->color_nonfocus_fg = gmo.theme.text.fg;
+
   /* if (parent) { */
   /*   CDL_APPEND(parent->children, (gtcaca_widget_t *)textlist); */
   /* } */
@@ -132,7 +138,16 @@ void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
   char **p;
 
   /* We draw the background */
-  caca_set_color_ansi(gmo.cv, gmo.theme.text.fg, gmo.theme.text.bg);
+  if (textlist->parent) {
+    if (textlist->parent->has_focus) {
+      caca_set_color_ansi(gmo.cv, textlist->parent->color_focus_fg, textlist->parent->color_focus_bg);
+    } else {
+      caca_set_color_ansi(gmo.cv, textlist->parent->color_nonfocus_fg, textlist->parent->color_nonfocus_bg);
+    }
+  } else {
+    caca_set_color_ansi(gmo.cv, gmo.theme.text.fg, gmo.theme.text.bg);
+  }
+  
   caca_fill_box(gmo.cv, textlist->x, textlist->y + 1, textlist->width, textlist->height, ' ');
   
   p = NULL;
