@@ -50,6 +50,7 @@ typedef struct _gtcaca_widget_t gtcaca_widget_t;
 void gtcaca_widget_debug(gtcaca_widget_t *widget);
 void gtcaca_widget_position_size_parent(gtcaca_widget_t *parent, gtcaca_widget_t *widget, int x, int y);
 void gtcaca_widget_printall();
+void gtcaca_widget_colorize_from_parent(gtcaca_widget_t *widget);
 void gtcaca_widget_colorize(gtcaca_widget_t *widget);
 
 #endif // _GTCACA_WIDGET_H_

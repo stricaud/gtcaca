@@ -132,21 +132,30 @@ int gtcaca_textlist_can_draw(gtcaca_textlist_widget_t *textlist, unsigned int i)
   return 0;
 }
 
+void gtcaca_textlist_selected_color(gtcaca_textlist_widget_t *textlist, unsigned int i)
+{
+  if (i == textlist->selected_item) {
+    if (textlist->parent) {
+      caca_set_color_ansi(gmo.cv, textlist->parent->color_focus_fg, textlist->parent->color_focus_bg);
+    } else {
+      caca_set_color_ansi(gmo.cv, textlist->color_focus_fg, textlist->color_focus_bg);
+    }
+  } else {
+    if (textlist->parent) {
+      caca_set_color_ansi(gmo.cv, textlist->parent->color_nonfocus_fg, textlist->parent->color_nonfocus_bg);
+    } else {
+      caca_set_color_ansi(gmo.cv, textlist->color_nonfocus_fg, textlist->color_nonfocus_bg);
+    }
+  }
+}
+
 void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
 {
   unsigned int i, elem_view;
   char **p;
 
   /* We draw the background */
-  if (textlist->parent) {
-    if (textlist->parent->has_focus) {
-      caca_set_color_ansi(gmo.cv, textlist->parent->color_focus_fg, textlist->parent->color_focus_bg);
-    } else {
-      caca_set_color_ansi(gmo.cv, textlist->parent->color_nonfocus_fg, textlist->parent->color_nonfocus_bg);
-    }
-  } else {
-    caca_set_color_ansi(gmo.cv, gmo.theme.text.fg, gmo.theme.text.bg);
-  }
+  gtcaca_widget_colorize_from_parent(GTCACA_WIDGET(textlist));
   
   caca_fill_box(gmo.cv, textlist->x, textlist->y + 1, textlist->width, textlist->height, ' ');
   
@@ -155,11 +164,7 @@ void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
   elem_view = 0;
   while ( (p=(char**)utarray_next(textlist->list,p))) {
     if (gtcaca_textlist_can_draw(textlist, i)) {
-      if (i == textlist->selected_item) {
-	caca_set_color_ansi(gmo.cv, gmo.theme.textfocus.fg, gmo.theme.textfocus.bg);
-      } else {
-	caca_set_color_ansi(gmo.cv, gmo.theme.text.fg, gmo.theme.text.bg);
-      }
+      gtcaca_textlist_selected_color(textlist, i);
       caca_printf(gmo.cv, textlist->x, textlist->y + elem_view, "%s", *p);
       elem_view++;
     }

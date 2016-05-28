@@ -85,6 +85,19 @@ void gtcaca_widget_printall()
 
 }
 
+void gtcaca_widget_colorize_from_parent(gtcaca_widget_t *widget)
+{
+  if (widget->parent) {
+    if (widget->parent->has_focus) {
+      caca_set_color_ansi(gmo.cv, widget->parent->color_focus_fg, widget->parent->color_focus_bg);
+    } else {
+      caca_set_color_ansi(gmo.cv, widget->parent->color_nonfocus_fg, widget->parent->color_nonfocus_bg);
+    }
+  } else {
+    caca_set_color_ansi(gmo.cv, widget->color_nonfocus_fg, widget->color_nonfocus_fg);
+  }  
+}
+
 void gtcaca_widget_colorize(gtcaca_widget_t *widget)
 {
   if (widget->has_focus) {
