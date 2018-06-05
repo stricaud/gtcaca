@@ -1,12 +1,15 @@
 #include <gtcaca/main.h>
 #include <gtcaca/window.h>
 #include <gtcaca/textlist.h>
+#include <gtcaca/label.h>
+
+gtcaca_label_widget_t *label;
 
 int textlist_key_press(gtcaca_textlist_widget_t *widget, int key, void *userdata)
 {
   switch(key) {
   case CACA_KEY_RETURN:
-    caca_printf(gmo.cv, widget->x, widget->y + 20, "Value:%s", gtcaca_textlist_get_text_selected(widget));
+    //    label->label = gtcaca_textlist_get_text_selected(widget);
     break;
   }
 }
@@ -20,10 +23,13 @@ int main(int argc, char **argv)
   gtcaca_textlist_widget_t *textlist2;
 
   gtcaca_init(&argc, &argv);
-
+  
   app = gtcaca_application_new("Testing buttons");
-  win = gtcaca_window_new((gtcaca_widget_t *)app, NULL, app->x, app->y, app->width / 2, app->height);
-  win2 = gtcaca_window_new((gtcaca_widget_t *)app, "The second window", app->x + (app->width / 2), app->y, app->width / 2, app->height);
+
+  //  label = gtcaca_label_new(NULL, "<return to get value>", 10, 10);
+
+  win = gtcaca_window_new(GTCACA_WIDGET(app), NULL, app->x, app->y, app->width / 2, app->height);
+  win2 = gtcaca_window_new(GTCACA_WIDGET(app), "The second window", app->x + (app->width / 2), app->y, app->width / 2, app->height);
 
   textlist = gtcaca_textlist_new((gtcaca_widget_t *)win, 2, 2);
   /* gtcaca_textlist_widget_set_view_size(textlist, 10); */
@@ -55,6 +61,13 @@ int main(int argc, char **argv)
 
   gtcaca_textlist_key_cb_register(textlist, textlist_key_press, NULL);
 
+  textlist2 = gtcaca_textlist_new((gtcaca_widget_t *)win2, 2, 2);
+  /* gtcaca_textlist_widget_set_view_size(textlist, 10); */
+  gtcaca_textlist_append(textlist2, "foo");
+  gtcaca_textlist_append(textlist2, "bar");
+  gtcaca_textlist_append(textlist2, "camp");
+  gtcaca_textlist_key_cb_register(textlist2, textlist_key_press, NULL);
+  
   gtcaca_main();
   return 0;
 }

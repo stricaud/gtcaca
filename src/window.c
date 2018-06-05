@@ -65,17 +65,31 @@ void gtcaca_window_draw(gtcaca_window_widget_t *win)
 void gtcaca_window_set_focus(gtcaca_window_widget_t *win)
 {
   gtcaca_widget_t *widget;
+  gtcaca_widget_t *widget_children;
 
   /* Disable focus of previous windows, since this one takes it */
   CDL_FOREACH(gmo.widgets_list, widget) {
     if (widget->type == GTCACA_WIDGET_WINDOW) {
-      /* gtcaca_log_write("In the widget loop\n"); */
       widget->has_focus = 0;
+      if (widget->children) {
+	CDL_FOREACH(widget->children, widget_children) {
+	  widget->has_focus = 0;
+	}
+      }
     }
   }
 
   /* gtcaca_log_write("win title:%s\n", win->window_title); */
   win->has_focus = 1;
+
+  /* FIXME, have a child widgets focus strategy. For now we give the focus to all of them. */
+  /* if (widget->children) { */
+  /*   CDL_FOREACH(widget->children, widget_children) { */
+  /*     widget_children->has_focus = 1; */
+  /*     break; */
+  /*   } */
+  /* } */
+
 }
 
 gtcaca_window_widget_t *gtcaca_window_get_current_focus(void)

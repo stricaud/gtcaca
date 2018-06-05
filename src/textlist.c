@@ -36,8 +36,8 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   }
 
   textlist->id = gtcaca_get_newid();
-  textlist->has_focus = 1;
-  textlist->is_visible = 1;
+  textlist->has_focus = parent ? parent->has_focus : 1;
+  textlist->is_visible = parent ? parent->is_visible : 1;
 
   gtcaca_widget_position_size_parent(parent, (gtcaca_widget_t *)textlist, x, y);
 
@@ -50,9 +50,9 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   textlist->color_nonfocus_bg = gmo.theme.text.bg;
   textlist->color_nonfocus_fg = gmo.theme.text.fg;
 
-  /* if (parent) { */
-  /*   CDL_APPEND(parent->children, (gtcaca_widget_t *)textlist); */
-  /* } */
+  if (parent) {
+    CDL_APPEND(parent->children, GTCACA_WIDGET(textlist));
+  }
 
   textlist->selected_item = 0;
   textlist->private_key_cb = _gtcaca_textlist_private_key_press;
