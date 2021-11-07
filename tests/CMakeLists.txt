@@ -8,6 +8,10 @@ set(GTCACA_LINK_LIBRARIES
   ${GTCACA_LIBRARY}
   )
 
+add_executable(tcaca tcaca.c)
+target_link_libraries(tcaca ${LIBCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+add_test(TestCaca tcaca)
+
 add_executable(simple simple.c)
 target_link_libraries(simple ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(Simple simple)
