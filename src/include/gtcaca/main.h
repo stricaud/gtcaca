@@ -23,7 +23,7 @@ struct _gmo_t {
 };
 typedef struct _gmo_t gmo_t;
 
-gmo_t gmo;
+static gmo_t gmo;
 
 int gtcaca_init(int *argc, char ***argv);
 void gtcaca_main(void);
