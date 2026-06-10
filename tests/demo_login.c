@@ -17,7 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <caca.h>
 
@@ -41,78 +40,15 @@ static gtcaca_entry_widget_t     *g_user        = NULL;
 static gtcaca_entry_widget_t     *g_pass        = NULL;
 static gtcaca_button_widget_t    *g_login_btn   = NULL;
 
-/* Hide every widget that belongs to the error dialog. */
-static void _dismiss_error_win(void)
-{
-  gtcaca_widget_t *w = NULL;
-  if (!g_error_win) return;
-  CDL_FOREACH(gmo.widgets_list, w) {
-    if (w == GTCACA_WIDGET(g_error_win) ||
-        w->parent == GTCACA_WIDGET(g_error_win))
-      w->is_visible = 0;
-  }
-  g_error_win = NULL;
-  gtcaca_window_set_focus(g_win);
-  gtcaca_window_set_focused_child(g_win, GTCACA_WIDGET(g_login_btn));
-}
-
-/* Fan-shrink animation: the error dialog collapses toward the Login button. */
-static void _animate_dismiss(int sx, int sy, int sw, int sh)
-{
-  /* Target: center of the Login button */
-  int tx = g_login_btn->x + g_login_btn->width / 2;
-  int ty = g_login_btn->y + 1;
-
-  int steps = 16;
-  int i;
-  for (i = 0; i <= steps; i++) {
-    float t = (float)i / (float)steps;
-
-    /* Box shrinks to zero while its center tracks toward the button */
-    int cw = (int)(sw * (1.0f - t));
-    int ch = (int)(sh * (1.0f - t));
-    int cx = (int)((sx + sw / 2) + ((tx) - (sx + sw / 2)) * t);
-    int cy = (int)((sy + sh / 2) + ((ty) - (sy + sh / 2)) * t);
-    int bx = cx - cw / 2;
-    int by = cy - ch / 2;
-
-    /* Redraw scene (dialog already invisible) */
-    gtcaca_redraw();
-
-    /* Draw the shrinking frame on top */
-    if (cw >= 2 && ch >= 2) {
-      caca_set_color_ansi(gmo.cv, CACA_YELLOW, CACA_RED);
-      caca_fill_box(gmo.cv, bx, by, cw, ch, ' ');
-      caca_draw_cp437_box(gmo.cv, bx, by, cw, ch);
-    } else if (cw >= 1 && ch >= 1) {
-      caca_set_color_ansi(gmo.cv, CACA_YELLOW, CACA_RED);
-      caca_put_char(gmo.cv, bx, by, '*');
-    }
-
-    caca_refresh_display(gmo.dp);
-    usleep(35000);   /* ~28 fps */
-  }
-}
-
 static int on_ok(gtcaca_button_widget_t *btn, int key, void *ud)
 {
   if (key != CACA_KEY_RETURN && key != ' ') return 0;
-
   if (!g_error_win) return 0;
 
-  /* Capture dialog geometry before hiding */
-  int sx = g_error_win->x;
-  int sy = g_error_win->y;
-  int sw = g_error_win->width;
-  int sh = g_error_win->height;
-
-  _dismiss_error_win();       /* hide widgets   */
-  _animate_dismiss(sx, sy, sw, sh);  /* animate        */
-
-  /* Final clean redraw */
-  gtcaca_redraw();
-  caca_refresh_display(gmo.dp);
-
+  gtcaca_window_close(g_error_win);
+  g_error_win = NULL;
+  gtcaca_window_set_focus(g_win);
+  gtcaca_window_set_focused_child(g_win, GTCACA_WIDGET(g_login_btn));
   gtcaca_statusbar_set_text(g_statusbar, "Try again — password hint: it's the project name");
   return 0;
 }
@@ -134,6 +70,8 @@ static void show_error_dialog(void)
   if (ey < 0) ey = 0;
 
   g_error_win = gtcaca_window_new(NULL, "Error", ex, ey, ew, eh);
+  gtcaca_window_set_close_animation(g_error_win, GTCACA_WINDOW_ANIM_SHRINK,
+                                    GTCACA_WIDGET(g_login_btn));
 
   gtcaca_label_new(GTCACA_WIDGET(g_error_win),
                    "The password is incorrect,", 2, 2);
@@ -150,14 +88,10 @@ static void show_error_dialog(void)
 
 static int on_ok_success(gtcaca_button_widget_t *btn, int key, void *ud)
 {
-  gtcaca_widget_t *w = NULL;
   if (key != CACA_KEY_RETURN && key != ' ') return 0;
   if (!g_success_win) return 0;
-  CDL_FOREACH(gmo.widgets_list, w) {
-    if (w == GTCACA_WIDGET(g_success_win) ||
-        w->parent == GTCACA_WIDGET(g_success_win))
-      w->is_visible = 0;
-  }
+
+  gtcaca_window_close(g_success_win);
   g_success_win = NULL;
   gtcaca_window_set_focus(g_win);
   gtcaca_window_set_focused_child(g_win, GTCACA_WIDGET(g_login_btn));

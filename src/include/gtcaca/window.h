@@ -4,6 +4,11 @@
 #include <gtcaca/main.h>
 #include <gtcaca/widget.h>
 
+typedef enum {
+  GTCACA_WINDOW_ANIM_NONE = 0,
+  GTCACA_WINDOW_ANIM_SHRINK,
+} gtcaca_window_close_anim_t;
+
 struct _gtcaca_window_widget_t {
 
   /* Properties shared accross all widgets */
@@ -27,6 +32,10 @@ struct _gtcaca_window_widget_t {
   /* Custom widget properties */
   char *window_title;
   gtcaca_widget_t *focused_child;
+
+  /* Close animation */
+  gtcaca_window_close_anim_t  close_anim;
+  gtcaca_widget_t            *close_anim_target;
 };
 typedef struct _gtcaca_window_widget_t gtcaca_window_widget_t;
 
@@ -39,5 +48,7 @@ gtcaca_window_widget_t *gtcaca_window_get_prev(gtcaca_window_widget_t *win);
 void gtcaca_window_set_focused_child(gtcaca_window_widget_t *win, gtcaca_widget_t *child);
 void gtcaca_window_focus_next_child(gtcaca_window_widget_t *win);
 void gtcaca_window_focus_prev_child(gtcaca_window_widget_t *win);
+void gtcaca_window_set_close_animation(gtcaca_window_widget_t *win, gtcaca_window_close_anim_t anim, gtcaca_widget_t *target);
+void gtcaca_window_close(gtcaca_window_widget_t *win);
 
 #endif /* _GTCACA_WINDOW_H_ */

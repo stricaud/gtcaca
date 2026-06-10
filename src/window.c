@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <caca.h>
 
@@ -49,7 +50,9 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
   win->type = GTCACA_WIDGET_WINDOW;
   win->parent = parent;
   win->children = NULL;
-  win->focused_child = NULL;
+  win->focused_child     = NULL;
+  win->close_anim        = GTCACA_WINDOW_ANIM_NONE;
+  win->close_anim_target = NULL;
 
   win->color_focus_bg = gmo.theme.windowfocus.bg;
   win->color_focus_fg = gmo.theme.windowfocus.fg;
@@ -223,4 +226,60 @@ void gtcaca_window_focus_prev_child(gtcaca_window_widget_t *win)
   i = (current - 1 + n) % n;
   focusable[i]->has_focus = 1;
   win->focused_child = focusable[i];
+}
+
+void gtcaca_window_set_close_animation(gtcaca_window_widget_t *win,
+                                        gtcaca_window_close_anim_t anim,
+                                        gtcaca_widget_t *target)
+{
+  win->close_anim        = anim;
+  win->close_anim_target = target;
+}
+
+void gtcaca_window_close(gtcaca_window_widget_t *win)
+{
+  gtcaca_widget_t *widget;
+  int sx = win->x, sy = win->y, sw = win->width, sh = win->height;
+
+  /* Hide window and all its children */
+  CDL_FOREACH(gmo.widgets_list, widget) {
+    if (widget == GTCACA_WIDGET(win) || widget->parent == GTCACA_WIDGET(win)) {
+      widget->is_visible = 0;
+      widget->has_focus  = 0;
+    }
+  }
+
+  if (win->close_anim == GTCACA_WINDOW_ANIM_SHRINK && win->close_anim_target) {
+    gtcaca_widget_t *tgt = win->close_anim_target;
+    int tx = tgt->x + tgt->width / 2;
+    int ty = tgt->y + 1;
+    int steps = 16, i;
+
+    for (i = 0; i <= steps; i++) {
+      float t  = (float)i / (float)steps;
+      int   cw = (int)(sw * (1.0f - t));
+      int   ch = (int)(sh * (1.0f - t));
+      int   cx = (int)((sx + sw / 2) + (tx - (sx + sw / 2)) * t);
+      int   cy = (int)((sy + sh / 2) + (ty - (sy + sh / 2)) * t);
+      int   bx = cx - cw / 2;
+      int   by = cy - ch / 2;
+
+      gtcaca_redraw();
+
+      if (cw >= 2 && ch >= 2) {
+        caca_set_color_ansi(gmo.cv, CACA_YELLOW, CACA_RED);
+        caca_fill_box(gmo.cv, bx, by, cw, ch, ' ');
+        caca_draw_cp437_box(gmo.cv, bx, by, cw, ch);
+      } else if (cw >= 1 && ch >= 1) {
+        caca_set_color_ansi(gmo.cv, CACA_YELLOW, CACA_RED);
+        caca_put_char(gmo.cv, bx, by, '*');
+      }
+
+      caca_refresh_display(gmo.dp);
+      usleep(35000);
+    }
+  }
+
+  gtcaca_redraw();
+  caca_refresh_display(gmo.dp);
 }
