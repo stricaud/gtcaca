@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 
 #include <caca.h>
 
@@ -115,19 +114,10 @@ char *gtcaca_textlist_get_text_selected(gtcaca_textlist_widget_t *textlist)
 
 int gtcaca_textlist_can_draw(gtcaca_textlist_widget_t *textlist, unsigned int i)
 {
-  unsigned int views;
-  unsigned int current_view;
-  unsigned int selected_view;
-
-  views = (unsigned int)round((float)utarray_len(textlist->list) / textlist->view_size);
-  current_view = (unsigned int)round((float)(i+1) / textlist->view_size);
-  selected_view = (unsigned int)round((float)(textlist->selected_item + 1) / textlist->view_size);
-
-  if (current_view == selected_view) {
-    return 1;
-  }
-  
-  return 0;
+  unsigned int current_view  = (textlist->view_size > 0) ? i / textlist->view_size : 0;
+  unsigned int selected_view = (textlist->view_size > 0)
+                               ? (unsigned int)textlist->selected_item / textlist->view_size : 0;
+  return (current_view == selected_view) ? 1 : 0;
 }
 
 void gtcaca_textlist_selected_color(gtcaca_textlist_widget_t *textlist, unsigned int i)
@@ -147,6 +137,12 @@ void gtcaca_textlist_selected_color(gtcaca_textlist_widget_t *textlist, unsigned
   }
 }
 
+void gtcaca_textlist_clear(gtcaca_textlist_widget_t *textlist)
+{
+  utarray_clear(textlist->list);
+  textlist->selected_item = 0;
+}
+
 void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
 {
   unsigned int i, elem_view;
@@ -154,8 +150,10 @@ void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
 
   /* We draw the background */
   gtcaca_widget_colorize_from_parent(GTCACA_WIDGET(textlist));
-  
-  caca_fill_box(gmo.cv, textlist->x, textlist->y + 1, textlist->width, textlist->height, ' ');
+
+  if (textlist->view_size > 0)
+    caca_fill_box(gmo.cv, textlist->x, textlist->y,
+                  textlist->width, (int)textlist->view_size, ' ');
   
   p = NULL;
   i = 0;

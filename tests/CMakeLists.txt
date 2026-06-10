@@ -48,3 +48,6 @@ target_link_libraries(demo_settings ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
 add_executable(demo_monitor demo_monitor.c)
 target_link_libraries(demo_monitor ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_json demo_json.c)
+target_link_libraries(demo_json ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
