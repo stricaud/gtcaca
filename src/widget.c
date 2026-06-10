@@ -91,6 +91,18 @@ void gtcaca_widget_colorize(gtcaca_widget_t *widget)
   }
 }
 
+void gtcaca_widget_show(gtcaca_widget_t *widget)
+{
+  widget->is_visible = 1;
+}
+
+void gtcaca_widget_hide(gtcaca_widget_t *widget)
+{
+  widget->is_visible = 0;
+  if (widget->has_focus)
+    widget->has_focus = 0;
+}
+
 int gtcaca_widget_is_focusable(gtcaca_widget_t *widget)
 {
   switch (widget->type) {

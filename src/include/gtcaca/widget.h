@@ -62,5 +62,7 @@ void gtcaca_widget_printall(void);
 void gtcaca_widget_colorize_from_parent(gtcaca_widget_t *widget);
 void gtcaca_widget_colorize(gtcaca_widget_t *widget);
 int gtcaca_widget_is_focusable(gtcaca_widget_t *widget);
+void gtcaca_widget_show(gtcaca_widget_t *widget);
+void gtcaca_widget_hide(gtcaca_widget_t *widget);
 
 #endif // _GTCACA_WIDGET_H_
