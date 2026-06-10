@@ -22,6 +22,13 @@ set(GTCACA_LIB_SRC
   widget.c
   window.c
   image.c
+  spinner.c
+  scale.c
+  spinbutton.c
+  switch.c
+  frame.c
+  separator.c
+  expander.c
 )
 
 set(GTCACA_HEADERS
@@ -46,6 +53,13 @@ set(GTCACA_HEADERS
   include/gtcaca/widget.h
   include/gtcaca/window.h
   include/gtcaca/image.h
+  include/gtcaca/spinner.h
+  include/gtcaca/scale.h
+  include/gtcaca/spinbutton.h
+  include/gtcaca/switch.h
+  include/gtcaca/frame.h
+  include/gtcaca/separator.h
+  include/gtcaca/expander.h
 )
 
 set(GTCACA_LINK_LIBRARIES

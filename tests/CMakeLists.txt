@@ -36,3 +36,15 @@ target_link_libraries(keytest ${LIBCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
 add_executable(image image.c)
 target_link_libraries(image ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(widgets widgets.c)
+target_link_libraries(widgets ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_login demo_login.c)
+target_link_libraries(demo_login ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_settings demo_settings.c)
+target_link_libraries(demo_settings ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_monitor demo_monitor.c)
+target_link_libraries(demo_monitor ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})

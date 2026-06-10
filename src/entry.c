@@ -76,6 +76,7 @@ gtcaca_entry_widget_t *gtcaca_entry_new(gtcaca_widget_t *parent, int x, int y, i
   entry->cursor_pos = 0;
   entry->scroll_offset = 0;
   entry->max_length = GTCACA_ENTRY_MAX_LEN;
+  entry->secret = 0;
   entry->private_key_cb = _gtcaca_entry_private_key_press;
   entry->key_cb = NULL;
   entry->key_cb_userdata = NULL;
@@ -101,6 +102,7 @@ void gtcaca_entry_draw(gtcaca_entry_widget_t *entry)
   for (i = 0; i < visible; i++) {
     int ti = i + entry->scroll_offset;
     c = (ti < tlen) ? entry->text[ti] : ' ';
+    if (entry->secret && ti < tlen) c = '*';
 
     if (entry->has_focus && ti == entry->cursor_pos) {
       caca_set_color_ansi(gmo.cv, entry->color_focus_bg, entry->color_focus_fg);
@@ -124,6 +126,11 @@ int gtcaca_entry_key_cb_register(gtcaca_entry_widget_t *widget, gtcaca_entry_key
 const char *gtcaca_entry_get_text(gtcaca_entry_widget_t *entry)
 {
   return entry->text;
+}
+
+void gtcaca_entry_set_secret(gtcaca_entry_widget_t *entry, int secret)
+{
+  entry->secret = secret ? 1 : 0;
 }
 
 void gtcaca_entry_set_text(gtcaca_entry_widget_t *entry, const char *text)

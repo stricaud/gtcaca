@@ -35,6 +35,7 @@ struct _gtcaca_entry_widget_t {
   int cursor_pos;
   int scroll_offset;
   int max_length;
+  int secret;
 };
 
 gtcaca_entry_widget_t *gtcaca_entry_new(gtcaca_widget_t *parent, int x, int y, int width);
@@ -42,5 +43,6 @@ void gtcaca_entry_draw(gtcaca_entry_widget_t *entry);
 int gtcaca_entry_key_cb_register(gtcaca_entry_widget_t *widget, gtcaca_entry_key_cb_t key_cb, void *userdata);
 const char *gtcaca_entry_get_text(gtcaca_entry_widget_t *entry);
 void gtcaca_entry_set_text(gtcaca_entry_widget_t *entry, const char *text);
+void gtcaca_entry_set_secret(gtcaca_entry_widget_t *entry, int secret);
 
 #endif /* _GTCACA_ENTRY_H_ */

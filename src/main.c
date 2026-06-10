@@ -23,6 +23,13 @@
 #include <gtcaca/combobox.h>
 #include <gtcaca/menu.h>
 #include <gtcaca/image.h>
+#include <gtcaca/spinner.h>
+#include <gtcaca/scale.h>
+#include <gtcaca/spinbutton.h>
+#include <gtcaca/switch.h>
+#include <gtcaca/frame.h>
+#include <gtcaca/separator.h>
+#include <gtcaca/expander.h>
 
 gmo_t gmo;
 
@@ -99,6 +106,27 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
   case GTCACA_WIDGET_IMAGE:
     gtcaca_image_draw((gtcaca_image_widget_t *)widget);
     break;
+  case GTCACA_WIDGET_SPINNER:
+    gtcaca_spinner_draw((gtcaca_spinner_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_SCALE:
+    gtcaca_scale_draw((gtcaca_scale_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_SPINBUTTON:
+    gtcaca_spinbutton_draw((gtcaca_spinbutton_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_SWITCH:
+    gtcaca_switch_draw((gtcaca_switch_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_FRAME:
+    gtcaca_frame_draw((gtcaca_frame_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_SEPARATOR:
+    gtcaca_separator_draw((gtcaca_separator_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_EXPANDER:
+    gtcaca_expander_draw((gtcaca_expander_widget_t *)widget);
+    break;
   case GTCACA_WIDGET_CALENDAR:
   case GTCACA_WIDGET_DIALOG:
   case GTCACA_WIDGET_FILECHOOSERDIALOG:
@@ -142,6 +170,10 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
   gtcaca_textview_widget_t *tv;
   gtcaca_combobox_widget_t *cb;
   gtcaca_menu_widget_t *menu;
+  gtcaca_scale_widget_t *scale;
+  gtcaca_spinbutton_widget_t *spinbutton;
+  gtcaca_switch_widget_t *sw;
+  gtcaca_expander_widget_t *exp;
 
   if (!widget->has_focus) return 0;
 
@@ -198,6 +230,27 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
     menu = (gtcaca_menu_widget_t *)widget;
     gtcaca_menu_handle_key(menu, key);
     break;
+  case GTCACA_WIDGET_SCALE:
+    scale = (gtcaca_scale_widget_t *)widget;
+    gtcaca_scale_handle_key(scale, key);
+    if (scale->cb) scale->cb(scale, scale->value, scale->cb_userdata);
+    break;
+  case GTCACA_WIDGET_SPINBUTTON:
+    spinbutton = (gtcaca_spinbutton_widget_t *)widget;
+    gtcaca_spinbutton_handle_key(spinbutton, key);
+    if (spinbutton->cb) spinbutton->cb(spinbutton, spinbutton->value, spinbutton->cb_userdata);
+    break;
+  case GTCACA_WIDGET_SWITCH:
+    sw = (gtcaca_switch_widget_t *)widget;
+    if (key == ' ' || key == CACA_KEY_RETURN) {
+      sw->active = !sw->active;
+      if (sw->cb) sw->cb(sw, sw->active, sw->cb_userdata);
+    }
+    break;
+  case GTCACA_WIDGET_EXPANDER:
+    exp = (gtcaca_expander_widget_t *)widget;
+    gtcaca_expander_handle_key(exp, key);
+    break;
   case GTCACA_WIDGET_PROGRESSBAR:
   case GTCACA_WIDGET_STATUSBAR:
   case GTCACA_WIDGET_LABEL:
@@ -205,6 +258,9 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
   case GTCACA_WIDGET_DIALOG:
   case GTCACA_WIDGET_FILECHOOSERDIALOG:
   case GTCACA_WIDGET_IMAGE:
+  case GTCACA_WIDGET_SPINNER:
+  case GTCACA_WIDGET_FRAME:
+  case GTCACA_WIDGET_SEPARATOR:
     break;
   }
 
@@ -257,8 +313,10 @@ int gtcaca_widgets_handle_key_press(int key)
                       type != GTCACA_WIDGET_TEXTVIEW &&
                       type != GTCACA_WIDGET_COMBOBOX);
         } else {
-          /* Left/Right: only Entry uses these for cursor movement. */
-          navigate = (type != GTCACA_WIDGET_ENTRY);
+          /* Left/Right: Entry, Scale, SpinButton use these internally. */
+          navigate = (type != GTCACA_WIDGET_ENTRY &&
+                      type != GTCACA_WIDGET_SCALE &&
+                      type != GTCACA_WIDGET_SPINBUTTON);
         }
         if (navigate) {
           if (key == CACA_KEY_UP || key == CACA_KEY_LEFT)
@@ -297,9 +355,14 @@ int gtcaca_widgets_handle_key_press(int key)
         break;
       }
     }
+    /* Snapshot the current tail so widgets appended during dispatch (e.g. a
+       dialog created by a button callback) don't receive this same event. */
+    gtcaca_widget_t *dispatch_last = gmo.widgets_list
+                                     ? gmo.widgets_list->prev : NULL;
     CDL_FOREACH(gmo.widgets_list, widget) {
       if (menu_active && widget->type != GTCACA_WIDGET_MENU) continue;
       _gtcaca_widget_handle_key_press(widget, key);
+      if (widget == dispatch_last) break;
     }
   }
 
@@ -422,6 +485,43 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
     _focus_widget_in_window(hit);
     _gtcaca_widget_handle_key_press(hit, CACA_KEY_RETURN);
     break;
+  case GTCACA_WIDGET_SWITCH:
+    _focus_widget_in_window(hit);
+    _gtcaca_widget_handle_key_press(hit, ' ');
+    break;
+  case GTCACA_WIDGET_EXPANDER:
+    _focus_widget_in_window(hit);
+    _gtcaca_widget_handle_key_press(hit, ' ');
+    break;
+  case GTCACA_WIDGET_SCALE: {
+    gtcaca_scale_widget_t *sc = (gtcaca_scale_widget_t *)hit;
+    _focus_widget_in_window(hit);
+    {
+      int track_w = sc->width - 2;
+      int click_pos = mx - sc->x - 1;
+      double range = sc->max - sc->min;
+      if (track_w > 0 && range > 0.0 && click_pos >= 0 && click_pos < track_w) {
+        sc->value = sc->min + (double)click_pos / (track_w - 1) * range;
+        if (sc->value < sc->min) sc->value = sc->min;
+        if (sc->value > sc->max) sc->value = sc->max;
+        if (sc->cb) sc->cb(sc, sc->value, sc->cb_userdata);
+      }
+    }
+    break;
+  }
+  case GTCACA_WIDGET_SPINBUTTON: {
+    gtcaca_spinbutton_widget_t *sb = (gtcaca_spinbutton_widget_t *)hit;
+    _focus_widget_in_window(hit);
+    /* Click on '<' (leftmost char) decrements, click on '>' (rightmost) increments */
+    if (mx == sb->x) {
+      gtcaca_spinbutton_handle_key(sb, CACA_KEY_LEFT);
+      if (sb->cb) sb->cb(sb, sb->value, sb->cb_userdata);
+    } else if (mx == sb->x + sb->width - 1) {
+      gtcaca_spinbutton_handle_key(sb, CACA_KEY_RIGHT);
+      if (sb->cb) sb->cb(sb, sb->value, sb->cb_userdata);
+    }
+    break;
+  }
   default:
     /* Entry, TextView, TextList, ProgressBar, Label, etc.: just focus. */
     _focus_widget_in_window(hit);

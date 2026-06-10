@@ -18,6 +18,10 @@ static int _gtcaca_widget_is_focusable(gtcaca_widget_t *widget)
   case GTCACA_WIDGET_RADIOBUTTON:
   case GTCACA_WIDGET_COMBOBOX:
   case GTCACA_WIDGET_TEXTVIEW:
+  case GTCACA_WIDGET_SCALE:
+  case GTCACA_WIDGET_SPINBUTTON:
+  case GTCACA_WIDGET_SWITCH:
+  case GTCACA_WIDGET_EXPANDER:
     return 1;
   default:
     return 0;
