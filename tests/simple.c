@@ -11,15 +11,17 @@ int textlist_key_press(gtcaca_textlist_widget_t *widget, int key, void *userdata
     caca_printf(gmo.cv, widget->x, widget->y + 20, "Value:%s", gtcaca_textlist_get_text_selected(widget));
     break;
   }
+  return 0;
 }
 
 int button_key_press(gtcaca_button_widget_t *widget, int key, void *userdata)
 {
   switch(key) {
   case CACA_KEY_RETURN:
-    caca_printf(gmo.cv, widget->x+5, widget->y + 4, "Widget returned");    
+    caca_printf(gmo.cv, widget->x+5, widget->y + 4, "Widget returned");
     break;
   }
+  return 0;
 }
 
 int main(int argc, char **argv)

@@ -12,6 +12,7 @@ int textlist_key_press(gtcaca_textlist_widget_t *widget, int key, void *userdata
     //    label->label = gtcaca_textlist_get_text_selected(widget);
     break;
   }
+  return 0;
 }
 
 int main(int argc, char **argv)

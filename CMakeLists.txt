@@ -1,4 +1,18 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.20)
+
+# Detect the actual macOS SDK path before project() initialises the toolchain,
+# so CMake never warns about a stale/missing CMAKE_OSX_SYSROOT value.
+if(APPLE)
+  execute_process(
+    COMMAND xcrun --show-sdk-path
+    OUTPUT_VARIABLE _detected_sysroot
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  if(_detected_sysroot)
+    set(CMAKE_OSX_SYSROOT "${_detected_sysroot}" CACHE PATH "macOS SDK path" FORCE)
+  endif()
+endif()
 
 project(gtcaca-project)
 
@@ -21,6 +35,7 @@ include(GNUInstallDirs)
 
 if(APPLE)
   set(CMAKE_MACOSX_RPATH ON)
+  set(CMAKE_BUILD_RPATH "${CMAKE_BINARY_DIR}/src")
 endif()
 
 #set(CMAKE_BUILD_TYPE "Release")

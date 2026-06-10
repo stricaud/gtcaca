@@ -58,8 +58,8 @@ int _add_section_key_value(ini_t *ini, char *section, char *key, char *value)
   ini->keyvals[pos+1] = strdup(value);
 
   ini->n_items += 2;
-  
   free(gkey);
+  return 0;
 }
 
 void ini_free(ini_t *ini)
@@ -129,7 +129,7 @@ ini_t *ini_parse_buffer(char *buf, long size)
 	reader = READ_SECTION;
 	break;
       default:
-	*buf--;
+	buf--;
 	reader = READ_KEY;
 	break;
       }
@@ -157,7 +157,7 @@ ini_t *ini_parse_buffer(char *buf, long size)
 	//	printf("path:[%s]\n", keybuf);
 	//	printf("++=[%c]\n", *(s+1));
 	if (*(buf+1) == ' ') {
-	  *buf++; // Just to skip the first space normal peope usually write!
+	  buf++; /* skip the leading space after '=' */
 	}
 	reader = READ_VALUE;
 	break;
@@ -184,7 +184,7 @@ ini_t *ini_parse_buffer(char *buf, long size)
       break;
     }
 
-    *buf++;
+    buf++;
     pos++;
   }
 

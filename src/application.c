@@ -23,7 +23,7 @@ static int _gtcaca_application_private_key_press(gtcaca_application_widget_t *ap
   case CACA_KEY_CTRL_N:
     window = gtcaca_window_get_current_focus();
     if (window) {
-      while(window = (gtcaca_window_widget_t *)window->next) {
+      while((window = (gtcaca_window_widget_t *)window->next)) {
 	if (window->type == GTCACA_WIDGET_WINDOW) {
 	  gtcaca_window_set_focus(window);
 	  break;
@@ -34,7 +34,7 @@ static int _gtcaca_application_private_key_press(gtcaca_application_widget_t *ap
   case CACA_KEY_CTRL_P:
     window = gtcaca_window_get_current_focus();
     if (window) {
-      while(window = (gtcaca_window_widget_t *)window->prev) {
+      while((window = (gtcaca_window_widget_t *)window->prev)) {
 	if (window->type == GTCACA_WIDGET_WINDOW) {
 	  gtcaca_window_set_focus(window);
 	  break;

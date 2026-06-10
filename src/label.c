@@ -10,7 +10,6 @@
 gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int x, int y)
 {
   gtcaca_label_widget_t *label;
-  int i;
 
   label = malloc(sizeof(gtcaca_label_widget_t));
   if (!label) {
@@ -26,12 +25,14 @@ gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int
   label->y = parent ? parent->y + y : y;
   label->width = strlen(text);
   label->height = 1;
+  label->color_focus_fg = gmo.theme.textfocus.fg;
+  label->color_focus_bg = gmo.theme.textfocus.bg;
+  label->color_nonfocus_fg = gmo.theme.text.fg;
+  label->color_nonfocus_bg = gmo.theme.text.bg;
+
   label->type = GTCACA_WIDGET_LABEL;
   label->parent = parent;
   label->children = NULL;
-  /* if (parent) { */
-  /*   CDL_APPEND(parent->children, (gtcaca_widget_t *)label); */
-  /* } */
 
   gtcaca_label_draw(label);
 
@@ -43,11 +44,6 @@ gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int
 
 void gtcaca_label_draw(gtcaca_label_widget_t *label)
 {
-  int i;
-
-  /* Can never have focus*/
-  caca_set_color_ansi(gmo.cv, gmo.theme.text.fg, gmo.theme.text.bg);
-  caca_printf(gmo.cv, label->x + 1, label->y, "%s", label->label);
-
-  caca_refresh_display(gmo.dp);
+  gtcaca_widget_colorize_from_parent(GTCACA_WIDGET(label));
+  caca_printf(gmo.cv, label->x, label->y, "%s", label->label);
 }

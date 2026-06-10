@@ -37,7 +37,6 @@ struct _gtcaca_application_widget_t {
   /* Now starts custom widget properties */
   char *application_title;
 };
-typedef struct _gtcaca_application_widget_t gtcaca_application_widget_t;
 
 gtcaca_application_widget_t *gtcaca_application_new(char *application_title);
 void gtcaca_application_draw(gtcaca_application_widget_t *application);

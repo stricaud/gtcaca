@@ -20,7 +20,8 @@ static int _gtcaca_textlist_private_key_press(gtcaca_textlist_widget_t *widget, 
   case CACA_KEY_DOWN:
     gtcaca_textlist_selection_down(widget);
     break;
-  }  
+  }
+  return 0;
 }
 
 /* Public functions */
@@ -50,14 +51,10 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   textlist->color_nonfocus_bg = gmo.theme.text.bg;
   textlist->color_nonfocus_fg = gmo.theme.text.fg;
 
-  if (parent) {
-    CDL_APPEND(parent->children, GTCACA_WIDGET(textlist));
-  }
-
   textlist->selected_item = 0;
   textlist->private_key_cb = _gtcaca_textlist_private_key_press;
   textlist->key_cb = NULL;
-  textlist->key_cb_userdata;
+  textlist->key_cb_userdata = NULL;
   
   utarray_new(textlist->list, &ut_str_icd);
 
@@ -86,6 +83,7 @@ int gtcaca_textlist_key_cb_register(gtcaca_textlist_widget_t *widget, gtcaca_tex
 {
   widget->key_cb = key_cb;
   widget->key_cb_userdata = userdata;
+  return 0;
 }
 
 void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item)
@@ -170,6 +168,4 @@ void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
     }
     i++;
   }
-  
-  caca_refresh_display(gmo.dp);
 }

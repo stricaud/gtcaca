@@ -27,3 +27,12 @@ add_test(2textlists2windows 2textlists2windows)
 add_executable(button button.c)
 target_link_libraries(button ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 add_test(Button button)
+
+add_executable(demo demo.c)
+target_link_libraries(demo ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(keytest keytest.c)
+target_link_libraries(keytest ${LIBCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(image image.c)
+target_link_libraries(image ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})

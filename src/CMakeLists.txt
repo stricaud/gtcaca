@@ -8,37 +8,44 @@ set(GTCACA_LIB_SRC
 
   application.c
   button.c
-  # calendar.c
-  # combobox.c
-  # dialog.c
-  # entry.c
-  # filechooserdialog.c
-  # image.c
+  checkbox.c
+  combobox.c
+  entry.c
   label.c
-  # menu.c
-  # progressbar.c
-  # radiobutton.c
-  # statusbar.c
+  menu.c
+  progressbar.c
+  radiobutton.c
+  statusbar.c
   textlist.c
-  # textview.c
+  textview.c
   theme.c
   widget.c
   window.c
+  image.c
 )
 
 set(GTCACA_HEADERS
   include/gtcaca/application.h
   include/gtcaca/button.h
+  include/gtcaca/checkbox.h
+  include/gtcaca/combobox.h
+  include/gtcaca/entry.h
   include/gtcaca/iniparse.h
   include/gtcaca/label.h
   include/gtcaca/log.h
   include/gtcaca/main.h
+  include/gtcaca/menu.h
+  include/gtcaca/progressbar.h
+  include/gtcaca/radiobutton.h
+  include/gtcaca/statusbar.h
   include/gtcaca/textlist.h
+  include/gtcaca/textview.h
   include/gtcaca/theme.h
   include/gtcaca/utarray.h
   include/gtcaca/utlist.h
   include/gtcaca/widget.h
   include/gtcaca/window.h
+  include/gtcaca/image.h
 )
 
 set(GTCACA_LINK_LIBRARIES

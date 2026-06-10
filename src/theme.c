@@ -86,6 +86,39 @@ void gtcaca_theme_default(void)
   gmo.theme.buttonfocus.fg = CACA_YELLOW;
   gmo.theme.button.bg = CACA_LIGHTRED;
   gmo.theme.button.fg = CACA_YELLOW;
+
+  gmo.theme.entry.bg = CACA_BLACK;
+  gmo.theme.entry.fg = CACA_LIGHTGRAY;
+  gmo.theme.entryfocus.bg = CACA_WHITE;
+  gmo.theme.entryfocus.fg = CACA_BLACK;
+
+  gmo.theme.checkbox.bg = CACA_BLUE;
+  gmo.theme.checkbox.fg = CACA_LIGHTGRAY;
+  gmo.theme.checkboxfocus.bg = CACA_BLUE;
+  gmo.theme.checkboxfocus.fg = CACA_YELLOW;
+
+  gmo.theme.progressbar.bg = CACA_BLUE;
+  gmo.theme.progressbar.fg = CACA_WHITE;
+
+  gmo.theme.statusbar.bg = CACA_CYAN;
+  gmo.theme.statusbar.fg = CACA_BLACK;
+
+  gmo.theme.textview.bg = CACA_BLACK;
+  gmo.theme.textview.fg = CACA_LIGHTGRAY;
+  gmo.theme.textviewfocus.bg = CACA_DARKGRAY;
+  gmo.theme.textviewfocus.fg = CACA_WHITE;
+
+  gmo.theme.combobox.bg = CACA_BLUE;
+  gmo.theme.combobox.fg = CACA_WHITE;
+  gmo.theme.comboboxfocus.bg = CACA_YELLOW;
+  gmo.theme.comboboxfocus.fg = CACA_BLUE;
+
+  gmo.theme.menu.bg = CACA_LIGHTGRAY;
+  gmo.theme.menu.fg = CACA_BLACK;
+  gmo.theme.menuitem.bg = CACA_LIGHTGRAY;
+  gmo.theme.menuitem.fg = CACA_BLACK;
+  gmo.theme.menuitemfocus.bg = CACA_BLUE;
+  gmo.theme.menuitemfocus.fg = CACA_WHITE;
 }
 
 int gtcaca_theme_parse_ini(char *theme)
@@ -100,9 +133,7 @@ int gtcaca_theme_parse_ini(char *theme)
 
   ini = ini_parse_file(theme_fullpath);
   if (!ini) {
-    fprintf(stderr, "Error, cannot open theme file %s\n", theme_fullpath);
-
-    /* We are not stoping the machine because we cannot parse theme from a file! */
+    fprintf(stderr, "No theme file found at %s, using built-in defaults.\n", theme_fullpath);
     gtcaca_theme_default();
   } else {
     for (count = 0; count < ini->n_items; count += 2) {

@@ -11,12 +11,10 @@
 static int _gtcaca_button_private_key_press(gtcaca_button_widget_t *button, int key, void *userdata)
 {
   switch(key) {
-  case CACA_KEY_RETURN:    
-    /* button->is_visible = 0; */
-    /* gtcaca_redraw(); */
-    /* gtcaca_button_draw_press_noshade(button); */
+  case CACA_KEY_RETURN:
     break;
   }
+  return 0;
 }
 
 gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_label, int x, int y)
@@ -43,9 +41,6 @@ gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_
   button->type = GTCACA_WIDGET_BUTTON;
   button->parent = parent;
   button->children = NULL;
-  if (parent) {
-    CDL_APPEND(parent->children, (gtcaca_widget_t *)button);
-  }
 
   button->private_key_cb = _gtcaca_button_private_key_press;
   button->key_cb = NULL;
@@ -60,6 +55,7 @@ gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_
 int gtcaca_button_key_cb_register(gtcaca_button_widget_t *widget, gtcaca_button_key_cb_t key_cb)
 {
   widget->key_cb = key_cb;
+  return 0;
 }
 
 void gtcaca_button_draw_press_noshade(gtcaca_button_widget_t *button)
@@ -77,7 +73,6 @@ void gtcaca_button_draw_press_noshade(gtcaca_button_widget_t *button)
     caca_printf(gmo.cv, button->x + 2, button->y + 2, "%s", button->button_label);
   }
 
-  caca_refresh_display(gmo.dp);
 }
 
 void gtcaca_button_draw(gtcaca_button_widget_t *button)
@@ -103,7 +98,4 @@ void gtcaca_button_draw(gtcaca_button_widget_t *button)
   }
   caca_put_char(gmo.cv, button->x + button->width, button->y + 2, ' ');
   caca_put_char(gmo.cv, button->x + button->width, button->y + 1, ' ');
-
-
-  caca_refresh_display(gmo.dp);
 }
