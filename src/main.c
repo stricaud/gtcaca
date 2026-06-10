@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -304,31 +306,152 @@ int gtcaca_widgets_handle_key_press(int key)
   return 0;
 }
 
+/* ---- Mouse hit-testing ---- */
+
+static void _focus_widget_in_window(gtcaca_widget_t *hit)
+{
+  if (hit->parent && hit->parent->type == GTCACA_WIDGET_WINDOW) {
+    gtcaca_window_set_focus((gtcaca_window_widget_t *)hit->parent);
+    gtcaca_window_set_focused_child((gtcaca_window_widget_t *)hit->parent, hit);
+  }
+}
+
+static void _gtcaca_handle_mouse_press(int mx, int my, int button)
+{
+  gtcaca_widget_t *widget;
+  gtcaca_widget_t *hit = NULL;
+  int i, j;
+
+  if (button != 1) return;  /* left button only */
+
+  /* Menus are drawn on top — check them first. */
+  CDL_FOREACH(gmo.widgets_list, widget) {
+    if (widget->type != GTCACA_WIDGET_MENU) continue;
+    gtcaca_menu_widget_t *menu = (gtcaca_menu_widget_t *)widget;
+
+    /* Click on open dropdown */
+    if (menu->is_open) {
+      gtcaca_menu_entry_t *entry = &menu->entries[menu->active_entry];
+      int dropdown_x = menu->x + entry->x_pos;
+      int dropdown_y = menu->y + 1;
+      int dropdown_w = 22;
+      for (j = 0; j < entry->n_items; j++) {
+        int sc_len  = (int)strlen(entry->items[j].shortcut);
+        int lbl_len = (int)strlen(entry->items[j].label);
+        int needed  = lbl_len + (sc_len > 0 ? sc_len + 2 : 0) + 3;
+        if (needed > dropdown_w) dropdown_w = needed;
+      }
+      if (mx >= dropdown_x && mx < dropdown_x + dropdown_w &&
+          my >  dropdown_y  && my < dropdown_y + entry->n_items + 1) {
+        int item_idx = my - dropdown_y - 1;
+        if (item_idx >= 0 && item_idx < entry->n_items &&
+            !entry->items[item_idx].is_separator) {
+          gtcaca_menu_item_t *item = &entry->items[item_idx];
+          if (item->action) item->action(item->userdata);
+          menu->is_open    = 0;
+          menu->has_focus  = 0;
+        }
+        return;
+      }
+      /* Click outside dropdown — close it */
+      menu->is_open   = 0;
+      menu->has_focus = 0;
+    }
+
+    /* Click on menu bar row */
+    if (my == menu->y) {
+      int x_pos = 1;
+      for (i = 0; i < menu->n_entries; i++) {
+        int title_len = (int)strlen(menu->entries[i].title);
+        int entry_w   = title_len + 2;  /* " title " */
+        if (mx >= x_pos && mx < x_pos + entry_w) {
+          if (menu->has_focus && menu->active_entry == i && menu->is_open) {
+            menu->is_open = 0;  /* toggle off */
+          } else {
+            menu->has_focus    = 1;
+            menu->active_entry = i;
+            menu->is_open      = 1;
+            /* Select first non-separator item */
+            menu->active_item  = 0;
+            gtcaca_menu_entry_t *e = &menu->entries[i];
+            while (menu->active_item < e->n_items &&
+                   e->items[menu->active_item].is_separator)
+              menu->active_item++;
+          }
+          return;
+        }
+        x_pos += entry_w;
+      }
+      /* Clicked menu bar background — close */
+      menu->is_open   = 0;
+      menu->has_focus = 0;
+      return;
+    }
+
+    break;  /* only one menu widget expected */
+  }
+
+  /* Find the topmost widget under the cursor (last match in draw order wins). */
+  CDL_FOREACH(gmo.widgets_list, widget) {
+    if (!widget->is_visible)           continue;
+    if (widget->type == GTCACA_WIDGET_MENU) continue;
+    if (mx >= widget->x && mx < widget->x + widget->width &&
+        my >= widget->y && my < widget->y + widget->height)
+      hit = widget;
+  }
+
+  if (!hit) return;
+
+  switch (hit->type) {
+  case GTCACA_WIDGET_WINDOW:
+    gtcaca_window_set_focus((gtcaca_window_widget_t *)hit);
+    break;
+  case GTCACA_WIDGET_BUTTON:
+    _focus_widget_in_window(hit);
+    _gtcaca_widget_handle_key_press(hit, CACA_KEY_RETURN);
+    break;
+  case GTCACA_WIDGET_CHECKBOX:
+    _focus_widget_in_window(hit);
+    _gtcaca_widget_handle_key_press(hit, ' ');
+    break;
+  case GTCACA_WIDGET_RADIOBUTTON:
+    _focus_widget_in_window(hit);
+    _gtcaca_widget_handle_key_press(hit, ' ');
+    break;
+  case GTCACA_WIDGET_COMBOBOX:
+    _focus_widget_in_window(hit);
+    _gtcaca_widget_handle_key_press(hit, CACA_KEY_RETURN);
+    break;
+  default:
+    /* Entry, TextView, TextList, ProgressBar, Label, etc.: just focus. */
+    _focus_widget_in_window(hit);
+    break;
+  }
+}
+
 void gtcaca_main(void)
 {
   caca_event_t ev;
   int quit = 0;
   int key;
   gtcaca_widget_t *widget = NULL;
-  int _dbg = open("/tmp/gtcacaX.log", O_WRONLY|O_CREAT|O_TRUNC, 0666);
-  if (_dbg >= 0) write(_dbg, "start\n", 6);
+  caca_set_mouse(gmo.dp, 1);
 
   gtcaca_redraw();
 
   while (!quit) {
     while (caca_get_event(gmo.dp, CACA_EVENT_ANY, &ev, 0)) {
       int evtype = caca_get_event_type(&ev);
-      if (_dbg >= 0) {
-        char buf[48];
-        int n;
-        if (evtype & CACA_EVENT_KEY_PRESS)
-          n = snprintf(buf, sizeof(buf), "KEY ch=0x%x\n", caca_get_event_key_ch(&ev));
-        else
-          n = snprintf(buf, sizeof(buf), "EVT 0x%x\n", evtype);
-        write(_dbg, buf, n);
-      }
       if (!(evtype & CACA_EVENT_KEY_PRESS)) {
-        if (evtype & CACA_EVENT_RESIZE) gtcaca_redraw();
+        if (evtype & CACA_EVENT_RESIZE) {
+          gtcaca_redraw();
+        } else if (evtype & CACA_EVENT_MOUSE_PRESS) {
+          _gtcaca_handle_mouse_press(
+            caca_get_event_mouse_x(&ev),
+            caca_get_event_mouse_y(&ev),
+            caca_get_event_mouse_button(&ev));
+          gtcaca_redraw();
+        }
         continue;
       }
 
@@ -382,7 +505,7 @@ void gtcaca_main(void)
     usleep(10000);
   }
 
-  if (_dbg >= 0) close(_dbg);
+  caca_set_mouse(gmo.dp, 0);
   caca_free_display(gmo.dp);
 }
 
