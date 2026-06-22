@@ -29,6 +29,7 @@
 #include <gtcaca/label.h>
 #include <gtcaca/separator.h>
 #include <gtcaca/statusbar.h>
+#include <gtcaca/box.h>
 
 #include "gtcaca_api.h"
 
@@ -263,6 +264,9 @@ static int on_func_select(gtcaca_textlist_widget_t *tl, int key, void *userdata)
 int main(int argc, char **argv)
 {
   int cw, ch, lw, rw, h;
+  gtcaca_label_widget_t     *search_lbl;
+  gtcaca_separator_widget_t *sep;
+  gtcaca_box_t              *left_box, *search_row, *right_box;
 
   gtcaca_init(&argc, &argv);
 
@@ -278,21 +282,47 @@ int main(int argc, char **argv)
   gtcaca_application_new("gtcaca API Browser");
 
   /* ── Left panel ── */
+  /* A vertical box stacks: [Search: entry] / separator / function list.
+     The list expands to fill whatever height is left. */
   g_left_win = gtcaca_window_new(NULL, "Functions", 0, 1, lw, h);
 
-  gtcaca_label_new(GTCACA_WIDGET(g_left_win), "Search:", 1, 1);
-  g_search = gtcaca_entry_new(GTCACA_WIDGET(g_left_win), 9, 1, lw - 11);
+  search_lbl = gtcaca_label_new(GTCACA_WIDGET(g_left_win), "Search:", 0, 0);
+  g_search   = gtcaca_entry_new(GTCACA_WIDGET(g_left_win), 0, 0, 8);
   gtcaca_entry_key_cb_register(g_search, on_search_key, NULL);
 
-  gtcaca_separator_new(GTCACA_WIDGET(g_left_win), 1, 2, lw - 2, 0);
+  sep = gtcaca_separator_new(GTCACA_WIDGET(g_left_win), 0, 0, 1, 0);
 
-  g_funclist = gtcaca_textlist_new(GTCACA_WIDGET(g_left_win), 1, 3);
-  gtcaca_textlist_widget_set_view_size(g_funclist, (unsigned int)(h - 5));
+  g_funclist = gtcaca_textlist_new(GTCACA_WIDGET(g_left_win), 0, 0);
   gtcaca_textlist_key_cb_register(g_funclist, on_func_select, NULL);
 
+  search_row = gtcaca_hbox_new();
+  gtcaca_box_set_margin(search_row, 0);
+  gtcaca_box_add(search_row, GTCACA_WIDGET(search_lbl));        /* fixed caption */
+  gtcaca_box_add_expand(search_row, GTCACA_WIDGET(g_search));   /* entry fills row */
+
+  left_box = gtcaca_vbox_new();
+  gtcaca_box_set_margin(left_box, 0);   /* the window border is the padding */
+  gtcaca_box_add_box(left_box, search_row);
+  gtcaca_box_add_full(left_box, GTCACA_WIDGET(sep), 0, 1);      /* span full width */
+  gtcaca_box_add_expand(left_box, GTCACA_WIDGET(g_funclist));   /* fills the rest */
+
+  gtcaca_box_apply_window(left_box, g_left_win);
+  gtcaca_box_free(left_box);
+
+  /* The list got its height from the layout; show that many rows. */
+  gtcaca_textlist_widget_set_view_size(g_funclist,
+                                       (unsigned int)g_funclist->height);
+
   /* ── Right panel ── */
+  /* A single text view that fills the window interior. */
   g_right_win = gtcaca_window_new(NULL, "Documentation", lw, 1, rw, h);
-  g_detail    = gtcaca_textview_new(GTCACA_WIDGET(g_right_win), 1, 1, rw - 2, h - 2);
+  g_detail    = gtcaca_textview_new(GTCACA_WIDGET(g_right_win), 0, 0, 1, 1);
+
+  right_box = gtcaca_vbox_new();
+  gtcaca_box_set_margin(right_box, 0);
+  gtcaca_box_add_expand(right_box, GTCACA_WIDGET(g_detail));
+  gtcaca_box_apply_window(right_box, g_right_win);
+  gtcaca_box_free(right_box);
 
   /* ── Status bar ── */
   gtcaca_statusbar_new(

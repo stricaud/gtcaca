@@ -16,6 +16,142 @@ DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
 
 SKIP_FILES = {"utlist.h", "utarray.h", "stb_image.h", "iniparse.h", "log.h"}
 
+# ─── hand-written overrides ─────────────────────────────────────────────────
+# Some functions don't fit the name-based heuristics (e.g. box layouts are not
+# widgets and are never added to the global list / drawn). Provide accurate
+# brief / description / returns text for those here, keyed by function name.
+
+_BOX_NEW_RET = "Pointer to the new box layout, or NULL on allocation failure."
+
+OVERRIDES = {
+    "gtcaca_box_new": {
+        "brief": "Create a new box layout",
+        "description": (
+            "Allocates a box layout with the given orientation. A box does not\n"
+            "draw anything: it positions the widgets you add to it. Add widgets\n"
+            "and nested boxes, then call gtcaca_box_apply() (or _apply_window) to\n"
+            "compute their coordinates. Free it with gtcaca_box_free()."),
+        "returns": _BOX_NEW_RET,
+    },
+    "gtcaca_vbox_new": {
+        "brief": "Create a new vertical box layout",
+        "description": (
+            "Convenience constructor for a vertically-stacking box layout.\n"
+            "Equivalent to gtcaca_box_new(GTCACA_BOX_VERTICAL)."),
+        "returns": _BOX_NEW_RET,
+    },
+    "gtcaca_hbox_new": {
+        "brief": "Create a new horizontal box layout",
+        "description": (
+            "Convenience constructor for a horizontally-stacking box layout.\n"
+            "Equivalent to gtcaca_box_new(GTCACA_BOX_HORIZONTAL)."),
+        "returns": _BOX_NEW_RET,
+    },
+    "gtcaca_box_add": {
+        "brief": "Add a widget to the box at its natural size",
+        "description": (
+            "Appends an already-created widget to the box. The widget keeps its\n"
+            "natural size and is aligned on the cross axis per the box alignment."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_add_expand": {
+        "brief": "Add a widget that grows to fill leftover space",
+        "description": (
+            "Appends a widget that both expands to share the leftover space along\n"
+            "the box's main axis and is resized to fill the cell it is given.\n"
+            "Use it for the widget that should soak up the remaining room."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_add_full": {
+        "brief": "Add a widget with explicit expand/fill flags",
+        "description": (
+            "Appends a widget with full control: expand shares leftover main-axis\n"
+            "space between growable items; fill resizes the widget to its cell.\n"
+            "gtcaca_box_add() is (0,0); gtcaca_box_add_expand() is (1,1)."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_add_box": {
+        "brief": "Nest a child box inside this box",
+        "description": (
+            "Adds a nested box as an item. The child spans the full cross axis and\n"
+            "takes its natural size along the main axis (add a stretch if you want\n"
+            "it to absorb slack). The child is laid out recursively on apply."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_add_stretch": {
+        "brief": "Add a flexible spacer that pushes items apart",
+        "description": (
+            "Adds an empty, infinitely-flexible item (Qt's addStretch). It claims\n"
+            "an equal share of the leftover space, so stretches before/after/\n"
+            "between widgets align them to the end, start or spread them out."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_add_spacing": {
+        "brief": "Add a fixed-size empty gap",
+        "description": (
+            "Inserts a fixed empty gap of `size` cells along the box's main axis,\n"
+            "on top of the regular inter-item spacing."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_set_spacing": {
+        "brief": "Set the gap between items",
+        "description": (
+            "Sets the number of blank cells inserted between adjacent items along\n"
+            "the main axis. Defaults to 1."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_set_margin": {
+        "brief": "Set the outer margin",
+        "description": (
+            "Sets the blank border, in cells, kept on every side inside the box's\n"
+            "rectangle before items are placed. Defaults to 1."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_set_align": {
+        "brief": "Set the cross-axis alignment",
+        "description": (
+            "Sets how non-filling items are aligned on the cross axis: START,\n"
+            "CENTER or END. Defaults to START."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_preferred_width": {
+        "brief": "Compute the box's natural width",
+        "description": (
+            "Returns the width the box would like, accounting for its items,\n"
+            "inter-item spacing and margins. Nested boxes are measured recursively."),
+        "returns": "Preferred width in characters.",
+    },
+    "gtcaca_box_preferred_height": {
+        "brief": "Compute the box's natural height",
+        "description": (
+            "Returns the height the box would like, accounting for its items,\n"
+            "inter-item spacing and margins. Nested boxes are measured recursively."),
+        "returns": "Preferred height in characters.",
+    },
+    "gtcaca_box_apply": {
+        "brief": "Lay out the box over a rectangle",
+        "description": (
+            "Positions every managed widget within the given canvas rectangle by\n"
+            "overwriting its x/y/width/height. Call once after building the box;\n"
+            "the next redraw paints the widgets at their computed positions."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_apply_window": {
+        "brief": "Lay out the box inside a window",
+        "description": (
+            "Convenience wrapper around gtcaca_box_apply() that targets the\n"
+            "interior of a window, just inside its border."),
+        "returns": "Nothing.",
+    },
+    "gtcaca_box_free": {
+        "brief": "Free the box and its nested boxes",
+        "description": (
+            "Releases the box and any boxes nested inside it. The widgets the box\n"
+            "positioned are never freed and remain valid."),
+        "returns": "Nothing.",
+    },
+}
+
 # ─── brief generator ────────────────────────────────────────────────────────
 
 def _make_brief(fname):
@@ -303,6 +439,13 @@ def scan_headers():
             brief = _make_brief(name)
             desc = _make_description(name, module, param_names)
             returns = _make_returns(ret_type, name)
+
+            # Apply hand-written overrides for functions the heuristics get wrong.
+            ov = OVERRIDES.get(name)
+            if ov:
+                brief = ov.get('brief', brief)
+                desc = ov.get('description', desc)
+                returns = ov.get('returns', returns)
 
             entries.append({
                 'name': name,

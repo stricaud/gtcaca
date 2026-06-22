@@ -15,6 +15,200 @@ const gtcaca_api_entry_t gtcaca_api[] = {
     "Nothing."
   },
   {
+    /* gtcaca_vbox_new */
+    "gtcaca_vbox_new",
+    "box",
+    "Create a new vertical box layout",
+    "gtcaca_box_t * gtcaca_vbox_new(void)",
+    "Convenience constructor for a vertically-stacking box layout.\n"
+    "Equivalent to gtcaca_box_new(GTCACA_BOX_VERTICAL).",
+    "",
+    "Pointer to the new box layout, or NULL on allocation failure."
+  },
+  {
+    /* gtcaca_hbox_new */
+    "gtcaca_hbox_new",
+    "box",
+    "Create a new horizontal box layout",
+    "gtcaca_box_t * gtcaca_hbox_new(void)",
+    "Convenience constructor for a horizontally-stacking box layout.\n"
+    "Equivalent to gtcaca_box_new(GTCACA_BOX_HORIZONTAL).",
+    "",
+    "Pointer to the new box layout, or NULL on allocation failure."
+  },
+  {
+    /* gtcaca_box_new */
+    "gtcaca_box_new",
+    "box",
+    "Create a new box layout",
+    "gtcaca_box_t * gtcaca_box_new(gtcaca_box_orientation_t orientation)",
+    "Allocates a box layout with the given orientation. A box does not\n"
+    "draw anything: it positions the widgets you add to it. Add widgets\n"
+    "and nested boxes, then call gtcaca_box_apply() (or _apply_window) to\n"
+    "compute their coordinates. Free it with gtcaca_box_free().",
+    "orientation\\tThe orientation argument\\n",
+    "Pointer to the new box layout, or NULL on allocation failure."
+  },
+  {
+    /* gtcaca_box_add */
+    "gtcaca_box_add",
+    "box",
+    "Add a widget to the box at its natural size",
+    "void gtcaca_box_add(gtcaca_box_t *box, gtcaca_widget_t *widget)",
+    "Appends an already-created widget to the box. The widget keeps its\n"
+    "natural size and is aligned on the cross axis per the box alignment.",
+    "box\\tThe box argument\\nwidget\\tTarget widget\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_add_expand */
+    "gtcaca_box_add_expand",
+    "box",
+    "Add a widget that grows to fill leftover space",
+    "void gtcaca_box_add_expand(gtcaca_box_t *box, gtcaca_widget_t *widget)",
+    "Appends a widget that both expands to share the leftover space along\n"
+    "the box's main axis and is resized to fill the cell it is given.\n"
+    "Use it for the widget that should soak up the remaining room.",
+    "box\\tThe box argument\\nwidget\\tTarget widget\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_add_full */
+    "gtcaca_box_add_full",
+    "box",
+    "Add a widget with explicit expand/fill flags",
+    "void gtcaca_box_add_full(gtcaca_box_t *box, gtcaca_widget_t *widget, int expand, int fill)",
+    "Appends a widget with full control: expand shares leftover main-axis\n"
+    "space between growable items; fill resizes the widget to its cell.\n"
+    "gtcaca_box_add() is (0,0); gtcaca_box_add_expand() is (1,1).",
+    "box\\tThe box argument\\nwidget\\tTarget widget\\nexpand\\tThe expand argument\\nfill\\tThe fill argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_add_box */
+    "gtcaca_box_add_box",
+    "box",
+    "Nest a child box inside this box",
+    "void gtcaca_box_add_box(gtcaca_box_t *box, gtcaca_box_t *child)",
+    "Adds a nested box as an item. The child spans the full cross axis and\n"
+    "takes its natural size along the main axis (add a stretch if you want\n"
+    "it to absorb slack). The child is laid out recursively on apply.",
+    "box\\tThe box argument\\nchild\\tThe child argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_add_stretch */
+    "gtcaca_box_add_stretch",
+    "box",
+    "Add a flexible spacer that pushes items apart",
+    "void gtcaca_box_add_stretch(gtcaca_box_t *box)",
+    "Adds an empty, infinitely-flexible item (Qt's addStretch). It claims\n"
+    "an equal share of the leftover space, so stretches before/after/\n"
+    "between widgets align them to the end, start or spread them out.",
+    "box\\tThe box argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_add_spacing */
+    "gtcaca_box_add_spacing",
+    "box",
+    "Add a fixed-size empty gap",
+    "void gtcaca_box_add_spacing(gtcaca_box_t *box, int size)",
+    "Inserts a fixed empty gap of `size` cells along the box's main axis,\n"
+    "on top of the regular inter-item spacing.",
+    "box\\tThe box argument\\nsize\\tThe size argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_set_spacing */
+    "gtcaca_box_set_spacing",
+    "box",
+    "Set the gap between items",
+    "void gtcaca_box_set_spacing(gtcaca_box_t *box, int spacing)",
+    "Sets the number of blank cells inserted between adjacent items along\n"
+    "the main axis. Defaults to 1.",
+    "box\\tThe box argument\\nspacing\\tThe spacing argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_set_margin */
+    "gtcaca_box_set_margin",
+    "box",
+    "Set the outer margin",
+    "void gtcaca_box_set_margin(gtcaca_box_t *box, int margin)",
+    "Sets the blank border, in cells, kept on every side inside the box's\n"
+    "rectangle before items are placed. Defaults to 1.",
+    "box\\tThe box argument\\nmargin\\tThe margin argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_set_align */
+    "gtcaca_box_set_align",
+    "box",
+    "Set the cross-axis alignment",
+    "void gtcaca_box_set_align(gtcaca_box_t *box, gtcaca_align_t align)",
+    "Sets how non-filling items are aligned on the cross axis: START,\n"
+    "CENTER or END. Defaults to START.",
+    "box\\tThe box argument\\nalign\\tThe align argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_preferred_width */
+    "gtcaca_box_preferred_width",
+    "box",
+    "Compute the box's natural width",
+    "int gtcaca_box_preferred_width(gtcaca_box_t *box)",
+    "Returns the width the box would like, accounting for its items,\n"
+    "inter-item spacing and margins. Nested boxes are measured recursively.",
+    "box\\tThe box argument\\n",
+    "Preferred width in characters."
+  },
+  {
+    /* gtcaca_box_preferred_height */
+    "gtcaca_box_preferred_height",
+    "box",
+    "Compute the box's natural height",
+    "int gtcaca_box_preferred_height(gtcaca_box_t *box)",
+    "Returns the height the box would like, accounting for its items,\n"
+    "inter-item spacing and margins. Nested boxes are measured recursively.",
+    "box\\tThe box argument\\n",
+    "Preferred height in characters."
+  },
+  {
+    /* gtcaca_box_apply */
+    "gtcaca_box_apply",
+    "box",
+    "Lay out the box over a rectangle",
+    "void gtcaca_box_apply(gtcaca_box_t *box, int x, int y, int width, int height)",
+    "Positions every managed widget within the given canvas rectangle by\n"
+    "overwriting its x/y/width/height. Call once after building the box;\n"
+    "the next redraw paints the widgets at their computed positions.",
+    "box\\tThe box argument\\nx\\tX position relative to parent\\ny\\tY position relative to parent\\nwidth\\tWidth in characters\\nheight\\tHeight in characters\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_apply_window */
+    "gtcaca_box_apply_window",
+    "box",
+    "Lay out the box inside a window",
+    "void gtcaca_box_apply_window(gtcaca_box_t *box, gtcaca_window_widget_t *win)",
+    "Convenience wrapper around gtcaca_box_apply() that targets the\n"
+    "interior of a window, just inside its border.",
+    "box\\tThe box argument\\nwin\\tThe win argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_box_free */
+    "gtcaca_box_free",
+    "box",
+    "Free the box and its nested boxes",
+    "void gtcaca_box_free(gtcaca_box_t *box)",
+    "Releases the box and any boxes nested inside it. The widgets the box\n"
+    "positioned are never freed and remain valid.",
+    "box\\tThe box argument\\n",
+    "Nothing."
+  },
+  {
     /* gtcaca_button_key_cb_register */
     "gtcaca_button_key_cb_register",
     "button",
@@ -808,6 +1002,16 @@ const gtcaca_api_entry_t gtcaca_api[] = {
     "Nothing."
   },
   {
+    /* gtcaca_textview_set_mode */
+    "gtcaca_textview_set_mode",
+    "textview",
+    "Set the mode property of textview",
+    "void gtcaca_textview_set_mode(gtcaca_textview_widget_t *tv, gtcaca_textview_mode_t mode)",
+    "Sets the mode attribute of the textview widget to the given value.",
+    "tv\\tThe tv argument\\nmode\\tThe mode argument\\n",
+    "Nothing."
+  },
+  {
     /* gtcaca_textview_key_cb_register */
     "gtcaca_textview_key_cb_register",
     "textview",
@@ -868,6 +1072,26 @@ const gtcaca_api_entry_t gtcaca_api[] = {
     "Perform widget is focusable operation.",
     "widget\\tTarget widget\\n",
     "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_widget_show */
+    "gtcaca_widget_show",
+    "widget",
+    "Show the widget widget",
+    "void gtcaca_widget_show(gtcaca_widget_t *widget)",
+    "Show the widget widget.",
+    "widget\\tTarget widget\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_widget_hide */
+    "gtcaca_widget_hide",
+    "widget",
+    "Hide the widget widget",
+    "void gtcaca_widget_hide(gtcaca_widget_t *widget)",
+    "Hide the widget widget.",
+    "widget\\tTarget widget\\n",
+    "Nothing."
   },
   {
     /* gtcaca_window_draw */
@@ -932,6 +1156,16 @@ const gtcaca_api_entry_t gtcaca_api[] = {
     "Nothing."
   },
   {
+    /* gtcaca_window_set_default */
+    "gtcaca_window_set_default",
+    "window",
+    "Set the default property of window",
+    "void gtcaca_window_set_default(gtcaca_window_widget_t *win, gtcaca_widget_t *widget)",
+    "Sets the default attribute of the window widget to the given value.",
+    "win\\tThe win argument\\nwidget\\tTarget widget\\n",
+    "Nothing."
+  },
+  {
     /* gtcaca_window_focus_next_child */
     "gtcaca_window_focus_next_child",
     "window",
@@ -948,6 +1182,26 @@ const gtcaca_api_entry_t gtcaca_api[] = {
     "Perform window focus prev child operation",
     "void gtcaca_window_focus_prev_child(gtcaca_window_widget_t *win)",
     "Perform window focus prev child operation.",
+    "win\\tThe win argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_window_set_close_animation */
+    "gtcaca_window_set_close_animation",
+    "window",
+    "Perform window set close animation operation",
+    "void gtcaca_window_set_close_animation(gtcaca_window_widget_t *win, gtcaca_window_close_anim_t anim, gtcaca_widget_t *target)",
+    "Perform window set close animation operation.",
+    "win\\tThe win argument\\nanim\\tThe anim argument\\ntarget\\tThe target argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_window_close */
+    "gtcaca_window_close",
+    "window",
+    "Perform window close operation",
+    "void gtcaca_window_close(gtcaca_window_widget_t *win)",
+    "Perform window close operation.",
     "win\\tThe win argument\\n",
     "Nothing."
   },

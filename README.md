@@ -86,6 +86,24 @@ Label
 
 A Window.
 
+## Layout (vbox / hbox)
+
+Widgets can be placed by hand (explicit `x, y` in every constructor) or arranged
+automatically with vertical/horizontal box layouts, à la Qt's `QVBoxLayout` /
+`QHBoxLayout`:
+
+    #include <gtcaca/box.h>
+
+    gtcaca_box_t *vb = gtcaca_vbox_new();
+    gtcaca_box_add(vb, GTCACA_WIDGET(label));
+    gtcaca_box_add(vb, GTCACA_WIDGET(entry));
+    gtcaca_box_add(vb, GTCACA_WIDGET(button));
+    gtcaca_box_apply_window(vb, win);   /* compute positions */
+    gtcaca_box_free(vb);
+
+See [docs/layout.md](docs/layout.md) for the full guide and
+[tests/simple_layout.c](tests/simple_layout.c) for a runnable demo.
+
 
 # License
 

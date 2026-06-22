@@ -29,6 +29,7 @@ set(GTCACA_LIB_SRC
   frame.c
   separator.c
   expander.c
+  box.c
 )
 
 set(GTCACA_HEADERS
@@ -60,6 +61,7 @@ set(GTCACA_HEADERS
   include/gtcaca/frame.h
   include/gtcaca/separator.h
   include/gtcaca/expander.h
+  include/gtcaca/box.h
 )
 
 set(GTCACA_LINK_LIBRARIES
