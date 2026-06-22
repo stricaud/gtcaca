@@ -428,15 +428,18 @@ int gtcaca_widgets_handle_key_press(int key)
         break;
       }
     }
-    /* Snapshot the current tail so widgets appended during dispatch (e.g. a
-       dialog created by a button callback) don't receive this same event. */
-    gtcaca_widget_t *dispatch_last = gmo.widgets_list
-                                     ? gmo.widgets_list->prev : NULL;
+    /* Snapshot the widgets focused right now and deliver only to them. This
+       way a widget appended during dispatch (e.g. a dialog from a button
+       callback) — or one that *gains* focus mid-dispatch (e.g. another window
+       focused by C-x o / C-x 0) — does not also receive this same key. */
+    gtcaca_widget_t *focused[64];
+    int nfocused = 0, i;
     CDL_FOREACH(gmo.widgets_list, widget) {
       if (menu_active && widget->type != GTCACA_WIDGET_MENU) continue;
-      _gtcaca_widget_handle_key_press(widget, key);
-      if (widget == dispatch_last) break;
+      if (widget->has_focus && nfocused < 64) focused[nfocused++] = widget;
     }
+    for (i = 0; i < nfocused; i++)
+      _gtcaca_widget_handle_key_press(focused[i], key);
   }
 
   return 0;

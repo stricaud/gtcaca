@@ -28,10 +28,14 @@ Lines    C-x C-t transpose lines   C-t transpose chars
 Modes    C-x C-q read-only   C-x w show whitespace   Insert overtype
 Search   C-s isearch fwd  C-r isearch back   (Enter accept, C-g cancel)
 Replace  M-% (Esc %) or C-x r   (prompts: Search: … then Replace with: …)
+Windows  C-x 2 split the focused window below   C-x 3 split it right
+         C-x 1 one window   C-x 0 close window   C-x o other   C-x b buffer
+         (windows nest: split one pane without disturbing the others)
 Meta     Esc is the Meta prefix — press Esc, then a key, for M-<key>
          (Alt+<key> works too on terminals that send it as Esc-prefixed)
 Undo     C-/   (also C-x u)
-Files    C-x C-s save     C-x C-c quit       C-x d browser
+Files    C-x C-f find file (Tab completes; a directory opens the browser)
+         C-x C-s save   C-x C-c quit   C-x d browser
 View     C-x l line numbers   C-x f folding   C-x t toggle fold   C-x a annotate
 JSON     C-x p pretty-print (.json/.jsonl open in JSON mode automatically)
 Complete Tab (after a word)  — Up/Down choose, Enter/Tab accept, Esc cancel
