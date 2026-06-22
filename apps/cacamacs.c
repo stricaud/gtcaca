@@ -15,8 +15,11 @@
  * widget's own editing keys.
  *
  * Bindings:
- *   Motion : C-f C-b C-n C-p  C-a C-e  C-v (page down)  arrows
- *   Edit   : C-d (delete fwd)  C-k (kill line)  Backspace
+ *   Motion : C-f C-b C-n C-p  C-a C-e  C-v (page down)  arrows  M-f/M-b word
+ *   Edit   : C-d (delete fwd)  C-k (kill line)  Backspace  C-t transpose chars
+ *            M-d / M-DEL kill word  M-u/M-l upcase/downcase word  Insert overtype
+ *   Lines  : C-x C-t transpose lines
+ *   Modes  : C-x C-q read-only   C-x w show whitespace   (matching braces glow)
  *   Region : C-Space set mark  C-w kill  M-w (Esc w) copy  C-y yank  C-g cancel
  *   Search : C-s incremental search forward, C-r backward (Enter accepts,
  *            C-g cancels); M-% (Esc %) or C-x r replace-all
@@ -77,6 +80,7 @@ static int                        g_folding = 0;         /* folding mode on? */
 /* indentation config (~/.cacamacs/config.json, with per-extension overrides) */
 typedef struct { char ext[16]; int tab_size, insert_spaces, indent_size; int has_ts, has_is, has_id; } lang_override_t;
 static int             g_cfg_tab = 8, g_cfg_spaces = 1, g_cfg_indent = 2;   /* global defaults */
+static int             g_cfg_edge = 0;                                       /* edge/ruler column */
 static lang_override_t g_overrides[32];
 static int             g_noverrides = 0;
 static int             g_tab_size = 8, g_insert_spaces = 1, g_indent_size = 2; /* effective */
@@ -154,6 +158,65 @@ static void copy_region(gtcaca_editor_widget_t *ed)
   gtcaca_editor_set_empty_selection(ed, gtcaca_editor_get_current_pos(ed));
   g_mark_active = 0;
   snprintf(g_message, sizeof g_message, "Saved to kill ring");
+}
+
+/* M-d / M-Backspace: kill the word forward/back, saving it to the kill ring. */
+static void kill_word_right(gtcaca_editor_widget_t *ed)
+{
+  int from = gtcaca_editor_get_current_pos(ed);
+  int to   = gtcaca_editor_word_right_position(ed, from);
+  if (to > from) { int n = to - from; char *b = malloc((size_t)n + 1); if (b) { gtcaca_editor_get_text_range(ed, from, to, b, n + 1); kill_set(b, n); free(b); } gtcaca_editor_del_word_right(ed); }
+}
+static void kill_word_left(gtcaca_editor_widget_t *ed)
+{
+  int to   = gtcaca_editor_get_current_pos(ed);
+  int from = gtcaca_editor_word_left_position(ed, to);
+  if (from < to) { int n = to - from; char *b = malloc((size_t)n + 1); if (b) { gtcaca_editor_get_text_range(ed, from, to, b, n + 1); kill_set(b, n); free(b); } gtcaca_editor_del_word_left(ed); }
+}
+
+/* M-u / M-l: upcase/downcase the region, or the word forward from point. */
+static void case_word(gtcaca_editor_widget_t *ed, int upper)
+{
+  if (gtcaca_editor_get_selection_start(ed) == gtcaca_editor_get_selection_end(ed)) {
+    int from = gtcaca_editor_get_current_pos(ed);
+    int to   = gtcaca_editor_word_right_position(ed, from);
+    if (to <= from) return;
+    gtcaca_editor_set_selection(ed, to, from);
+    if (upper) gtcaca_editor_upper_case(ed); else gtcaca_editor_lower_case(ed);
+    gtcaca_editor_set_empty_selection(ed, to);
+  } else {
+    if (upper) gtcaca_editor_upper_case(ed); else gtcaca_editor_lower_case(ed);
+  }
+}
+
+/* C-t: transpose the two characters around point (Emacs transpose-chars). */
+static void transpose_chars(gtcaca_editor_widget_t *ed)
+{
+  int p = gtcaca_editor_get_current_pos(ed), len = gtcaca_editor_get_length(ed), a, b;
+  char ca, cb, two[3];
+  if (len < 2) return;
+  if (p >= len) { a = len - 2; b = len - 1; } else if (p == 0) { a = 0; b = 1; } else { a = p - 1; b = p; }
+  ca = gtcaca_editor_get_char_at(ed, a); cb = gtcaca_editor_get_char_at(ed, b);
+  if (ca == '\n' || cb == '\n') return;
+  two[0] = cb; two[1] = ca; two[2] = '\0';
+  gtcaca_editor_delete_range(ed, a, 2);
+  gtcaca_editor_insert_text(ed, a, two);
+  gtcaca_editor_set_empty_selection(ed, (p >= len) ? p : p + 1);
+}
+
+/* show-paren: highlight the brace under/just-before the caret and its match. */
+static void show_paren(gtcaca_editor_widget_t *ed)
+{
+  int pos = gtcaca_editor_get_current_pos(ed), bp = -1;
+  char c0 = gtcaca_editor_get_char_at(ed, pos);
+  char c1 = pos > 0 ? gtcaca_editor_get_char_at(ed, pos - 1) : 0;
+  if (c0 && strchr("()[]{}", c0))      bp = pos;
+  else if (c1 && strchr("()[]{}", c1)) bp = pos - 1;
+  if (bp >= 0) {
+    int m = gtcaca_editor_brace_match(ed, bp);
+    if (m >= 0) gtcaca_editor_brace_highlight(ed, bp, m);
+    else        gtcaca_editor_brace_badlight(ed, bp);
+  } else gtcaca_editor_brace_highlight(ed, -1, -1);
 }
 
 static void kill_line(gtcaca_editor_widget_t *ed)
@@ -460,6 +523,15 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     case 'd':               show_browser();               return 1;  /* C-x d (dired) */
     case 'p':               pretty_print_json(ed);        return 1;  /* C-x p */
     case 'r':               start_replace();              return 1;  /* C-x r */
+    case CACA_KEY_CTRL_T:   gtcaca_editor_line_transpose(ed); return 1;  /* C-x C-t transpose lines */
+    case CACA_KEY_CTRL_Q:
+      gtcaca_editor_set_read_only(ed, !gtcaca_editor_get_read_only(ed));
+      snprintf(g_message, sizeof g_message, "Read-only %s", gtcaca_editor_get_read_only(ed) ? "on" : "off");
+      return 1;
+    case 'w':
+      gtcaca_editor_set_view_whitespace(ed, !gtcaca_editor_get_view_whitespace(ed));
+      snprintf(g_message, sizeof g_message, "Whitespace %s", gtcaca_editor_get_view_whitespace(ed) ? "shown" : "hidden");
+      return 1;
     default:
       snprintf(g_message, sizeof(g_message), "C-x %c is undefined", key >= 32 ? key : '?');
       return 1;
@@ -472,6 +544,13 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     switch (key) {
     case '%':               start_replace();   return 1;  /* M-% query replace */
     case 'w': case 'W':     copy_region(ed);   return 1;  /* M-w copy region   */
+    case 'f': case 'F':     move(ed, gtcaca_editor_word_right, gtcaca_editor_word_right_extend); return 1; /* M-f */
+    case 'b': case 'B':     move(ed, gtcaca_editor_word_left,  gtcaca_editor_word_left_extend);  return 1; /* M-b */
+    case 'd': case 'D':     kill_word_right(ed); return 1;  /* M-d  kill word fwd  */
+    case CACA_KEY_BACKSPACE:
+    case CACA_KEY_DELETE:   kill_word_left(ed);  return 1;  /* M-DEL kill word back */
+    case 'u': case 'U':     case_word(ed, 1);    return 1;  /* M-u  upcase word    */
+    case 'l': case 'L':     case_word(ed, 0);    return 1;  /* M-l  downcase word  */
     case CACA_KEY_ESCAPE:   keyboard_quit(ed); return 1;  /* Esc Esc cancels   */
     default:
       snprintf(g_message, sizeof(g_message), "M-%c is undefined", key >= 32 ? key : '?');
@@ -488,6 +567,13 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
   /* search */
   case KEY_CTRL_S:      start_isearch(ed, 1);  return 1;   /* C-s */
   case CACA_KEY_CTRL_R: start_isearch(ed, -1); return 1;   /* C-r */
+
+  /* misc editing */
+  case CACA_KEY_CTRL_T: transpose_chars(ed);   return 1;   /* C-t transpose chars */
+  case CACA_KEY_INSERT:
+    gtcaca_editor_set_overtype(ed, !gtcaca_editor_get_overtype(ed));
+    snprintf(g_message, sizeof g_message, "Overtype %s", gtcaca_editor_get_overtype(ed) ? "on" : "off");
+    return 1;
 
   /* motion */
   case CACA_KEY_CTRL_F: move(ed, gtcaca_editor_char_right, gtcaca_editor_char_right_extend); return 1;
@@ -544,6 +630,7 @@ static void refresh_modeline(gtcaca_editor_widget_t *ed, void *ud)
   const char *mod  = gtcaca_editor_get_modify(ed) ? "**" : "--";
 
   (void)ud;
+  show_paren(ed);
   /* keep fold structure in step with edits */
   if (gtcaca_editor_get_json_mode(ed)) gtcaca_editor_fold_json(ed);
   else if (g_folding)                  gtcaca_editor_fold_by_indentation(ed);
@@ -600,6 +687,7 @@ static void load_config(void)
   g_cfg_tab    = _json_int(root, "tabSize", g_cfg_tab);
   g_cfg_spaces = _json_bool(root, "insertSpaces", g_cfg_spaces);
   g_cfg_indent = _json_int(root, "indentSize", g_cfg_indent);
+  g_cfg_edge   = _json_int(root, "edgeColumn", g_cfg_edge);
 
   /* per-language overrides keyed by file extension, e.g. ".py": { ... } */
   langs = gtcaca_json_object_get(root, "languages");
@@ -1176,6 +1264,9 @@ int main(int argc, char **argv)
   gtcaca_editor_key_cb_register(g_ed, on_key, NULL);
   gtcaca_editor_set_update_cb(g_ed, refresh_modeline, NULL);
   apply_indent_settings(g_filename ? strrchr(g_filename, '.') : NULL);
+  gtcaca_editor_set_caret_line_visible(g_ed, 1);     /* subtly highlight the current line */
+  gtcaca_editor_set_caret_line_back(g_ed, CACA_BLACK);
+  gtcaca_editor_set_edge_column(g_ed, g_cfg_edge);   /* optional column ruler */
 
   if (contents) { gtcaca_editor_set_text(g_ed, contents); free(contents); }
   gtcaca_editor_empty_undo_buffer(g_ed);

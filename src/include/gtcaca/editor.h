@@ -208,6 +208,18 @@ struct _gtcaca_editor_widget_t {
   int                   target_end;
   int                   search_flags;
 
+  /* Modes & display options */
+  int                   read_only;
+  int                   overtype;
+  int                   view_ws;              /* show whitespace */
+  int                   caret_line_visible;
+  int                   caret_line_back_set;
+  uint8_t               caret_line_back;
+  int                   edge_column;          /* 0 = off */
+  uint8_t               edge_colour;
+  /* Brace highlight positions (-1 = none) */
+  int                   brace_hl1, brace_hl2, brace_bad;
+
   /* Margins / folding / annotations */
   int                   show_fold_margin;
   int                   annotation_visible;   /* an ANNOTATION_* mode */
@@ -409,6 +421,46 @@ int  gtcaca_editor_find_text(gtcaca_editor_widget_t *w, int flags, const char *t
 void gtcaca_editor_search_anchor(gtcaca_editor_widget_t *w);
 int  gtcaca_editor_search_next(gtcaca_editor_widget_t *w, int flags, const char *text);
 int  gtcaca_editor_search_prev(gtcaca_editor_widget_t *w, int flags, const char *text);
+
+/* ── Word operations (cf. Scintilla word commands) ────────────────────────── */
+int  gtcaca_editor_word_left_position(gtcaca_editor_widget_t *w, int pos);
+int  gtcaca_editor_word_right_position(gtcaca_editor_widget_t *w, int pos);
+void gtcaca_editor_word_left(gtcaca_editor_widget_t *w);
+void gtcaca_editor_word_left_extend(gtcaca_editor_widget_t *w);
+void gtcaca_editor_word_right(gtcaca_editor_widget_t *w);
+void gtcaca_editor_word_right_extend(gtcaca_editor_widget_t *w);
+void gtcaca_editor_del_word_left(gtcaca_editor_widget_t *w);
+void gtcaca_editor_del_word_right(gtcaca_editor_widget_t *w);
+
+/* ── Brace matching (cf. Scintilla SCI_BRACEMATCH / SCI_BRACEHIGHLIGHT) ────── */
+/* Returns the position of the brace matching the one at `pos`, or -1. */
+int  gtcaca_editor_brace_match(gtcaca_editor_widget_t *w, int pos);
+/* Highlight a matched brace pair (pos2 = -1 to clear); badlight an unmatched. */
+void gtcaca_editor_brace_highlight(gtcaca_editor_widget_t *w, int pos1, int pos2);
+void gtcaca_editor_brace_badlight(gtcaca_editor_widget_t *w, int pos);
+
+/* ── Line & case commands ─────────────────────────────────────────────────── */
+void gtcaca_editor_line_duplicate(gtcaca_editor_widget_t *w);
+void gtcaca_editor_line_transpose(gtcaca_editor_widget_t *w);   /* swap with previous line */
+void gtcaca_editor_line_delete(gtcaca_editor_widget_t *w);
+void gtcaca_editor_selection_duplicate(gtcaca_editor_widget_t *w);
+void gtcaca_editor_upper_case(gtcaca_editor_widget_t *w);       /* the selection */
+void gtcaca_editor_lower_case(gtcaca_editor_widget_t *w);
+
+/* ── Modes ────────────────────────────────────────────────────────────────── */
+void gtcaca_editor_set_read_only(gtcaca_editor_widget_t *w, int on);
+int  gtcaca_editor_get_read_only(gtcaca_editor_widget_t *w);
+void gtcaca_editor_set_overtype(gtcaca_editor_widget_t *w, int on);
+int  gtcaca_editor_get_overtype(gtcaca_editor_widget_t *w);
+
+/* ── Display options ──────────────────────────────────────────────────────── */
+void gtcaca_editor_set_view_whitespace(gtcaca_editor_widget_t *w, int on);
+int  gtcaca_editor_get_view_whitespace(gtcaca_editor_widget_t *w);
+void gtcaca_editor_set_caret_line_visible(gtcaca_editor_widget_t *w, int on);
+void gtcaca_editor_set_caret_line_back(gtcaca_editor_widget_t *w, uint8_t colour);
+void gtcaca_editor_set_edge_column(gtcaca_editor_widget_t *w, int column);
+int  gtcaca_editor_get_edge_column(gtcaca_editor_widget_t *w);
+void gtcaca_editor_set_edge_colour(gtcaca_editor_widget_t *w, uint8_t colour);
 
 /* ── TextMate grammars (.tmLanguage.json) ─────────────────────────────────── */
 /* Load a grammar from a .tmLanguage.json. Returns NULL on error, or if the

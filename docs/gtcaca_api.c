@@ -1551,6 +1551,286 @@ const gtcaca_api_entry_t gtcaca_api[] = {
     "0 on success, non-zero on error."
   },
   {
+    /* gtcaca_editor_word_left_position */
+    "gtcaca_editor_word_left_position",
+    "editor",
+    "Perform editor word left position operation",
+    "int gtcaca_editor_word_left_position(gtcaca_editor_widget_t *w, int pos)",
+    "Perform editor word left position operation.",
+    "w\\tThe w argument\\npos\\tThe pos argument\\n",
+    "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_editor_word_right_position */
+    "gtcaca_editor_word_right_position",
+    "editor",
+    "Perform editor word right position operation",
+    "int gtcaca_editor_word_right_position(gtcaca_editor_widget_t *w, int pos)",
+    "Perform editor word right position operation.",
+    "w\\tThe w argument\\npos\\tThe pos argument\\n",
+    "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_editor_word_left */
+    "gtcaca_editor_word_left",
+    "editor",
+    "Perform editor word left operation",
+    "void gtcaca_editor_word_left(gtcaca_editor_widget_t *w)",
+    "Perform editor word left operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_word_left_extend */
+    "gtcaca_editor_word_left_extend",
+    "editor",
+    "Perform editor word left extend operation",
+    "void gtcaca_editor_word_left_extend(gtcaca_editor_widget_t *w)",
+    "Perform editor word left extend operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_word_right */
+    "gtcaca_editor_word_right",
+    "editor",
+    "Perform editor word right operation",
+    "void gtcaca_editor_word_right(gtcaca_editor_widget_t *w)",
+    "Perform editor word right operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_word_right_extend */
+    "gtcaca_editor_word_right_extend",
+    "editor",
+    "Perform editor word right extend operation",
+    "void gtcaca_editor_word_right_extend(gtcaca_editor_widget_t *w)",
+    "Perform editor word right extend operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_del_word_left */
+    "gtcaca_editor_del_word_left",
+    "editor",
+    "Perform editor del word left operation",
+    "void gtcaca_editor_del_word_left(gtcaca_editor_widget_t *w)",
+    "Perform editor del word left operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_del_word_right */
+    "gtcaca_editor_del_word_right",
+    "editor",
+    "Perform editor del word right operation",
+    "void gtcaca_editor_del_word_right(gtcaca_editor_widget_t *w)",
+    "Perform editor del word right operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_brace_match */
+    "gtcaca_editor_brace_match",
+    "editor",
+    "Perform editor brace match operation",
+    "int gtcaca_editor_brace_match(gtcaca_editor_widget_t *w, int pos)",
+    "Perform editor brace match operation.",
+    "w\\tThe w argument\\npos\\tThe pos argument\\n",
+    "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_editor_brace_highlight */
+    "gtcaca_editor_brace_highlight",
+    "editor",
+    "Perform editor brace highlight operation",
+    "void gtcaca_editor_brace_highlight(gtcaca_editor_widget_t *w, int pos1, int pos2)",
+    "Perform editor brace highlight operation.",
+    "w\\tThe w argument\\npos1\\tThe pos1 argument\\npos2\\tThe pos2 argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_brace_badlight */
+    "gtcaca_editor_brace_badlight",
+    "editor",
+    "Perform editor brace badlight operation",
+    "void gtcaca_editor_brace_badlight(gtcaca_editor_widget_t *w, int pos)",
+    "Perform editor brace badlight operation.",
+    "w\\tThe w argument\\npos\\tThe pos argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_line_duplicate */
+    "gtcaca_editor_line_duplicate",
+    "editor",
+    "Perform editor line duplicate operation",
+    "void gtcaca_editor_line_duplicate(gtcaca_editor_widget_t *w)",
+    "Perform editor line duplicate operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_line_transpose */
+    "gtcaca_editor_line_transpose",
+    "editor",
+    "Perform editor line transpose operation",
+    "void gtcaca_editor_line_transpose(gtcaca_editor_widget_t *w)",
+    "Perform editor line transpose operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_line_delete */
+    "gtcaca_editor_line_delete",
+    "editor",
+    "Perform editor line delete operation",
+    "void gtcaca_editor_line_delete(gtcaca_editor_widget_t *w)",
+    "Perform editor line delete operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_selection_duplicate */
+    "gtcaca_editor_selection_duplicate",
+    "editor",
+    "Perform editor selection duplicate operation",
+    "void gtcaca_editor_selection_duplicate(gtcaca_editor_widget_t *w)",
+    "Perform editor selection duplicate operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_upper_case */
+    "gtcaca_editor_upper_case",
+    "editor",
+    "Perform editor upper case operation",
+    "void gtcaca_editor_upper_case(gtcaca_editor_widget_t *w)",
+    "Perform editor upper case operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_lower_case */
+    "gtcaca_editor_lower_case",
+    "editor",
+    "Perform editor lower case operation",
+    "void gtcaca_editor_lower_case(gtcaca_editor_widget_t *w)",
+    "Perform editor lower case operation.",
+    "w\\tThe w argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_set_read_only */
+    "gtcaca_editor_set_read_only",
+    "editor",
+    "Perform editor set read only operation",
+    "void gtcaca_editor_set_read_only(gtcaca_editor_widget_t *w, int on)",
+    "Perform editor set read only operation.",
+    "w\\tThe w argument\\non\\tThe on argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_get_read_only */
+    "gtcaca_editor_get_read_only",
+    "editor",
+    "Perform editor get read only operation",
+    "int gtcaca_editor_get_read_only(gtcaca_editor_widget_t *w)",
+    "Perform editor get read only operation.",
+    "w\\tThe w argument\\n",
+    "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_editor_set_overtype */
+    "gtcaca_editor_set_overtype",
+    "editor",
+    "Set the overtype property of editor",
+    "void gtcaca_editor_set_overtype(gtcaca_editor_widget_t *w, int on)",
+    "Sets the overtype attribute of the editor widget to the given value.",
+    "w\\tThe w argument\\non\\tThe on argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_get_overtype */
+    "gtcaca_editor_get_overtype",
+    "editor",
+    "Get the overtype property of editor",
+    "int gtcaca_editor_get_overtype(gtcaca_editor_widget_t *w)",
+    "Returns the current overtype attribute of the editor widget.",
+    "w\\tThe w argument\\n",
+    "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_editor_set_view_whitespace */
+    "gtcaca_editor_set_view_whitespace",
+    "editor",
+    "Perform editor set view whitespace operation",
+    "void gtcaca_editor_set_view_whitespace(gtcaca_editor_widget_t *w, int on)",
+    "Perform editor set view whitespace operation.",
+    "w\\tThe w argument\\non\\tThe on argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_get_view_whitespace */
+    "gtcaca_editor_get_view_whitespace",
+    "editor",
+    "Perform editor get view whitespace operation",
+    "int gtcaca_editor_get_view_whitespace(gtcaca_editor_widget_t *w)",
+    "Perform editor get view whitespace operation.",
+    "w\\tThe w argument\\n",
+    "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_editor_set_caret_line_visible */
+    "gtcaca_editor_set_caret_line_visible",
+    "editor",
+    "Perform editor set caret line visible operation",
+    "void gtcaca_editor_set_caret_line_visible(gtcaca_editor_widget_t *w, int on)",
+    "Perform editor set caret line visible operation.",
+    "w\\tThe w argument\\non\\tThe on argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_set_caret_line_back */
+    "gtcaca_editor_set_caret_line_back",
+    "editor",
+    "Perform editor set caret line back operation",
+    "void gtcaca_editor_set_caret_line_back(gtcaca_editor_widget_t *w, uint8_t colour)",
+    "Perform editor set caret line back operation.",
+    "w\\tThe w argument\\ncolour\\tThe colour argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_set_edge_column */
+    "gtcaca_editor_set_edge_column",
+    "editor",
+    "Perform editor set edge column operation",
+    "void gtcaca_editor_set_edge_column(gtcaca_editor_widget_t *w, int column)",
+    "Perform editor set edge column operation.",
+    "w\\tThe w argument\\ncolumn\\tThe column argument\\n",
+    "Nothing."
+  },
+  {
+    /* gtcaca_editor_get_edge_column */
+    "gtcaca_editor_get_edge_column",
+    "editor",
+    "Perform editor get edge column operation",
+    "int gtcaca_editor_get_edge_column(gtcaca_editor_widget_t *w)",
+    "Perform editor get edge column operation.",
+    "w\\tThe w argument\\n",
+    "0 on success, non-zero on error."
+  },
+  {
+    /* gtcaca_editor_set_edge_colour */
+    "gtcaca_editor_set_edge_colour",
+    "editor",
+    "Perform editor set edge colour operation",
+    "void gtcaca_editor_set_edge_colour(gtcaca_editor_widget_t *w, uint8_t colour)",
+    "Perform editor set edge colour operation.",
+    "w\\tThe w argument\\ncolour\\tThe colour argument\\n",
+    "Nothing."
+  },
+  {
     /* gtcaca_editor_grammar_load */
     "gtcaca_editor_grammar_load",
     "editor",

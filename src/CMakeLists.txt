@@ -40,6 +40,7 @@ set(GTCACA_LIB_SRC
   editor_json.c
   editor_tm.c
   editor_search.c
+  editor_ops.c
   json.c
 )
 

@@ -94,7 +94,7 @@ static void _adjust_after_delete(gtcaca_editor_widget_t *w, int pos, int len)
 
 static void _insert_len(gtcaca_editor_widget_t *w, int pos, const char *s, int len)
 {
-  if (len <= 0) return;
+  if (len <= 0 || w->read_only) return;
   pos = _clampi(pos, 0, w->length);
   _raw_insert(w, pos, s, len);
   _stack_clear(&w->redo, &w->redo_count, &w->redo_cap);
@@ -111,6 +111,7 @@ void gtcaca_editor_insert_text(gtcaca_editor_widget_t *w, int pos, const char *s
 
 void gtcaca_editor_delete_range(gtcaca_editor_widget_t *w, int pos, int len)
 {
+  if (w->read_only) return;
   pos = _clampi(pos, 0, w->length);
   if (pos + len > w->length) len = w->length - pos;
   if (len <= 0) return;
@@ -321,7 +322,9 @@ static int _delete_selection(gtcaca_editor_widget_t *w)
 void gtcaca_editor_add_char(gtcaca_editor_widget_t *w, char c)
 {
   char s[2]; s[0] = c; s[1] = '\0';
-  _delete_selection(w);
+  if (!_delete_selection(w) && w->overtype &&
+      w->current_pos < w->length && w->text[w->current_pos] != '\n')
+    gtcaca_editor_delete_range(w, w->current_pos, 1);   /* overwrite the char */
   _insert_len(w, w->current_pos, s, 1);  /* caret auto-advances past it */
 }
 
@@ -627,6 +630,14 @@ gtcaca_editor_widget_t *gtcaca_editor_new(gtcaca_widget_t *parent, int x, int y,
   w->autoc.max_height = 9;
   w->autoc_cb = NULL;
 
+  /* Modes / display options / brace highlight */
+  w->read_only = w->overtype = w->view_ws = w->caret_line_visible = 0;
+  w->caret_line_back_set = 0;
+  w->caret_line_back = CACA_BLUE;
+  w->edge_column = 0;
+  w->edge_colour = CACA_DARKGRAY;
+  w->brace_hl1 = w->brace_hl2 = w->brace_bad = -1;
+
   /* Margins / folding / annotations */
   w->show_fold_margin = 0;
   w->annotation_visible = GTCACA_EDITOR_ANNOTATION_STANDARD;
@@ -768,6 +779,15 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
       caca_put_char(gmo.cv, inner_x + ln_w, draw_y, mk);
     }
 
+    /* current-line highlight: paint the row background first */
+    uint8_t rowbg = (w->caret_line_visible && line == caret_line && w->has_focus)
+                      ? w->caret_line_back : nb;
+    if (rowbg != nb) {
+      int cx;
+      caca_set_color_ansi(gmo.cv, nf, rowbg); caca_set_attr(gmo.cv, 0);
+      for (cx = 0; cx < text_w; cx++) caca_put_char(gmo.cv, origin_x + cx, draw_y, ' ');
+    }
+
     /* line text, expanding tabs and applying horizontal scroll */
     vcol = 0;
     for (pos = line_start; pos < line_end; pos++) {
@@ -778,26 +798,42 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
         int vc = vcol + k;
         if (vc >= w->x_offset && vc < w->x_offset + text_w) {
           int sx = origin_x + (vc - w->x_offset);
-          int in_sel  = (pos >= sel_start && pos < sel_end);
+          int in_sel   = (pos >= sel_start && pos < sel_end);
           int is_caret = (w->has_focus && pos == w->current_pos && k == 0);
-          char outc = (c == '\t') ? ' ' : c;
+          int is_brace = (pos == w->brace_hl1 || pos == w->brace_hl2);
+          int is_bad   = (pos == w->brace_bad);
+          uint32_t outc = (c == '\t') ? ' ' : (uint32_t)(unsigned char)c;
           if (is_caret) {
             caca_set_color_ansi(gmo.cv, nb, nf); caca_set_attr(gmo.cv, 0);
           } else if (in_sel) {
             caca_set_color_ansi(gmo.cv, w->sel_set ? w->sel_fore : nb, w->sel_set ? w->sel_back : nf);
             caca_set_attr(gmo.cv, 0);
+          } else if (is_bad) {
+            caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_RED);   caca_set_attr(gmo.cv, CACA_BOLD);
+          } else if (is_brace) {
+            caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_GREEN); caca_set_attr(gmo.cv, CACA_BOLD);
+          } else if (w->view_ws && (c == ' ' || c == '\t')) {
+            caca_set_color_ansi(gmo.cv, CACA_DARKGRAY, rowbg); caca_set_attr(gmo.cv, 0);
+            outc = (c == '\t') ? (k == 0 ? 0xBB : (uint32_t)' ') : 0xB7;  /* » and · */
           } else if ((w->colorize_enabled || w->json_mode || w->grammar) && w->styles && pos < w->length) {
             gtcaca_editor_style_t *st = &w->style_table[w->styles[pos]];
-            caca_set_color_ansi(gmo.cv, st->fore, st->back_set ? st->back : nb);
+            caca_set_color_ansi(gmo.cv, st->fore, st->back_set ? st->back : rowbg);
             caca_set_attr(gmo.cv, _style_attr(st));
             if (!st->visible) outc = ' ';
           } else {
-            caca_set_color_ansi(gmo.cv, nf, nb); caca_set_attr(gmo.cv, 0);
+            caca_set_color_ansi(gmo.cv, nf, rowbg); caca_set_attr(gmo.cv, 0);
           }
           caca_put_char(gmo.cv, sx, draw_y, outc);
         }
       }
       vcol += cells;
+    }
+
+    /* edge column marker, where the line is shorter than the edge */
+    if (w->edge_column > 0 && w->edge_column >= vcol &&
+        w->edge_column >= w->x_offset && w->edge_column < w->x_offset + text_w) {
+      caca_set_color_ansi(gmo.cv, w->edge_colour, rowbg); caca_set_attr(gmo.cv, 0);
+      caca_put_char(gmo.cv, origin_x + (w->edge_column - w->x_offset), draw_y, 0x2502); /* │ */
     }
     /* caret at end-of-line */
     if (w->has_focus && caret_line == line && w->current_pos == line_end) {

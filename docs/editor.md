@@ -364,6 +364,45 @@ gtcaca_editor_search_next(ed, 0, "needle");   /* or _search_prev */
 `cacamacs` builds Emacs `C-s`/`C-r` isearch on the anchored calls and `C-x r`
 replace-all on the target calls.
 
+## 6c. Editing operations & modes
+
+Word, brace, line, case and mode commands modelled on Scintilla:
+
+```c
+/* words */
+gtcaca_editor_word_left(ed);  gtcaca_editor_word_right(ed);   /* + _extend */
+gtcaca_editor_del_word_left(ed);  gtcaca_editor_del_word_right(ed);
+int p = gtcaca_editor_word_right_position(ed, pos);
+
+/* brace matching (skips braces in string/comment styles) */
+int m = gtcaca_editor_brace_match(ed, pos);
+gtcaca_editor_brace_highlight(ed, pos, m);   /* or _brace_badlight; -1,-1 clears */
+
+/* line commands */
+gtcaca_editor_line_duplicate(ed);
+gtcaca_editor_line_transpose(ed);    /* swap with previous line */
+gtcaca_editor_line_delete(ed);
+gtcaca_editor_selection_duplicate(ed);
+
+/* case (the selection) */
+gtcaca_editor_upper_case(ed);  gtcaca_editor_lower_case(ed);
+
+/* modes */
+gtcaca_editor_set_read_only(ed, 1);   /* blocks user edits */
+gtcaca_editor_set_overtype(ed, 1);    /* typing overwrites */
+
+/* display */
+gtcaca_editor_set_view_whitespace(ed, 1);            /* show · and » */
+gtcaca_editor_set_caret_line_visible(ed, 1);
+gtcaca_editor_set_caret_line_back(ed, CACA_BLACK);
+gtcaca_editor_set_edge_column(ed, 80);               /* column ruler */
+gtcaca_editor_set_edge_colour(ed, CACA_DARKGRAY);
+```
+
+In `cacamacs`: `M-f`/`M-b`/`M-d`/`M-DEL` words, `M-u`/`M-l` case, `C-t` /
+`C-x C-t` transpose, `C-x C-q` read-only, `Insert` overtype, `C-x w` whitespace;
+matching braces glow automatically.
+
 ## 7. Style definitions
 
 Each syntax style is a full *style definition* (cf. Scintilla): foreground and
