@@ -23,19 +23,30 @@ Motion   C-f C-b C-n C-p  C-a C-e  C-v   arrows / Home / End / PageUp / PageDown
 Edit     C-d delete-fwd   C-k kill-line  Backspace   Tab indent / complete
 Words    M-f / M-b move   M-d / M-DEL kill   M-u / M-l upcase / downcase
 Region   C-Space mark     C-w kill   M-w (Esc w) copy   C-y yank   C-g cancel
+Rect     C-x SPC rectangle mark, move to the opposite corner, then:
+         C-x r t insert a string on each line   C-x r k kill   C-x r y yank
+         C-x r d delete   C-x r c blank   (C-w / M-w also act on the box)
 Comment  M-; comment / uncomment the current line or region
 Lines    C-x C-t transpose lines   C-t transpose chars
 Modes    C-x C-q read-only   C-x w show whitespace   Insert overtype
 Search   C-s isearch fwd  C-r isearch back   (Enter accept, C-g cancel)
-Replace  M-% (Esc %) or C-x r   (prompts: Search: … then Replace with: …)
+Replace  M-% (Esc %)   (prompts: Search: … then Replace with: …)
 Windows  C-x 2 split the focused window below   C-x 3 split it right
          C-x 1 one window   C-x 0 close window   C-x o other   C-x b buffer
          (windows nest: split one pane without disturbing the others)
+Macros   C-x ( start recording   C-x ) finish   C-x e replay
+         (C-u N C-x e replays N times, e.g. C-u 100 C-x e)
+Repeat   C-u N <command> runs the next command N times (bare C-u = 4):
+         C-u 40 - draws 40 dashes, C-u 5 C-f moves five chars, …
 Meta     Esc is the Meta prefix — press Esc, then a key, for M-<key>
          (Alt+<key> works too on terminals that send it as Esc-prefixed)
 Undo     C-/   (also C-x u)
 Files    C-x C-f find file (Tab completes; a directory opens the browser)
-         C-x C-s save   C-x C-c quit   C-x d browser
+         C-x C-s save (opens the save dialog if the buffer has no name)
+         C-x C-w write to a different file (save dialog)
+         C-x C-c quit   C-x d browser
+         (save dialog: type the name, Enter saves via the default OK button;
+          Tab to the buttons, Cancel or C-g aborts)
 View     C-x l line numbers   C-x f folding   C-x t toggle fold   C-x a annotate
 JSON     C-x p pretty-print (.json/.jsonl open in JSON mode automatically)
 Complete Tab (after a word)  — Up/Down choose, Enter/Tab accept, Esc cancel

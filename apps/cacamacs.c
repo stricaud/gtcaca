@@ -58,6 +58,9 @@
 #include <gtcaca/window.h>
 #include <gtcaca/statusbar.h>
 #include <gtcaca/textlist.h>
+#include <gtcaca/label.h>
+#include <gtcaca/button.h>
+#include <gtcaca/entry.h>
 #include <gtcaca/editor.h>
 #include <gtcaca/box.h>
 #include <gtcaca/json.h>
@@ -112,6 +115,14 @@ static int    g_win_used[MAXLEAVES];
 static gtcaca_window_widget_t    *g_browser_win = NULL;
 static gtcaca_editor_widget_t    *g_browser_ed  = NULL;
 static char                       g_curdir[PATH_MAX] = "";
+
+/* save-as dialog (a real window with an entry + OK / Cancel buttons) */
+static gtcaca_window_widget_t    *g_save_win    = NULL;
+static gtcaca_label_widget_t     *g_save_label  = NULL;
+static gtcaca_entry_widget_t     *g_save_entry  = NULL;
+static gtcaca_button_widget_t    *g_save_ok     = NULL;
+static gtcaca_button_widget_t    *g_save_cancel = NULL;
+static int                        g_save_open   = 0;
 static gtcaca_editor_langcfg_t   *g_langcfg  = NULL;
 static gtcaca_editor_grammar_t   *g_grammar  = NULL;
 static char                       g_langname[64] = "fundamental";
@@ -143,12 +154,26 @@ static void pane_hide_all(void);
 static void pane_show_all(void);
 static int  buf_index_of(gtcaca_editor_widget_t *ed);
 static void focus_pane(int slot);
+static void start_save_as(void);
 
 static int   g_mark_active   = 0;
 static int   g_ctrl_x        = 0;   /* C-x prefix pending */
+static int   g_rect_prefix   = 0;   /* C-x r rectangle sub-prefix pending */
 static int   g_meta          = 0;   /* Meta (Esc) prefix pending */
 static char *g_killbuf       = NULL;
 static char  g_message[128]  = "";
+
+/* keyboard macros: C-x ( record … C-x ) end, replay with C-x e */
+#define MACRO_MAX 8192
+static int   g_macro[MACRO_MAX];
+static int   g_macro_len       = 0;
+static int   g_macro_recording = 0;
+static int   g_macro_executing = 0;
+/* numeric prefix argument: C-u [digits] command  (e.g. C-u 100 C-x e) */
+static int   g_prefix_reading  = 0; /* C-u seen, accumulating an optional count */
+static int   g_prefix_pending  = 0; /* a count is armed for the next command    */
+static int   g_prefix_have     = 0; /* digits were actually typed (else default) */
+static long  g_prefix_arg      = 0;
 
 /* ── kill ring (single register) ───────────────────────────────────────────── */
 
@@ -172,13 +197,24 @@ static void move(gtcaca_editor_widget_t *ed, mv_t plain, mv_t extend)
 
 static void set_mark(gtcaca_editor_widget_t *ed)
 {
+  gtcaca_editor_set_rectangular_selection(ed, 0);   /* plain mark = linear region */
   gtcaca_editor_set_empty_selection(ed, gtcaca_editor_get_current_pos(ed));
   g_mark_active = 1;
   snprintf(g_message, sizeof(g_message), "Mark set");
 }
 
+/* C-x SPC — like set-mark, but the region is a rectangular column box */
+static void set_rectangle_mark(gtcaca_editor_widget_t *ed)
+{
+  gtcaca_editor_set_empty_selection(ed, gtcaca_editor_get_current_pos(ed));
+  gtcaca_editor_set_rectangular_selection(ed, 1);
+  g_mark_active = 1;
+  snprintf(g_message, sizeof(g_message), "Rectangle mark set — move, then C-x r t/k/y/d/c");
+}
+
 static void keyboard_quit(gtcaca_editor_widget_t *ed)
 {
+  gtcaca_editor_set_rectangular_selection(ed, 0);
   gtcaca_editor_set_empty_selection(ed, gtcaca_editor_get_current_pos(ed));
   g_mark_active = 0;
   snprintf(g_message, sizeof(g_message), "Quit");
@@ -186,8 +222,15 @@ static void keyboard_quit(gtcaca_editor_widget_t *ed)
 
 static void kill_region(gtcaca_editor_widget_t *ed)
 {
-  int a = gtcaca_editor_get_selection_start(ed);
-  int b = gtcaca_editor_get_selection_end(ed);
+  int a, b;
+  if (gtcaca_editor_get_rectangular_selection(ed)) {   /* C-w on a rectangle */
+    gtcaca_editor_rect_kill(ed);
+    g_mark_active = 0;
+    snprintf(g_message, sizeof g_message, "Killed rectangle");
+    return;
+  }
+  a = gtcaca_editor_get_selection_start(ed);
+  b = gtcaca_editor_get_selection_end(ed);
   if (a == b) { snprintf(g_message, sizeof(g_message), "No region"); return; }
   {
     int n = b - a;
@@ -202,8 +245,15 @@ static void kill_region(gtcaca_editor_widget_t *ed)
 /* M-w: copy the region to the kill ring without deleting it. */
 static void copy_region(gtcaca_editor_widget_t *ed)
 {
-  int a = gtcaca_editor_get_selection_start(ed);
-  int b = gtcaca_editor_get_selection_end(ed);
+  int a, b;
+  if (gtcaca_editor_get_rectangular_selection(ed)) {   /* M-w on a rectangle */
+    gtcaca_editor_rect_copy(ed);                        /* -> rectangle clipboard (C-x r y) */
+    g_mark_active = 0;
+    snprintf(g_message, sizeof g_message, "Copied rectangle");
+    return;
+  }
+  a = gtcaca_editor_get_selection_start(ed);
+  b = gtcaca_editor_get_selection_end(ed);
   if (a == b) { snprintf(g_message, sizeof g_message, "No region"); return; }
   {
     int n = b - a;
@@ -401,8 +451,12 @@ static void exchange_point_and_mark(gtcaca_editor_widget_t *ed)
 static void recenter(gtcaca_editor_widget_t *ed)
 {
   int line = gtcaca_editor_get_current_line(ed);
-  int top  = line - (ed->view_lines > 0 ? ed->view_lines / 2 : 0);
-  ed->first_visible_line = top < 0 ? 0 : top;
+  /* rows of text in the view; fall back to the widget height if we have not
+     been drawn yet, so the very first C-l still centres. */
+  int vh   = ed->view_lines > 0 ? ed->view_lines : ed->height - 2;
+  int top  = line - (vh > 0 ? vh / 2 : 0);
+  ed->first_visible_line = top < 0 ? 0 : top;   /* near the top it can't centre */
+  snprintf(g_message, sizeof g_message, "Recentered");
 }
 
 /* ── view toggles (line numbers, folding, annotations) ─────────────────────── */
@@ -494,7 +548,7 @@ static void save_file(gtcaca_editor_widget_t *ed)
   int len = gtcaca_editor_get_length(ed);
   char *buf;
 
-  if (!g_filename) { snprintf(g_message, sizeof(g_message), "No file name"); return; }
+  if (!g_filename) { start_save_as(); return; }   /* scratch buffer: ask for a name */
 
   buf = malloc((size_t)len + 1);
   if (!buf) return;
@@ -734,11 +788,75 @@ static void replace_phase1(const char *search)
 
 static void start_replace(void) { start_minibuffer("Replace: ", replace_phase1); }
 
+/* C-x r t — prompt for a string and insert it into the rectangle on each line */
+static void string_rect_done(const char *s)
+{
+  gtcaca_editor_rect_string_insert(g_ed, s);
+  g_mark_active = 0;
+  snprintf(g_message, sizeof g_message, "String rectangle inserted");
+}
+static void start_string_rectangle(void) { start_minibuffer("String rectangle: ", string_rect_done); }
+
+/* ── keyboard macros & numeric prefix ──────────────────────────────────────── */
+
+static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud);
+
+/* Mirror the editor widget's default text handling for keys on_key ignores,
+   so replaying a recorded key reproduces exactly what typing it would do. */
+static void editor_default_key(gtcaca_editor_widget_t *ed, int key)
+{
+  switch (key) {
+  case CACA_KEY_LEFT:     gtcaca_editor_char_left(ed);  break;
+  case CACA_KEY_RIGHT:    gtcaca_editor_char_right(ed); break;
+  case CACA_KEY_UP:       gtcaca_editor_line_up(ed);    break;
+  case CACA_KEY_DOWN:     gtcaca_editor_line_down(ed);  break;
+  case CACA_KEY_HOME:     gtcaca_editor_home(ed);       break;
+  case CACA_KEY_END:      gtcaca_editor_line_end(ed);   break;
+  case CACA_KEY_PAGEUP:   gtcaca_editor_page_up(ed);    break;
+  case CACA_KEY_PAGEDOWN: gtcaca_editor_page_down(ed);  break;
+  case CACA_KEY_RETURN: case 10:                        gtcaca_editor_new_line(ed);    break;
+  case CACA_KEY_BACKSPACE: case CACA_KEY_DELETE:        gtcaca_editor_delete_back(ed); break;
+  case CACA_KEY_TAB:      gtcaca_editor_add_char(ed, '\t'); break;
+  default: if (key >= 32 && key <= 126) gtcaca_editor_add_char(ed, (char)key); break;
+  }
+}
+
+/* Feed one key through the same path the main loop uses for the focused editor. */
+static void macro_feed(gtcaca_editor_widget_t *ed, int key)
+{
+  if (!on_key(ed, key, NULL)) editor_default_key(ed, key);
+}
+
+static void macro_execute(gtcaca_editor_widget_t *ed)
+{
+  int i;
+  if (g_macro_len == 0) { snprintf(g_message, sizeof g_message, "No keyboard macro defined"); return; }
+  g_macro_executing = 1;
+  gtcaca_editor_begin_undo_action(ed);   /* one macro run = one undo step */
+  for (i = 0; i < g_macro_len; i++) macro_feed(ed, g_macro[i]);
+  gtcaca_editor_end_undo_action(ed);
+  g_macro_executing = 0;
+}
+
+/* Consume the armed numeric prefix, returning the repeat count (default 1, or 4
+   for a bare C-u with no digits). */
+static int take_prefix(void)
+{
+  int n = g_prefix_pending ? (g_prefix_have ? (int)g_prefix_arg : 4) : 1;
+  g_prefix_pending = 0; g_prefix_have = 0; g_prefix_arg = 0;
+  return n < 1 ? 1 : n;
+}
+
 /* ── Emacs keymap ──────────────────────────────────────────────────────────── */
 
 static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
 {
   (void)ud;
+
+  /* record into the keyboard macro (the C-x ( / C-x ) control keys are trimmed
+     by the handlers below; replayed keys are not re-recorded) */
+  if (g_macro_recording && !g_macro_executing && g_macro_len < MACRO_MAX)
+    g_macro[g_macro_len++] = key;
 
   /* if focus landed on a different pane's editor, sync our notion of focus */
   if (ed != g_ed && ed != g_browser_ed) {
@@ -759,11 +877,47 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     if (key == CACA_KEY_CTRL_X) return 1;   /* swallow C-x (no save/quit chords here) */
   }
 
+  /* third key of a C-x r rectangle chord */
+  if (g_rect_prefix) {
+    g_rect_prefix = 0;
+    switch (key) {
+    case 't': start_string_rectangle();      return 1;  /* C-x r t string-rectangle */
+    case 'k': gtcaca_editor_rect_kill(ed);   g_mark_active = 0;
+              snprintf(g_message, sizeof g_message, "Killed rectangle");  return 1;  /* C-x r k */
+    case 'y': gtcaca_editor_rect_yank(ed);
+              snprintf(g_message, sizeof g_message, "Yanked rectangle");  return 1;  /* C-x r y */
+    case 'd': gtcaca_editor_rect_delete(ed); g_mark_active = 0;
+              snprintf(g_message, sizeof g_message, "Deleted rectangle"); return 1;  /* C-x r d */
+    case 'c': gtcaca_editor_rect_clear(ed);  g_mark_active = 0;
+              snprintf(g_message, sizeof g_message, "Cleared rectangle"); return 1;  /* C-x r c */
+    default:
+      snprintf(g_message, sizeof g_message, "C-x r %c is undefined", key >= 32 ? key : '?');
+      return 1;
+    }
+  }
+
   /* second key of a C-x chord */
   if (g_ctrl_x) {
+    int reps = take_prefix();   /* consumed here; only C-x e uses the count */
     g_ctrl_x = 0;
     switch (key) {
+    case '(':                                                        /* C-x ( start macro */
+      g_macro_len = 0; g_macro_recording = 1;
+      snprintf(g_message, sizeof g_message, "Defining keyboard macro...");
+      return 1;
+    case ')':                                                        /* C-x ) end macro */
+      if (g_macro_recording) {
+        if (g_macro_len >= 2) g_macro_len -= 2;   /* drop the trailing C-x ) */
+        g_macro_recording = 0;
+        snprintf(g_message, sizeof g_message, "Keyboard macro defined (%d keys)", g_macro_len);
+      }
+      return 1;
+    case 'e': {                                                      /* C-x e run macro */
+      int i; for (i = 0; i < reps; i++) macro_execute(ed);
+      return 1;
+    }
     case KEY_CTRL_S:        save_file(ed);                return 1;  /* C-x C-s */
+    case CACA_KEY_CTRL_W:   start_save_as();              return 1;  /* C-x C-w write-file */
     case CACA_KEY_CTRL_F:   start_find_file();            return 1;  /* C-x C-f */
     case CACA_KEY_CTRL_C:   gtcaca_main_quit();           return 1;  /* C-x C-c */
     case CACA_KEY_CTRL_X:   exchange_point_and_mark(ed);  return 1;  /* C-x C-x */
@@ -774,7 +928,9 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     case 'a':               toggle_annotation_here(ed);   return 1;  /* C-x a */
     case 'd':               show_browser();               return 1;  /* C-x d (dired) */
     case 'p':               pretty_print_json(ed);        return 1;  /* C-x p */
-    case 'r':               start_replace();              return 1;  /* C-x r */
+    case 'r':               g_rect_prefix = 1;                        /* C-x r … rectangle */
+                            snprintf(g_message, sizeof g_message, "C-x r-"); return 1;
+    case ' ':               set_rectangle_mark(ed);       return 1;  /* C-x SPC rect mark */
     case '2':               pane_split(1);                return 1;  /* C-x 2 split below */
     case '3':               pane_split(0);                return 1;  /* C-x 3 split right */
     case '1':               pane_unsplit_one();           return 1;  /* C-x 1 one window */
@@ -798,6 +954,7 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
 
   /* second key of a Meta (Esc) chord — Esc then a key acts as M-<key> */
   if (g_meta) {
+    (void)take_prefix();   /* consume any armed count (M- commands run once) */
     g_meta = 0;
     switch (key) {
     case '%':               start_replace();   return 1;  /* M-% query replace */
@@ -817,11 +974,43 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     }
   }
 
+  /* numeric prefix argument: C-u [digits] command (e.g. C-u 100 C-x e) */
+  if (g_prefix_reading) {
+    if (key >= '0' && key <= '9') {
+      g_prefix_arg = (g_prefix_have ? g_prefix_arg : 0) * 10 + (key - '0');
+      g_prefix_have = 1;
+      snprintf(g_message, sizeof g_message, "C-u %ld-", g_prefix_arg);
+      return 1;
+    }
+    if (key == CACA_KEY_CTRL_U) {                 /* C-u C-u … multiplies by 4 */
+      g_prefix_arg = (g_prefix_have ? g_prefix_arg : 1) * 4; g_prefix_have = 1;
+      snprintf(g_message, sizeof g_message, "C-u %ld-", g_prefix_arg);
+      return 1;
+    }
+    g_prefix_reading = 0; g_prefix_pending = 1;   /* count armed; this key is the command */
+  }
+  /* a count is armed: repeat this command (chord/meta starters pass through and
+     consume it in their own handlers). macro_feed handles every key kind —
+     self-insert, motion, edit — exactly as typing it would. */
+  if (g_prefix_pending && key != CACA_KEY_CTRL_X && key != CACA_KEY_ESCAPE) {
+    int n = take_prefix(), i, save = g_macro_executing;
+    g_macro_executing = 1;              /* don't double-record the repeats */
+    gtcaca_editor_begin_undo_action(ed); /* C-u N <cmd> = one undo step */
+    for (i = 0; i < n; i++) macro_feed(ed, key);
+    gtcaca_editor_end_undo_action(ed);
+    g_macro_executing = save;
+    return 1;
+  }
+
   g_message[0] = '\0';
 
   switch (key) {
   case CACA_KEY_CTRL_X: g_ctrl_x = 1; return 1;
   case CACA_KEY_ESCAPE: g_meta = 1; snprintf(g_message, sizeof g_message, "ESC-"); return 1;
+  case CACA_KEY_CTRL_U:                                  /* C-u universal prefix */
+    g_prefix_reading = 1; g_prefix_have = 0; g_prefix_arg = 4;
+    snprintf(g_message, sizeof g_message, "C-u-");
+    return 1;
 
   /* search */
   case KEY_CTRL_S:      start_isearch(ed, 1);  return 1;   /* C-s */
@@ -1800,6 +1989,122 @@ static void pane_switch_buffer(void)
   snprintf(g_message, sizeof g_message, "%s", g_buffers[bi].has_file ? g_buffers[bi].path : "*scratch*");
 }
 
+/* ── save-as (C-x C-w, and C-x C-s on a scratch buffer) ────────────────────── */
+
+static void save_as_done(const char *input)
+{
+  char path[PATH_MAX];
+  FILE *f;
+  int len;
+  char *buf;
+  buffer_t *b;
+
+  if (!input[0]) return;
+  if (input[0] == '~') expand_tilde(input, path, sizeof path);
+  else if (input[0] == '/') snprintf(path, sizeof path, "%s", input);
+  else if (g_curdir[0]) snprintf(path, sizeof path, "%s/%s", g_curdir, input);
+  else snprintf(path, sizeof path, "%s", input);
+
+  len = gtcaca_editor_get_length(g_ed);
+  buf = malloc((size_t)len + 1);
+  if (!buf) return;
+  gtcaca_editor_get_text(g_ed, buf, len + 1);
+  f = fopen(path, "w");
+  if (!f) { snprintf(g_message, sizeof g_message, "Cannot write %s", path); free(buf); return; }
+  fwrite(buf, 1, (size_t)len, f);
+  fclose(f);
+  free(buf);
+
+  /* attach the file to the focused buffer and re-detect its language */
+  b = &g_buffers[g_cur_buf];
+  strncpy(b->path, path, sizeof b->path - 1); b->path[sizeof b->path - 1] = '\0';
+  b->has_file = 1;
+  g_filename = b->path;
+  if (g_langcfg) { gtcaca_editor_set_langcfg(g_ed, NULL); gtcaca_editor_langcfg_free(g_langcfg); g_langcfg = NULL; }
+  if (g_grammar) { gtcaca_editor_set_grammar(g_ed, NULL); gtcaca_editor_grammar_free(g_grammar); g_grammar = NULL; }
+  g_keywords = NULL; g_n_keywords = 0; strcpy(g_langname, "fundamental");
+  gtcaca_editor_set_json_mode(g_ed, 0);
+  setup_language(g_ed, g_filename, NULL);
+  buffer_store_globals(g_cur_buf);
+
+  gtcaca_editor_set_save_point(g_ed);
+  snprintf(g_message, sizeof g_message, "Wrote %s", path);
+}
+
+/* Bring a widget (and so its window) to the front of the draw order. */
+static void widget_to_front(gtcaca_widget_t *w)
+{
+  CDL_DELETE(gmo.widgets_list, w);
+  CDL_APPEND(gmo.widgets_list, w);
+}
+
+static void hide_save_dialog(void)
+{
+  gtcaca_widget_hide(GTCACA_WIDGET(g_save_win));
+  gtcaca_widget_hide(GTCACA_WIDGET(g_save_label));
+  gtcaca_widget_hide(GTCACA_WIDGET(g_save_entry));
+  gtcaca_widget_hide(GTCACA_WIDGET(g_save_ok));
+  gtcaca_widget_hide(GTCACA_WIDGET(g_save_cancel));
+  g_save_open = 0;
+  focus_pane(g_focus_leaf);           /* return focus to the editor */
+}
+
+static int dlg_ok(gtcaca_button_widget_t *btn, int key, void *ud)
+{
+  char tmp[PATH_MAX];
+  const char *t;
+  (void)btn; (void)ud;
+  if (key != CACA_KEY_RETURN && key != ' ') return 0;
+  t = gtcaca_entry_get_text(g_save_entry);
+  strncpy(tmp, t ? t : "", sizeof tmp - 1); tmp[sizeof tmp - 1] = '\0';
+  save_as_done(tmp);     /* sets g_message = "Wrote <path>" before we redraw */
+  hide_save_dialog();    /* focus_pane → refresh_modeline shows that message */
+  return 0;
+}
+static int dlg_cancel(gtcaca_button_widget_t *btn, int key, void *ud)
+{
+  (void)btn; (void)ud;
+  if (key != CACA_KEY_RETURN && key != ' ') return 0;
+  hide_save_dialog();
+  snprintf(g_message, sizeof g_message, "Cancelled");
+  return 0;
+}
+/* C-g inside the entry cancels the dialog too. */
+static int dlg_entry_key(gtcaca_entry_widget_t *e, int key, void *ud)
+{
+  (void)e; (void)ud;
+  if (key == CACA_KEY_CTRL_G) { hide_save_dialog(); snprintf(g_message, sizeof g_message, "Cancelled"); }
+  return 0;
+}
+
+static void start_save_as(void)
+{
+  char defdir[PATH_MAX];
+  if (g_cur_buf >= 0 && g_buffers[g_cur_buf].has_file) {
+    strncpy(defdir, g_buffers[g_cur_buf].path, sizeof defdir - 1); defdir[sizeof defdir - 1] = '\0';
+  } else if (g_curdir[0]) {
+    snprintf(defdir, sizeof defdir, "%s/", g_curdir);
+  } else {
+    if (getcwd(defdir, sizeof defdir - 1)) strncat(defdir, "/", sizeof defdir - strlen(defdir) - 1);
+    else defdir[0] = '\0';
+  }
+  gtcaca_entry_set_text(g_save_entry, defdir);
+  widget_to_front(GTCACA_WIDGET(g_save_win));
+  widget_to_front(GTCACA_WIDGET(g_save_label));
+  widget_to_front(GTCACA_WIDGET(g_save_entry));
+  widget_to_front(GTCACA_WIDGET(g_save_ok));
+  widget_to_front(GTCACA_WIDGET(g_save_cancel));
+  gtcaca_widget_show(GTCACA_WIDGET(g_save_win));
+  gtcaca_widget_show(GTCACA_WIDGET(g_save_label));
+  gtcaca_widget_show(GTCACA_WIDGET(g_save_entry));
+  gtcaca_widget_show(GTCACA_WIDGET(g_save_ok));
+  gtcaca_widget_show(GTCACA_WIDGET(g_save_cancel));
+  gtcaca_window_set_focus(g_save_win);
+  gtcaca_window_set_focused_child(g_save_win, GTCACA_WIDGET(g_save_entry));
+  g_save_open = 1;
+  snprintf(g_message, sizeof g_message, "Write file — Enter/OK to save, Cancel or C-g to abort");
+}
+
 int main(int argc, char **argv)
 {
   int cw, ch, i, b0;
@@ -1847,6 +2152,24 @@ int main(int argc, char **argv)
       gtcaca_box_free(bb); }
     gtcaca_widget_hide(GTCACA_WIDGET(g_browser_ed));
     gtcaca_widget_hide(GTCACA_WIDGET(g_browser_win));
+  }
+
+  /* save-as dialog (created hidden; brought to front when shown) */
+  {
+    g_save_win   = gtcaca_window_new_centered(NULL, "Write file", 56, 10);
+    g_save_label = gtcaca_label_new(GTCACA_WIDGET(g_save_win), "File name:", 2, 1);
+    g_save_entry = gtcaca_entry_new(GTCACA_WIDGET(g_save_win), 2, 3, 52);
+    g_save_ok    = gtcaca_button_new(GTCACA_WIDGET(g_save_win), "[ OK ]", 4, 5);
+    g_save_cancel= gtcaca_button_new(GTCACA_WIDGET(g_save_win), "[ Cancel ]", 16, 5);
+    gtcaca_button_key_cb_register(g_save_ok, dlg_ok);
+    gtcaca_button_key_cb_register(g_save_cancel, dlg_cancel);
+    gtcaca_entry_key_cb_register(g_save_entry, dlg_entry_key, NULL);
+    gtcaca_window_set_default(g_save_win, GTCACA_WIDGET(g_save_ok));  /* Enter = OK */
+    gtcaca_widget_hide(GTCACA_WIDGET(g_save_win));
+    gtcaca_widget_hide(GTCACA_WIDGET(g_save_label));
+    gtcaca_widget_hide(GTCACA_WIDGET(g_save_entry));
+    gtcaca_widget_hide(GTCACA_WIDGET(g_save_ok));
+    gtcaca_widget_hide(GTCACA_WIDGET(g_save_cancel));
   }
 
   g_modeline = gtcaca_statusbar_new("");

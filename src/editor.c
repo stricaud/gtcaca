@@ -58,7 +58,7 @@ static void _stack_clear(gtcaca_editor_action_t **st, int *count, int *cap)
 }
 
 static void _stack_push(gtcaca_editor_action_t **st, int *count, int *cap,
-                        int is_insert, int pos, const char *text, int len)
+                        int is_insert, int pos, const char *text, int len, int group)
 {
   if (*count == *cap) {
     int ncap = *cap ? *cap * 2 : 32;
@@ -70,8 +70,25 @@ static void _stack_push(gtcaca_editor_action_t **st, int *count, int *cap,
   a->is_insert = is_insert;
   a->pos = pos;
   a->len = len;
+  a->group = group;
   a->text = malloc((size_t)len + 1);
   if (a->text) { memcpy(a->text, text, (size_t)len); a->text[len] = '\0'; }
+}
+
+/* id stamped on edits recorded while a transaction is open (0 = standalone) */
+static int _cur_undo_group(gtcaca_editor_widget_t *w)
+{
+  return w->undo_group_depth > 0 ? w->undo_group_id : 0;
+}
+
+void gtcaca_editor_begin_undo_action(gtcaca_editor_widget_t *w)
+{
+  if (w->undo_group_depth == 0) w->undo_group_id = ++w->undo_seq;
+  w->undo_group_depth++;
+}
+void gtcaca_editor_end_undo_action(gtcaca_editor_widget_t *w)
+{
+  if (w->undo_group_depth > 0) w->undo_group_depth--;
 }
 
 /* ── caret adjustment after edits ──────────────────────────────────────────── */
@@ -98,7 +115,7 @@ static void _insert_len(gtcaca_editor_widget_t *w, int pos, const char *s, int l
   pos = _clampi(pos, 0, w->length);
   _raw_insert(w, pos, s, len);
   _stack_clear(&w->redo, &w->redo_count, &w->redo_cap);
-  _stack_push(&w->undo, &w->undo_count, &w->undo_cap, 1, pos, s, len);
+  _stack_push(&w->undo, &w->undo_count, &w->undo_cap, 1, pos, s, len, _cur_undo_group(w));
   _adjust_after_insert(w, pos, len);
   w->modified = 1;
   w->goal_col = -1;
@@ -116,7 +133,7 @@ void gtcaca_editor_delete_range(gtcaca_editor_widget_t *w, int pos, int len)
   if (pos + len > w->length) len = w->length - pos;
   if (len <= 0) return;
   _stack_clear(&w->redo, &w->redo_count, &w->redo_cap);
-  _stack_push(&w->undo, &w->undo_count, &w->undo_cap, 0, pos, w->text + pos, len);
+  _stack_push(&w->undo, &w->undo_count, &w->undo_cap, 0, pos, w->text + pos, len, _cur_undo_group(w));
   _raw_delete(w, pos, len);
   _adjust_after_delete(w, pos, len);
   w->modified = 1;
@@ -194,6 +211,23 @@ int gtcaca_editor_get_column(gtcaca_editor_widget_t *w, int pos)
 int gtcaca_editor_get_current_line(gtcaca_editor_widget_t *w)
 {
   return gtcaca_editor_line_from_position(w, w->current_pos);
+}
+
+int gtcaca_editor_find_column(gtcaca_editor_widget_t *w, int line, int column)
+{
+  int lc = gtcaca_editor_get_line_count(w);
+  if (line < 0) line = 0;
+  if (line >= lc) line = lc - 1;
+  return _pos_from_visual_col(w, line, column);
+}
+
+void gtcaca_editor_set_rectangular_selection(gtcaca_editor_widget_t *w, int on)
+{
+  w->rect_select = on ? 1 : 0;
+}
+int gtcaca_editor_get_rectangular_selection(gtcaca_editor_widget_t *w)
+{
+  return w->rect_select;
 }
 
 /* ── caret & selection ─────────────────────────────────────────────────────── */
@@ -357,34 +391,43 @@ void gtcaca_editor_append_text(gtcaca_editor_widget_t *w, const char *s, int len
 
 void gtcaca_editor_undo(gtcaca_editor_widget_t *w)
 {
+  int group;
   if (w->undo_count == 0) return;
-  gtcaca_editor_action_t a = w->undo[--w->undo_count];  /* take ownership of a.text */
-  if (a.is_insert) {            /* text had been inserted → remove it */
-    _raw_delete(w, a.pos, a.len);
-    _set_caret(w, a.pos, 0);
-  } else {                      /* text had been deleted → put it back */
-    _raw_insert(w, a.pos, a.text, a.len);
-    _set_caret(w, a.pos + a.len, 0);
-  }
-  _stack_push(&w->redo, &w->redo_count, &w->redo_cap, a.is_insert, a.pos, a.text, a.len);
-  free(a.text);
+  /* a whole transaction (same non-zero group, contiguous on top) reverts at once */
+  group = w->undo[w->undo_count - 1].group;
+  do {
+    gtcaca_editor_action_t a = w->undo[--w->undo_count];  /* take ownership of a.text */
+    if (a.is_insert) {            /* text had been inserted → remove it */
+      _raw_delete(w, a.pos, a.len);
+      _set_caret(w, a.pos, 0);
+    } else {                      /* text had been deleted → put it back */
+      _raw_insert(w, a.pos, a.text, a.len);
+      _set_caret(w, a.pos + a.len, 0);
+    }
+    _stack_push(&w->redo, &w->redo_count, &w->redo_cap, a.is_insert, a.pos, a.text, a.len, a.group);
+    free(a.text);
+  } while (group != 0 && w->undo_count > 0 && w->undo[w->undo_count - 1].group == group);
   w->modified = 1;
   w->goal_col = -1;
 }
 
 void gtcaca_editor_redo(gtcaca_editor_widget_t *w)
 {
+  int group;
   if (w->redo_count == 0) return;
-  gtcaca_editor_action_t a = w->redo[--w->redo_count];
-  if (a.is_insert) {
-    _raw_insert(w, a.pos, a.text, a.len);
-    _set_caret(w, a.pos + a.len, 0);
-  } else {
-    _raw_delete(w, a.pos, a.len);
-    _set_caret(w, a.pos, 0);
-  }
-  _stack_push(&w->undo, &w->undo_count, &w->undo_cap, a.is_insert, a.pos, a.text, a.len);
-  free(a.text);
+  group = w->redo[w->redo_count - 1].group;
+  do {
+    gtcaca_editor_action_t a = w->redo[--w->redo_count];
+    if (a.is_insert) {
+      _raw_insert(w, a.pos, a.text, a.len);
+      _set_caret(w, a.pos + a.len, 0);
+    } else {
+      _raw_delete(w, a.pos, a.len);
+      _set_caret(w, a.pos, 0);
+    }
+    _stack_push(&w->undo, &w->undo_count, &w->undo_cap, a.is_insert, a.pos, a.text, a.len, a.group);
+    free(a.text);
+  } while (group != 0 && w->redo_count > 0 && w->redo[w->redo_count - 1].group == group);
   w->modified = 1;
   w->goal_col = -1;
 }
@@ -702,6 +745,17 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
   int sel_start = gtcaca_editor_get_selection_start(w);
   int sel_end   = gtcaca_editor_get_selection_end(w);
   int caret_line = gtcaca_editor_get_current_line(w);
+  /* rectangular selection box (visual columns), when active */
+  int r_top = 0, r_bot = -1, r_left = 0, r_right = 0;   /* r_bot < r_top = inactive */
+  if (w->rect_select) {
+    int la = gtcaca_editor_line_from_position(w, w->anchor);
+    int lc = gtcaca_editor_line_from_position(w, w->current_pos);
+    int ca = gtcaca_editor_get_column(w, w->anchor);
+    int cc = gtcaca_editor_get_column(w, w->current_pos);
+    r_top = la < lc ? la : lc;  r_bot = la < lc ? lc : la;
+    r_left = ca < cc ? ca : cc; r_right = ca < cc ? cc : ca;
+    if (r_right == r_left) r_right = r_left + 1;   /* zero-width: show a 1-col bar */
+  }
   int inner_x = w->x + 1, inner_y = w->y + 1, origin_x;
   int row, line;
   /* Margin colours: use the non-focus pair so the digits stay legible even
@@ -798,7 +852,9 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
         int vc = vcol + k;
         if (vc >= w->x_offset && vc < w->x_offset + text_w) {
           int sx = origin_x + (vc - w->x_offset);
-          int in_sel   = (pos >= sel_start && pos < sel_end);
+          int in_sel   = w->rect_select
+                           ? (line >= r_top && line <= r_bot && vc >= r_left && vc < r_right)
+                           : (pos >= sel_start && pos < sel_end);
           int is_caret = (w->has_focus && pos == w->current_pos && k == 0);
           int is_brace = (pos == w->brace_hl1 || pos == w->brace_hl2);
           int is_bad   = (pos == w->brace_bad);
@@ -827,6 +883,20 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
         }
       }
       vcol += cells;
+    }
+
+    /* rectangular selection over virtual space: highlight box columns that lie
+       past this line's text (and the 1-col bar for a zero-width box). */
+    if (w->rect_select && line >= r_top && line <= r_bot) {
+      int vc;
+      for (vc = (vcol > r_left ? vcol : r_left); vc < r_right; vc++) {
+        if (vc >= w->x_offset && vc < w->x_offset + text_w) {
+          caca_set_color_ansi(gmo.cv, w->sel_set ? w->sel_fore : nb,
+                                      w->sel_set ? w->sel_back : nf);
+          caca_set_attr(gmo.cv, 0);
+          caca_put_char(gmo.cv, origin_x + (vc - w->x_offset), draw_y, ' ');
+        }
+      }
     }
 
     /* edge column marker, where the line is shorter than the edge */

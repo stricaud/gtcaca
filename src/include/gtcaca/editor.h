@@ -41,6 +41,7 @@ typedef struct {
   int   pos;
   char *text;        /* copy of the affected text */
   int   len;
+  int   group;       /* transaction id (0 = standalone); same id = one undo step */
 } gtcaca_editor_action_t;
 
 /*
@@ -168,6 +169,7 @@ struct _gtcaca_editor_widget_t {
   int current_pos;
   int anchor;
   int goal_col;          /* preferred column for line up/down (-1 = recompute) */
+  int rect_select;       /* selection is a column box (anchor/caret = corners) */
 
   /* View */
   int first_visible_line;
@@ -185,6 +187,9 @@ struct _gtcaca_editor_widget_t {
   int undo_count, undo_cap;
   gtcaca_editor_action_t *redo;
   int redo_count, redo_cap;
+  int undo_group_depth;   /* >0 while a begin/end_undo_action transaction is open */
+  int undo_group_id;      /* id stamped on edits within the current transaction   */
+  int undo_seq;           /* monotonic source of transaction ids                  */
 
   /* Colourization */
   gtcaca_editor_langcfg_t *langcfg;       /* language config driving the lexer */
@@ -267,6 +272,21 @@ int gtcaca_editor_position_from_line(gtcaca_editor_widget_t *w, int line);
 int gtcaca_editor_get_line_end_position(gtcaca_editor_widget_t *w, int line);
 int gtcaca_editor_get_column(gtcaca_editor_widget_t *w, int pos);
 int gtcaca_editor_get_current_line(gtcaca_editor_widget_t *w);
+/* byte position on `line` at visual column `column` (tabs expanded); clamps to
+   the line end when the line is shorter than `column` (cf. SCI_FINDCOLUMN). */
+int gtcaca_editor_find_column(gtcaca_editor_widget_t *w, int line, int column);
+
+/* ── Rectangular (column-box) selection ──────────────────────────────────────
+   The box has the caret and anchor as opposite corners. Turn the mode on, move
+   the caret (extending) to size the box, then apply one of the ops below. */
+void gtcaca_editor_set_rectangular_selection(gtcaca_editor_widget_t *w, int on);
+int  gtcaca_editor_get_rectangular_selection(gtcaca_editor_widget_t *w);
+void gtcaca_editor_rect_string_insert(gtcaca_editor_widget_t *w, const char *s); /* C-x r t */
+void gtcaca_editor_rect_kill(gtcaca_editor_widget_t *w);                         /* C-x r k */
+void gtcaca_editor_rect_delete(gtcaca_editor_widget_t *w);                       /* C-x r d */
+void gtcaca_editor_rect_clear(gtcaca_editor_widget_t *w);                        /* C-x r c */
+void gtcaca_editor_rect_copy(gtcaca_editor_widget_t *w);   /* copy box, no delete (M-w / C-x r M-w) */
+void gtcaca_editor_rect_yank(gtcaca_editor_widget_t *w);                         /* C-x r y */
 
 /* ── Movement key commands (plain collapses, _extend grows the selection) ──── */
 void gtcaca_editor_char_left(gtcaca_editor_widget_t *w);
@@ -302,6 +322,10 @@ void gtcaca_editor_redo(gtcaca_editor_widget_t *w);
 int  gtcaca_editor_can_undo(gtcaca_editor_widget_t *w);
 int  gtcaca_editor_can_redo(gtcaca_editor_widget_t *w);
 void gtcaca_editor_empty_undo_buffer(gtcaca_editor_widget_t *w);
+/* Group a run of edits so one undo/redo reverts them all (cf. SCI_BEGIN/ENDUNDOACTION).
+   Calls nest; the outermost begin/end pair defines the transaction. */
+void gtcaca_editor_begin_undo_action(gtcaca_editor_widget_t *w);
+void gtcaca_editor_end_undo_action(gtcaca_editor_widget_t *w);
 
 /* ── State & display options ──────────────────────────────────────────────── */
 void gtcaca_editor_set_save_point(gtcaca_editor_widget_t *w); /* mark as unmodified */

@@ -205,3 +205,169 @@ void gtcaca_editor_set_caret_line_back(gtcaca_editor_widget_t *w, uint8_t colour
 void gtcaca_editor_set_edge_column(gtcaca_editor_widget_t *w, int column) { w->edge_column = column; }
 int  gtcaca_editor_get_edge_column(gtcaca_editor_widget_t *w) { return w->edge_column; }
 void gtcaca_editor_set_edge_colour(gtcaca_editor_widget_t *w, uint8_t colour) { w->edge_colour = colour; }
+
+/* ── rectangular (column-box) operations ───────────────────────────────────────
+ * The box has the caret and anchor as opposite corners; columns are visual
+ * (tabs expanded). Ops loop the spanned lines, editing the fixed column range.
+ * A shared clipboard holds a killed rectangle (one string per line), Emacs-style.
+ */
+
+static char **g_rect_kill   = NULL;
+static int    g_rect_kill_n = 0;
+
+static void _rect_bounds(gtcaca_editor_widget_t *w,
+                         int *top, int *bot, int *left, int *right)
+{
+  int la = gtcaca_editor_line_from_position(w, w->anchor);
+  int lc = gtcaca_editor_line_from_position(w, w->current_pos);
+  int ca = gtcaca_editor_get_column(w, w->anchor);
+  int cc = gtcaca_editor_get_column(w, w->current_pos);
+  *top  = la < lc ? la : lc;  *bot   = la < lc ? lc : la;
+  *left = ca < cc ? ca : cc;  *right = ca < cc ? cc : ca;
+}
+
+/* byte range [*p0,*p1) covering visual columns [left,right) on `line` (clamped
+   to the line end where the line is shorter than the column). */
+static void _rect_line_span(gtcaca_editor_widget_t *w, int line,
+                            int left, int right, int *p0, int *p1)
+{
+  int end   = gtcaca_editor_get_line_end_position(w, line);
+  int width = gtcaca_editor_get_column(w, end);
+  *p0 = (left  <= width) ? gtcaca_editor_find_column(w, line, left)  : end;
+  *p1 = (right <= width) ? gtcaca_editor_find_column(w, line, right) : end;
+  if (*p1 < *p0) *p1 = *p0;
+}
+
+/* pad `line` with spaces up to visual column `col`; return the byte pos there */
+static int _rect_pad_to(gtcaca_editor_widget_t *w, int line, int col)
+{
+  int end   = gtcaca_editor_get_line_end_position(w, line);
+  int width = gtcaca_editor_get_column(w, end);
+  if (width >= col) return gtcaca_editor_find_column(w, line, col);
+  {
+    char sp[129]; int n = col - width;
+    while (n > 0) {
+      int c = n > 128 ? 128 : n, i;
+      for (i = 0; i < c; i++) sp[i] = ' ';
+      sp[c] = '\0';
+      gtcaca_editor_insert_text(w, end, sp);
+      end += c; n -= c;
+    }
+  }
+  return end;
+}
+
+static void _rect_insert_spaces(gtcaca_editor_widget_t *w, int at, int n)
+{
+  char sp[129];
+  while (n > 0) {
+    int c = n > 128 ? 128 : n, i;
+    for (i = 0; i < c; i++) sp[i] = ' ';
+    sp[c] = '\0';
+    gtcaca_editor_insert_text(w, at, sp);
+    at += c; n -= c;
+  }
+}
+
+static void _rect_free_kill(void)
+{
+  int i;
+  for (i = 0; i < g_rect_kill_n; i++) free(g_rect_kill[i]);
+  free(g_rect_kill); g_rect_kill = NULL; g_rect_kill_n = 0;
+}
+
+/* copy each spanned line's box text into the rectangle clipboard (no edit) */
+static void _rect_save(gtcaca_editor_widget_t *w)
+{
+  int top, bot, left, right, line;
+  _rect_bounds(w, &top, &bot, &left, &right);
+  _rect_free_kill();
+  g_rect_kill_n = bot - top + 1;
+  g_rect_kill = calloc((size_t)g_rect_kill_n, sizeof(char *));
+  for (line = top; line <= bot; line++) {
+    int p0, p1, n; char *s;
+    _rect_line_span(w, line, left, right, &p0, &p1);
+    n = p1 - p0;
+    s = malloc((size_t)n + 1);
+    gtcaca_editor_get_text_range(w, p0, p1, s, n + 1);
+    g_rect_kill[line - top] = s;
+  }
+}
+
+/* delete the box on every spanned line (bottom-to-top so upper positions stay
+   valid); if `save`, first copy it into the rectangle clipboard. */
+static void _rect_remove(gtcaca_editor_widget_t *w, int save)
+{
+  int top, bot, left, right, line;
+  if (save) _rect_save(w);
+  _rect_bounds(w, &top, &bot, &left, &right);
+  for (line = bot; line >= top; line--) {
+    int p0, p1;
+    _rect_line_span(w, line, left, right, &p0, &p1);
+    if (p1 > p0) gtcaca_editor_delete_range(w, p0, p1 - p0);
+  }
+}
+
+/* every multi-line rectangle edit is one undo step (begin/end_undo_action) */
+
+void gtcaca_editor_rect_delete(gtcaca_editor_widget_t *w)
+{
+  gtcaca_editor_begin_undo_action(w); _rect_remove(w, 0); gtcaca_editor_end_undo_action(w);
+  w->rect_select = 0;
+}
+void gtcaca_editor_rect_kill(gtcaca_editor_widget_t *w)
+{
+  gtcaca_editor_begin_undo_action(w); _rect_remove(w, 1); gtcaca_editor_end_undo_action(w);
+  w->rect_select = 0;
+}
+void gtcaca_editor_rect_copy(gtcaca_editor_widget_t *w) { _rect_save(w); w->rect_select = 0; }
+
+void gtcaca_editor_rect_clear(gtcaca_editor_widget_t *w)
+{
+  int top, bot, left, right, line, width;
+  _rect_bounds(w, &top, &bot, &left, &right);
+  width = right - left;
+  gtcaca_editor_begin_undo_action(w);
+  for (line = bot; line >= top; line--) {
+    int p0, p1, at;
+    _rect_line_span(w, line, left, right, &p0, &p1);
+    if (p1 > p0) gtcaca_editor_delete_range(w, p0, p1 - p0);
+    if (width > 0) { at = _rect_pad_to(w, line, left); _rect_insert_spaces(w, at, width); }
+  }
+  gtcaca_editor_end_undo_action(w);
+  w->rect_select = 0;
+}
+
+void gtcaca_editor_rect_string_insert(gtcaca_editor_widget_t *w, const char *s)
+{
+  int top, bot, left, right, line;
+  _rect_bounds(w, &top, &bot, &left, &right);
+  gtcaca_editor_begin_undo_action(w);
+  for (line = bot; line >= top; line--) {
+    int p0, p1, at;
+    _rect_line_span(w, line, left, right, &p0, &p1);
+    if (p1 > p0) gtcaca_editor_delete_range(w, p0, p1 - p0);  /* replace the box */
+    at = _rect_pad_to(w, line, left);                         /* pad short lines */
+    if (s && *s) gtcaca_editor_insert_text(w, at, s);
+  }
+  gtcaca_editor_end_undo_action(w);
+  w->rect_select = 0;
+}
+
+void gtcaca_editor_rect_yank(gtcaca_editor_widget_t *w)
+{
+  int cl  = gtcaca_editor_line_from_position(w, w->current_pos);
+  int col = gtcaca_editor_get_column(w, w->current_pos);
+  int i;
+  if (g_rect_kill_n == 0) return;
+  gtcaca_editor_begin_undo_action(w);
+  for (i = 0; i < g_rect_kill_n; i++) {
+    int line = cl + i, at;
+    while (line >= gtcaca_editor_get_line_count(w))            /* grow the buffer */
+      gtcaca_editor_insert_text(w, w->length, "\n");
+    at = _rect_pad_to(w, line, col);
+    if (g_rect_kill[i] && g_rect_kill[i][0]) gtcaca_editor_insert_text(w, at, g_rect_kill[i]);
+  }
+  gtcaca_editor_end_undo_action(w);
+  w->rect_select = 0;
+}
