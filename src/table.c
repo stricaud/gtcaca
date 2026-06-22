@@ -21,7 +21,7 @@ gtcaca_table_widget_t *gtcaca_table_new(gtcaca_widget_t *parent, int x, int y, i
   t->width = width; t->height = height;
   t->color_focus_fg = t->color_nonfocus_fg = gmo.theme.textview.fg;
   t->color_focus_bg = t->color_nonfocus_bg = gmo.theme.textview.bg;
-  t->model = NULL; t->top = 0; t->sel = 0; t->colw = NULL; t->ncolw = 0;
+  t->model = NULL; t->top = 0; t->sel = 0; t->cur_col = 0; t->colw = NULL; t->ncolw = 0;
   t->title = NULL; t->sel_bg = CACA_BLUE;
   CDL_APPEND(gmo.widgets_list, GTCACA_WIDGET(t));
   return t;
@@ -53,6 +53,15 @@ void gtcaca_table_free(gtcaca_table_widget_t *t)
 }
 
 long gtcaca_table_selected_row(gtcaca_table_widget_t *t) { return t->sel; }
+int  gtcaca_table_current_col(gtcaca_table_widget_t *t) { return t->cur_col; }
+void gtcaca_table_set_current(gtcaca_table_widget_t *t, long row, int col)
+{
+  long rows = t->model ? t->model->row_count(t->model) : 0;
+  int  cols = t->model ? t->model->col_count(t->model) : 0;
+  if (row < 0) row = 0; if (rows && row > rows - 1) row = rows - 1;
+  if (col < 0) col = 0; if (cols && col > cols - 1) col = cols - 1;
+  t->sel = row; t->cur_col = col;
+}
 
 /* width of column `c`; falls back to an equal split of the inner width */
 static int _colwidth(gtcaca_table_widget_t *t, int c, int ncol, int inner_w)
@@ -108,9 +117,16 @@ void gtcaca_table_draw(gtcaca_table_widget_t *t)
     { int col; for (col = 0; col < inner_w; col++) caca_put_char(gmo.cv, inner_x + col, y, ' '); }
     for (c = 0; c < ncol; c++) {
       int w = _colwidth(t, c, ncol, inner_w);
+      int cell_cur = selected && c == t->cur_col, avail = inner_w - cx, k;
       if (cx >= inner_w) break;
+      if (cell_cur) {                          /* highlight the current cell */
+        caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_CYAN); caca_set_attr(gmo.cv, 0);
+        for (k = 0; k < w && cx + k < inner_w; k++) caca_put_char(gmo.cv, inner_x + cx + k, y, ' ');
+      } else {
+        caca_set_color_ansi(gmo.cv, selected ? CACA_WHITE : fg, rbg); caca_set_attr(gmo.cv, 0);
+      }
       t->model->cell(t->model, row, c, buf, sizeof buf);
-      caca_printf(gmo.cv, inner_x + cx, y, "%-.*s", w - 1 < inner_w - cx ? w - 1 : inner_w - cx, buf);
+      caca_printf(gmo.cv, inner_x + cx, y, "%-.*s", w - 1 < avail ? w - 1 : avail, buf);
       cx += w;
     }
   }
@@ -132,6 +148,12 @@ int gtcaca_table_key(gtcaca_table_widget_t *t, int key, void *userdata)
   case CACA_KEY_PAGEDOWN: t->sel += page; break;
   case CACA_KEY_HOME:     t->sel = 0; break;
   case CACA_KEY_END:      t->sel = rows - 1; break;
+  case CACA_KEY_LEFT:     if (t->cur_col > 0) t->cur_col--; break;
+  case CACA_KEY_RIGHT: {
+    int cols = t->model->col_count(t->model);
+    if (t->cur_col < cols - 1) t->cur_col++;
+    break;
+  }
   default: return 0;
   }
   if (t->sel < 0) t->sel = 0;

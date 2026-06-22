@@ -431,6 +431,7 @@ int gtcaca_widgets_handle_key_press(int key)
                       type != GTCACA_WIDGET_SPINBUTTON &&
                       type != GTCACA_WIDGET_EDITOR &&
                       type != GTCACA_WIDGET_TREE &&
+                      type != GTCACA_WIDGET_TABLE &&
                       type != GTCACA_WIDGET_MAP);
         }
         if (navigate) {
@@ -502,6 +503,31 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
   gtcaca_widget_t *widget;
   gtcaca_widget_t *hit = NULL;
   int i, j;
+
+  /* Mouse wheel: libcaca mis-reports the wheel coordinates on some terminals
+     (e.g. macOS Terminal gives a garbage position), so we scroll the *focused*
+     scrollable widget rather than the one under the cursor. Button 4 = down,
+     5 = up (matches what those terminals report). */
+  if (button == 4 || button == 5) {
+    int key = (button == 4) ? CACA_KEY_DOWN : CACA_KEY_UP;
+    gtcaca_widget_t *w, *target = NULL;
+    (void)mx; (void)my;
+    CDL_FOREACH(gmo.widgets_list, w) {
+      if (w->has_focus && (w->type == GTCACA_WIDGET_TREE ||
+                           w->type == GTCACA_WIDGET_TABLE ||
+                           w->type == GTCACA_WIDGET_EDITOR)) { target = w; break; }
+    }
+    if (target) switch (target->type) {
+    case GTCACA_WIDGET_TREE:   gtcaca_tree_key((gtcaca_tree_widget_t *)target, key, NULL); break;
+    case GTCACA_WIDGET_TABLE:  gtcaca_table_key((gtcaca_table_widget_t *)target, key, NULL); break;
+    case GTCACA_WIDGET_EDITOR:
+      if (key == CACA_KEY_DOWN) gtcaca_editor_line_down((gtcaca_editor_widget_t *)target);
+      else                      gtcaca_editor_line_up((gtcaca_editor_widget_t *)target);
+      break;
+    default: break;
+    }
+    return;
+  }
 
   if (button != 1) return;  /* left button only */
 
@@ -640,6 +666,36 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
     }
     break;
   }
+  case GTCACA_WIDGET_TREE: {
+    gtcaca_tree_widget_t *t = (gtcaca_tree_widget_t *)hit;
+    long row = t->top + (my - (t->y + 1));
+    _focus_widget_in_window(hit);
+    if (my > t->y && my < t->y + t->height - 1 && row >= 0 && row < gtcaca_tree_visible_count(t)) {
+      t->sel = row;
+      gtcaca_tree_key(t, ' ', NULL);   /* toggle expand/collapse if it has children */
+    }
+    break;
+  }
+  case GTCACA_WIDGET_TABLE: {
+    gtcaca_table_widget_t *t = (gtcaca_table_widget_t *)hit;
+    long row = t->top + (my - (t->y + 3));   /* border + header + separator */
+    _focus_widget_in_window(hit);
+    if (t->model && row >= 0 && row < t->model->row_count(t->model)) t->sel = row;
+    break;
+  }
+  case GTCACA_WIDGET_MAP: {
+    gtcaca_map_widget_t *m = (gtcaca_map_widget_t *)hit;
+    int best = -1, k; long bd = 0;
+    _focus_widget_in_window(hit);
+    for (k = 0; k < m->npoints; k++) {
+      int sx, sy; long d;
+      if (!gtcaca_map_project(m, m->points[k].lon, m->points[k].lat, &sx, &sy)) continue;
+      d = (long)(sx - mx) * (sx - mx) + (long)(sy - my) * (sy - my);
+      if (best < 0 || d < bd) { bd = d; best = k; }
+    }
+    if (best >= 0) m->sel = best;
+    break;
+  }
   default:
     /* Entry, TextView, TextList, ProgressBar, Label, etc.: just focus. */
     _focus_widget_in_window(hit);
@@ -664,9 +720,12 @@ void gtcaca_main(void)
         if (evtype & CACA_EVENT_RESIZE) {
           gtcaca_redraw();
         } else if (evtype & CACA_EVENT_MOUSE_PRESS) {
+          /* Use the display's *tracked* mouse position rather than the event's
+             coordinates: libcaca reports garbage per-event coordinates on some
+             terminals (e.g. macOS Terminal), but the tracked position is valid. */
           _gtcaca_handle_mouse_press(
-            caca_get_event_mouse_x(&ev),
-            caca_get_event_mouse_y(&ev),
+            caca_get_mouse_x(gmo.dp),
+            caca_get_mouse_y(gmo.dp),
             caca_get_event_mouse_button(&ev));
           gtcaca_redraw();
         }

@@ -67,3 +67,6 @@ target_link_libraries(demo_table ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
 add_executable(demo_map demo_map.c)
 target_link_libraries(demo_map ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_events demo_events.c)
+target_link_libraries(demo_events ${LIBCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
