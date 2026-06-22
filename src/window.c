@@ -51,6 +51,7 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
   win->parent = parent;
   win->children = NULL;
   win->focused_child     = NULL;
+  win->default_widget    = NULL;
   win->close_anim        = GTCACA_WINDOW_ANIM_NONE;
   win->close_anim_target = NULL;
 
@@ -178,6 +179,11 @@ void gtcaca_window_set_focused_child(gtcaca_window_widget_t *win, gtcaca_widget_
     child->has_focus = 1;
     win->focused_child = child;
   }
+}
+
+void gtcaca_window_set_default(gtcaca_window_widget_t *win, gtcaca_widget_t *widget)
+{
+  win->default_widget = widget;
 }
 
 void gtcaca_window_focus_next_child(gtcaca_window_widget_t *win)

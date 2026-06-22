@@ -267,9 +267,48 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
   return 0;
 }
 
+/* Widgets that act on Enter themselves; for these the focused child handles
+   Enter and it should not be redirected to the window's default widget. */
+static int _gtcaca_widget_claims_enter(gtcaca_widget_type_t type)
+{
+  switch (type) {
+  case GTCACA_WIDGET_BUTTON:
+  case GTCACA_WIDGET_COMBOBOX:
+  case GTCACA_WIDGET_RADIOBUTTON:
+  case GTCACA_WIDGET_SWITCH:
+  case GTCACA_WIDGET_EXPANDER:
+  case GTCACA_WIDGET_MENU:
+    return 1;
+  default:
+    return 0;
+  }
+}
+
+/* Trigger a widget's Enter action regardless of whether it currently holds
+   focus (used to activate a window's default widget). */
+static void _gtcaca_widget_activate(gtcaca_widget_t *widget)
+{
+  int saved = widget->has_focus;
+  widget->has_focus = 1;
+  _gtcaca_widget_handle_key_press(widget, CACA_KEY_RETURN);
+  widget->has_focus = saved;
+}
+
 int gtcaca_widgets_handle_key_press(int key)
 {
   gtcaca_widget_t *widget = NULL;
+
+  /* Enter: activate the focused window's default widget, unless the focused
+     child consumes Enter itself. Lets a form submit from inside a text entry. */
+  if (key == CACA_KEY_RETURN) {
+    gtcaca_window_widget_t *win = gtcaca_window_get_current_focus();
+    if (win && win->default_widget &&
+        (!win->focused_child ||
+         !_gtcaca_widget_claims_enter(win->focused_child->type))) {
+      _gtcaca_widget_activate(win->default_widget);
+      return 0;
+    }
+  }
 
   /* TAB: cycle focus to next focusable child in focused window */
   if (key == '\t') {

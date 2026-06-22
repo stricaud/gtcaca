@@ -33,6 +33,10 @@ struct _gtcaca_window_widget_t {
   char *window_title;
   gtcaca_widget_t *focused_child;
 
+  /* Widget activated when Enter is pressed and the focused child does not
+     consume Enter itself (e.g. the default button of a form). */
+  gtcaca_widget_t *default_widget;
+
   /* Close animation */
   gtcaca_window_close_anim_t  close_anim;
   gtcaca_widget_t            *close_anim_target;
@@ -46,6 +50,7 @@ gtcaca_window_widget_t *gtcaca_window_get_current_focus(void);
 gtcaca_window_widget_t *gtcaca_window_get_next(gtcaca_window_widget_t *win);
 gtcaca_window_widget_t *gtcaca_window_get_prev(gtcaca_window_widget_t *win);
 void gtcaca_window_set_focused_child(gtcaca_window_widget_t *win, gtcaca_widget_t *child);
+void gtcaca_window_set_default(gtcaca_window_widget_t *win, gtcaca_widget_t *widget);
 void gtcaca_window_focus_next_child(gtcaca_window_widget_t *win);
 void gtcaca_window_focus_prev_child(gtcaca_window_widget_t *win);
 void gtcaca_window_set_close_animation(gtcaca_window_widget_t *win, gtcaca_window_close_anim_t anim, gtcaca_widget_t *target);

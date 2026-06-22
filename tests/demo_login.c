@@ -213,6 +213,9 @@ int main(int argc, char **argv)
   g_statusbar = gtcaca_statusbar_new(
     "Tab: next | Enter: submit | Password: gtcaca | Q: quit");
 
+  /* Enter from any field (e.g. the username/password entry) submits */
+  gtcaca_window_set_default(g_win, GTCACA_WIDGET(g_login_btn));
+
   gtcaca_window_set_focused_child(g_win, GTCACA_WIDGET(g_user));
   gtcaca_main();
   return 0;
