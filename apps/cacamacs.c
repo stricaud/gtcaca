@@ -18,7 +18,7 @@
  *   Motion : C-f C-b C-n C-p  C-a C-e  C-v (page down)  arrows  M-f/M-b word
  *   Edit   : C-d (delete fwd)  C-k (kill line)  Backspace  C-t transpose chars
  *            M-d / M-DEL kill word  M-u/M-l upcase/downcase word  Insert overtype
- *   Lines  : C-x C-t transpose lines
+ *   Lines  : C-x C-t transpose lines   M-; comment/uncomment line or region
  *   Modes  : C-x C-q read-only   C-x w show whitespace   (matching braces glow)
  *   Region : C-Space set mark  C-w kill  M-w (Esc w) copy  C-y yank  C-g cancel
  *   Search : C-s incremental search forward, C-r backward (Enter accepts,
@@ -41,6 +41,14 @@
 #include <ctype.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <limits.h>
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+#ifndef NAME_MAX
+#define NAME_MAX 255
+#endif
 
 #include <caca.h>
 
@@ -62,14 +70,12 @@ static gtcaca_editor_widget_t    *g_ed       = NULL;
 static gtcaca_statusbar_widget_t *g_modeline = NULL;
 static gtcaca_window_widget_t    *g_win      = NULL;   /* the editor window  */
 static const char                *g_filename = NULL;
-static char                       g_open_path[1024] = "";
+static char                       g_open_path[PATH_MAX] = "";
 
-/* file browser */
+/* file browser — a read-only editor showing the directory listing */
 static gtcaca_window_widget_t    *g_browser_win = NULL;
-static gtcaca_textlist_widget_t  *g_browser     = NULL;
-static char                       g_curdir[1024] = "";
-static char                     **g_browser_items = NULL;  /* owned entry strings */
-static int                        g_browser_n     = 0;
+static gtcaca_editor_widget_t    *g_browser_ed  = NULL;
+static char                       g_curdir[PATH_MAX] = "";
 static gtcaca_editor_langcfg_t   *g_langcfg  = NULL;
 static gtcaca_editor_grammar_t   *g_grammar  = NULL;
 static char                       g_langname[64] = "fundamental";
@@ -88,6 +94,8 @@ static int             g_tab_size = 8, g_insert_spaces = 1, g_indent_size = 2; /
 static int  is_word_char(int c) { return isalnum((unsigned char)c) || c == '_' || c == '$'; }
 static void complete_at_point(gtcaca_editor_widget_t *ed);   /* defined below */
 static void show_browser(void);                              /* defined below */
+static void hide_browser(void);
+static void browser_open_current(void);
 
 static int   g_mark_active   = 0;
 static int   g_ctrl_x        = 0;   /* C-x prefix pending */
@@ -202,6 +210,95 @@ static void transpose_chars(gtcaca_editor_widget_t *ed)
   gtcaca_editor_delete_range(ed, a, 2);
   gtcaca_editor_insert_text(ed, a, two);
   gtcaca_editor_set_empty_selection(ed, (p >= len) ? p : p + 1);
+}
+
+/* ── comment / uncomment (M-;), Emacs comment-dwim ─────────────────────────── */
+
+/* The line-comment prefix for the current file (from the language config, with
+   a small fallback by extension). NULL if unknown. */
+static const char *line_comment_for_ext(const char *ext)
+{
+  if (!ext) return NULL;
+  if (!strcmp(ext, ".c") || !strcmp(ext, ".h") || !strcmp(ext, ".cpp") || !strcmp(ext, ".cc") ||
+      !strcmp(ext, ".hpp") || !strcmp(ext, ".js") || !strcmp(ext, ".mjs") || !strcmp(ext, ".ts") ||
+      !strcmp(ext, ".java") || !strcmp(ext, ".go") || !strcmp(ext, ".rs") ||
+      !strcmp(ext, ".json") || !strcmp(ext, ".jsonc")) return "//";
+  if (!strcmp(ext, ".py") || !strcmp(ext, ".pyw") || !strcmp(ext, ".sh") || !strcmp(ext, ".rb") ||
+      !strcmp(ext, ".yaml") || !strcmp(ext, ".yml") || !strcmp(ext, ".toml") ||
+      !strcmp(ext, ".cfg") || !strcmp(ext, ".conf")) return "#";
+  if (!strcmp(ext, ".lua") || !strcmp(ext, ".sql")) return "--";
+  if (!strcmp(ext, ".el") || !strcmp(ext, ".lisp") || !strcmp(ext, ".scm") || !strcmp(ext, ".clj")) return ";;";
+  return NULL;
+}
+
+static const char *current_line_comment(void)
+{
+  const char *lc = g_langcfg ? gtcaca_editor_langcfg_get_line_comment(g_langcfg) : NULL;
+  if (lc && lc[0]) return lc;
+  return line_comment_for_ext(g_filename ? strrchr(g_filename, '.') : NULL);
+}
+
+static int line_first_nonws(gtcaca_editor_widget_t *ed, int line)
+{
+  int p = gtcaca_editor_position_from_line(ed, line);
+  int e = gtcaca_editor_get_line_end_position(ed, line);
+  while (p < e) { char c = gtcaca_editor_get_char_at(ed, p); if (c != ' ' && c != '\t') break; p++; }
+  return p;
+}
+static int line_is_blank(gtcaca_editor_widget_t *ed, int line)
+{
+  return line_first_nonws(ed, line) >= gtcaca_editor_get_line_end_position(ed, line);
+}
+static int line_is_commented(gtcaca_editor_widget_t *ed, int line, const char *lc, int lclen)
+{
+  int p = line_first_nonws(ed, line), i;
+  if (p + lclen > gtcaca_editor_get_line_end_position(ed, line)) return 0;
+  for (i = 0; i < lclen; i++) if (gtcaca_editor_get_char_at(ed, p + i) != lc[i]) return 0;
+  return 1;
+}
+
+static void comment_dwim(gtcaca_editor_widget_t *ed)
+{
+  const char *lc = current_line_comment();
+  int lclen, first, last, L, any_content = 0, any_uncommented = 0, do_comment;
+  char cstr[40];
+
+  if (!lc || !lc[0]) { snprintf(g_message, sizeof g_message, "No comment syntax for this file"); return; }
+  lclen = (int)strlen(lc);
+
+  if (gtcaca_editor_get_selection_start(ed) != gtcaca_editor_get_selection_end(ed)) {
+    int a = gtcaca_editor_get_selection_start(ed), b = gtcaca_editor_get_selection_end(ed);
+    first = gtcaca_editor_line_from_position(ed, a);
+    last  = gtcaca_editor_line_from_position(ed, b);
+    if (last > first && b == gtcaca_editor_position_from_line(ed, last)) last--;  /* trailing line at col 0 */
+  } else {
+    first = last = gtcaca_editor_get_current_line(ed);
+  }
+
+  /* comment unless every non-blank line in the range is already commented */
+  for (L = first; L <= last; L++) {
+    if (line_is_blank(ed, L)) continue;
+    any_content = 1;
+    if (!line_is_commented(ed, L, lc, lclen)) any_uncommented = 1;
+  }
+  do_comment = !any_content || any_uncommented;
+
+  snprintf(cstr, sizeof cstr, "%s ", lc);
+
+  /* edit bottom-to-top so earlier line positions stay valid */
+  for (L = last; L >= first; L--) {
+    int p = line_first_nonws(ed, L);
+    if (do_comment) {
+      if (line_is_blank(ed, L)) continue;
+      gtcaca_editor_insert_text(ed, p, cstr);
+    } else if (line_is_commented(ed, L, lc, lclen)) {
+      int del = lclen;
+      if (gtcaca_editor_get_char_at(ed, p + lclen) == ' ') del++;   /* eat one following space */
+      gtcaca_editor_delete_range(ed, p, del);
+    }
+  }
+  snprintf(g_message, sizeof g_message, "%s %d line%s",
+           do_comment ? "Commented" : "Uncommented", last - first + 1, last == first ? "" : "s");
 }
 
 /* show-paren: highlight the brace under/just-before the caret and its match. */
@@ -508,6 +605,15 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
   if (g_isearch)   return isearch_key(ed, key);
   if (g_mb_active) return minibuffer_key(key);
 
+  /* browser mode: the listing is a read-only editor — Enter opens the entry,
+     q/Esc close it, and everything else (arrows, C-s search, …) falls through
+     to the normal editor handling (edits are no-ops because it is read-only). */
+  if (ed == g_browser_ed) {
+    if (key == CACA_KEY_RETURN || key == 10) { browser_open_current(); return 1; }
+    if (key == 'q' || key == CACA_KEY_ESCAPE) { hide_browser(); return 1; }
+    if (key == CACA_KEY_CTRL_X) return 1;   /* swallow C-x (no save/quit chords here) */
+  }
+
   /* second key of a C-x chord */
   if (g_ctrl_x) {
     g_ctrl_x = 0;
@@ -551,6 +657,7 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     case CACA_KEY_DELETE:   kill_word_left(ed);  return 1;  /* M-DEL kill word back */
     case 'u': case 'U':     case_word(ed, 1);    return 1;  /* M-u  upcase word    */
     case 'l': case 'L':     case_word(ed, 0);    return 1;  /* M-l  downcase word  */
+    case ';':               comment_dwim(ed);    return 1;  /* M-;  comment-dwim   */
     case CACA_KEY_ESCAPE:   keyboard_quit(ed); return 1;  /* Esc Esc cancels   */
     default:
       snprintf(g_message, sizeof(g_message), "M-%c is undefined", key >= 32 ? key : '?');
@@ -1143,93 +1250,117 @@ static void open_path_in_editor(const char *path)
   strcpy(g_langname, "fundamental");
   setup_language(g_ed, g_filename, NULL);
 
-  gtcaca_widget_hide(GTCACA_WIDGET(g_browser));
-  gtcaca_widget_hide(GTCACA_WIDGET(g_browser_win));
-  gtcaca_window_set_focus(g_win);
-  gtcaca_window_set_focused_child(g_win, GTCACA_WIDGET(g_ed));
+  hide_browser();
 }
 
+/* Render the directory listing into the read-only browser editor. */
 static void populate_browser(const char *dir)
 {
   DIR *d = opendir(dir);
   struct dirent *de;
   bent_t ents[2048];
-  int n = 0, i, rows;
+  int n = 0, i, total, len;
+  char *listing;
+  char resolved[PATH_MAX];
 
-  if (!d) { snprintf(g_message, sizeof g_message, "Cannot open %s", dir); return; }
-  if (!realpath(dir, g_curdir)) { strncpy(g_curdir, dir, sizeof g_curdir - 1); g_curdir[sizeof g_curdir - 1] = '\0'; }
+  /* Canonicalise into a SEPARATE buffer first: `dir` may alias g_curdir
+     (show_browser passes g_curdir), and realpath() with src==dst is UB. */
+  if (realpath(dir, resolved)) { strncpy(g_curdir, resolved, sizeof g_curdir - 1); g_curdir[sizeof g_curdir - 1] = '\0'; }
+  else if (dir != g_curdir)    { strncpy(g_curdir, dir, sizeof g_curdir - 1);      g_curdir[sizeof g_curdir - 1] = '\0'; }
 
-  while ((de = readdir(d)) != NULL && n < 2048) {
-    int isdir;
-    if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
-    isdir = (de->d_type == DT_DIR);
-    if (de->d_type == DT_UNKNOWN) {
-      struct stat st; char p[2300];
-      snprintf(p, sizeof p, "%s/%s", g_curdir, de->d_name);
-      if (stat(p, &st) == 0) isdir = S_ISDIR(st.st_mode);
+  if (d) {
+    while ((de = readdir(d)) != NULL && n < 2048) {
+      int isdir;
+      if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
+      isdir = (de->d_type == DT_DIR);
+      if (de->d_type == DT_UNKNOWN) {
+        struct stat st; char p[PATH_MAX];
+        int need = snprintf(p, sizeof p, "%s/%s", g_curdir, de->d_name);
+        if (need > 0 && need < (int)sizeof p && stat(p, &st) == 0) isdir = S_ISDIR(st.st_mode);
+      }
+      strncpy(ents[n].name, de->d_name, sizeof ents[n].name - 1);
+      ents[n].name[sizeof ents[n].name - 1] = '\0';
+      ents[n].isdir = isdir;
+      n++;
     }
-    strncpy(ents[n].name, de->d_name, sizeof ents[n].name - 1);
-    ents[n].name[sizeof ents[n].name - 1] = '\0';
-    ents[n].isdir = isdir;
-    n++;
+    closedir(d);
+    qsort(ents, (size_t)n, sizeof(bent_t), _cmp_bent);
   }
-  closedir(d);
-  qsort(ents, (size_t)n, sizeof(bent_t), _cmp_bent);
 
-  /* rebuild the list, owning the strings (textlist keeps the pointers) */
-  gtcaca_textlist_clear(g_browser);
-  for (i = 0; i < g_browser_n; i++) free(g_browser_items[i]);
-  free(g_browser_items);
-  g_browser_items = malloc((size_t)(n + 1) * sizeof(char *));
-  g_browser_n = 0;
-
-  g_browser_items[g_browser_n] = strdup("../");
-  gtcaca_textlist_append(g_browser, g_browser_items[g_browser_n++]);
+  /* one entry per line; ".." first so you can always go up */
+  total = 3;  /* "../" */
+  for (i = 0; i < n; i++) total += 1 + (int)strlen(ents[i].name) + (ents[i].isdir ? 1 : 0);
+  listing = malloc((size_t)total + 1);
+  if (!listing) return;
+  strcpy(listing, "../"); len = 3;
   for (i = 0; i < n; i++) {
-    char line[300];
-    snprintf(line, sizeof line, "%s%s", ents[i].name, ents[i].isdir ? "/" : "");
-    g_browser_items[g_browser_n] = strdup(line);
-    gtcaca_textlist_append(g_browser, g_browser_items[g_browser_n++]);
+    listing[len++] = '\n';
+    strcpy(listing + len, ents[i].name); len += (int)strlen(ents[i].name);
+    if (ents[i].isdir) listing[len++] = '/';
   }
+  listing[len] = '\0';
 
-  rows = g_browser_win->height - 2;
-  gtcaca_textlist_widget_set_view_size(g_browser, (unsigned int)(rows > 0 ? rows : 1));
+  gtcaca_editor_set_read_only(g_browser_ed, 0);
+  gtcaca_editor_set_text(g_browser_ed, listing);
+  gtcaca_editor_set_read_only(g_browser_ed, 1);
+  gtcaca_editor_goto_pos(g_browser_ed, 0);
+  free(listing);
+
   g_browser_win->window_title = g_curdir;
-  snprintf(g_message, sizeof g_message, "%d item%s", n, n == 1 ? "" : "s");
+  if (!d) snprintf(g_message, sizeof g_message, "Cannot read %s", dir);
+  else    snprintf(g_message, sizeof g_message, "%d item%s", n, n == 1 ? "" : "s");
 }
 
 static void show_browser(void)
 {
   if (!g_curdir[0]) { if (!realpath(".", g_curdir)) strcpy(g_curdir, "."); }
   gtcaca_widget_show(GTCACA_WIDGET(g_browser_win));
-  gtcaca_widget_show(GTCACA_WIDGET(g_browser));
+  gtcaca_widget_show(GTCACA_WIDGET(g_browser_ed));
   populate_browser(g_curdir);
   gtcaca_window_set_focus(g_browser_win);
-  gtcaca_window_set_focused_child(g_browser_win, GTCACA_WIDGET(g_browser));
+  gtcaca_window_set_focused_child(g_browser_win, GTCACA_WIDGET(g_browser_ed));
 }
 
-static int on_browser_select(gtcaca_textlist_widget_t *tl, int key, void *ud)
+static void hide_browser(void)
 {
-  char *sel;
-  char path[2300];
+  gtcaca_widget_hide(GTCACA_WIDGET(g_browser_ed));
+  gtcaca_widget_hide(GTCACA_WIDGET(g_browser_win));
+  gtcaca_window_set_focus(g_win);
+  gtcaca_window_set_focused_child(g_win, GTCACA_WIDGET(g_ed));
+}
+
+/* Open whatever entry the caret is on: descend into a directory, or open a file. */
+static void browser_open_current(void)
+{
+  gtcaca_editor_widget_t *ed = g_browser_ed;
+  int line = gtcaca_editor_get_current_line(ed);
+  int s = gtcaca_editor_position_from_line(ed, line);
+  int e = gtcaca_editor_get_line_end_position(ed, line);
+  char entry[NAME_MAX + 2], path[PATH_MAX];
   struct stat st;
-  (void)ud;
+  size_t l;
+  int need;
 
-  if (key != CACA_KEY_RETURN) return 0;
-  sel = gtcaca_textlist_get_text_selected(tl);
-  if (!sel) return 0;
-
-  if (!strcmp(sel, "../")) snprintf(path, sizeof path, "%s/..", g_curdir);
+  gtcaca_editor_get_text_range(ed, s, e, entry, sizeof entry);
+  if (entry[0] == '\0') return;
+  if (!strcmp(entry, "../")) need = snprintf(path, sizeof path, "%s/..", g_curdir);
   else {
-    char name[256];
-    strncpy(name, sel, sizeof name - 1); name[sizeof name - 1] = '\0';
-    { size_t l = strlen(name); if (l && name[l - 1] == '/') name[l - 1] = '\0'; }  /* strip dir slash */
-    snprintf(path, sizeof path, "%s/%s", g_curdir, name);
+    l = strlen(entry); if (l && entry[l - 1] == '/') entry[l - 1] = '\0';
+    need = snprintf(path, sizeof path, "%s/%s", g_curdir, entry);
   }
-
+  if (need < 0 || need >= (int)sizeof path) { snprintf(g_message, sizeof g_message, "Path too long"); return; }
   if (stat(path, &st) == 0 && S_ISDIR(st.st_mode)) populate_browser(path);
   else                                             open_path_in_editor(path);
-  return 0;
+}
+
+/* Modeline shown while the browser is focused. */
+static void browser_modeline(gtcaca_editor_widget_t *ed, void *ud)
+{
+  char t[256];
+  (void)ed; (void)ud;
+  if (g_message[0]) snprintf(t, sizeof t, "  Browser  %s   %s", g_curdir, g_message);
+  else snprintf(t, sizeof t, "  Browser  %s   arrows move  C-s search  Enter open  q quit", g_curdir);
+  gtcaca_statusbar_set_text(g_modeline, t);
 }
 
 int main(int argc, char **argv)
@@ -1281,11 +1412,26 @@ int main(int argc, char **argv)
   gtcaca_box_apply_window(box, win);
   gtcaca_box_free(box);
 
-  /* browser window, stacked on top of the editor (initially hidden) */
-  g_browser_win = gtcaca_window_new(NULL, "Browser", 0, 0, cw, ch - 1);
-  g_browser = gtcaca_textlist_new(GTCACA_WIDGET(g_browser_win), 1, 1);
-  gtcaca_textlist_key_cb_register(g_browser, on_browser_select, NULL);
-  gtcaca_textlist_widget_set_view_size(g_browser, (unsigned int)(ch - 3 > 0 ? ch - 3 : 1));
+  /* browser: a centred pop-up on top of the editor (initially hidden) */
+  {
+    int bw = cw * 4 / 5, bh = (ch - 1) * 4 / 5;
+    if (bw < 24) bw = cw > 24 ? cw - 2 : cw;
+    if (bh < 6)  bh = ch - 2;
+    g_browser_win = gtcaca_window_new_centered(NULL, "Browser", bw, bh);
+    g_browser_ed = gtcaca_editor_new(GTCACA_WIDGET(g_browser_win), 0, 0, 1, 1);
+    gtcaca_editor_set_line_numbers(g_browser_ed, 0);
+    gtcaca_editor_set_caret_line_visible(g_browser_ed, 1);
+    gtcaca_editor_set_caret_line_back(g_browser_ed, CACA_BLUE);
+    gtcaca_editor_set_read_only(g_browser_ed, 1);
+    gtcaca_editor_key_cb_register(g_browser_ed, on_key, NULL);
+    gtcaca_editor_set_update_cb(g_browser_ed, browser_modeline, NULL);
+    /* fill the whole window so the editor's own border is the only one */
+    { gtcaca_box_t *bb = gtcaca_vbox_new(); gtcaca_box_set_margin(bb, 0);
+      gtcaca_box_add_expand(bb, GTCACA_WIDGET(g_browser_ed));
+      gtcaca_box_apply(bb, g_browser_win->x, g_browser_win->y,
+                       g_browser_win->width, g_browser_win->height);
+      gtcaca_box_free(bb); }
+  }
 
   g_modeline = gtcaca_statusbar_new("");
 
@@ -1293,7 +1439,7 @@ int main(int argc, char **argv)
     if (!realpath(arg, g_curdir)) { strncpy(g_curdir, arg, sizeof g_curdir - 1); g_curdir[sizeof g_curdir - 1] = '\0'; }
     show_browser();
   } else {
-    gtcaca_widget_hide(GTCACA_WIDGET(g_browser));
+    gtcaca_widget_hide(GTCACA_WIDGET(g_browser_ed));
     gtcaca_widget_hide(GTCACA_WIDGET(g_browser_win));
     gtcaca_window_set_focus(win);
     gtcaca_window_set_focused_child(win, GTCACA_WIDGET(g_ed));
@@ -1305,6 +1451,5 @@ int main(int argc, char **argv)
   gtcaca_editor_langcfg_free(g_langcfg);
   gtcaca_editor_grammar_free(g_grammar);
   free(g_killbuf);
-  { int i; for (i = 0; i < g_browser_n; i++) free(g_browser_items[i]); free(g_browser_items); }
   return 0;
 }

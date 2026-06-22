@@ -70,6 +70,17 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
   return win;
 }
 
+gtcaca_window_widget_t *gtcaca_window_new_centered(gtcaca_widget_t *parent, char *window_title, int width, int height)
+{
+  int cw = caca_get_canvas_width(gmo.cv);
+  int ch = caca_get_canvas_height(gmo.cv);
+  int x = (cw - width) / 2;
+  int y = (ch - height) / 2;
+  if (x < 0) x = 0;
+  if (y < 0) y = 0;
+  return gtcaca_window_new(parent, window_title, x, y, width, height);
+}
+
 void gtcaca_window_draw(gtcaca_window_widget_t *win)
 {
   gtcaca_widget_colorize(GTCACA_WIDGET(win));

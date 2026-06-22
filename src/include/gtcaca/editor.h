@@ -343,6 +343,10 @@ void gtcaca_editor_langcfg_set_block_comment(gtcaca_editor_langcfg_t *cfg, const
 void gtcaca_editor_langcfg_add_bracket(gtcaca_editor_langcfg_t *cfg, const char *open, const char *close);
 void gtcaca_editor_langcfg_add_string_delimiter(gtcaca_editor_langcfg_t *cfg, const char *delim);
 void gtcaca_editor_langcfg_set_keywords(gtcaca_editor_langcfg_t *cfg, const char *const *words, int count);
+/* Comment delimiters (empty string if unset) — for comment/uncomment commands. */
+const char *gtcaca_editor_langcfg_get_line_comment(gtcaca_editor_langcfg_t *cfg);
+const char *gtcaca_editor_langcfg_get_block_comment_open(gtcaca_editor_langcfg_t *cfg);
+const char *gtcaca_editor_langcfg_get_block_comment_close(gtcaca_editor_langcfg_t *cfg);
 /* Load a VSCode language-configuration.json (JSONC tolerated). Returns 0 on success. */
 int  gtcaca_editor_langcfg_load_json(gtcaca_editor_langcfg_t *cfg, const char *path);
 /* Attach (or detach with NULL) a config; attaching enables colourization. */

@@ -3,6 +3,7 @@
   "tabSize": 4,
   "insertSpaces": true,
   "indentSize": 4,
+  "edgeColumn": 80,
   "languages": {
     ".py": { "tabSize": 4, "insertSpaces": true, "indentSize": 4 },
     ".c":  { "insertSpaces": false, "tabSize": 8 },

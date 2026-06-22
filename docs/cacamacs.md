@@ -10,8 +10,10 @@ cacamacs [file | directory] [language-configuration.json]
 ```
 
 - A **file** opens in the editor.
-- A **directory** opens the file browser (also `C-x d`): Up/Down move, Enter
-  descends into a folder (`../` goes up) or opens a file.
+- A **directory** opens the file browser (also `C-x d`). The browser is a
+  read-only editor showing one entry per line, so it works like the editor:
+  arrows/`C-n`/`C-p` move, `C-s` searches the listing, Enter descends into a
+  folder (`../` goes up) or opens a file, and `q`/`Esc` closes it.
 - An optional explicit `language-configuration.json` forces that config.
 
 ## Key bindings
@@ -19,7 +21,11 @@ cacamacs [file | directory] [language-configuration.json]
 ```
 Motion   C-f C-b C-n C-p  C-a C-e  C-v   arrows / Home / End / PageUp / PageDown
 Edit     C-d delete-fwd   C-k kill-line  Backspace   Tab indent / complete
+Words    M-f / M-b move   M-d / M-DEL kill   M-u / M-l upcase / downcase
 Region   C-Space mark     C-w kill   M-w (Esc w) copy   C-y yank   C-g cancel
+Comment  M-; comment / uncomment the current line or region
+Lines    C-x C-t transpose lines   C-t transpose chars
+Modes    C-x C-q read-only   C-x w show whitespace   Insert overtype
 Search   C-s isearch fwd  C-r isearch back   (Enter accept, C-g cancel)
 Replace  M-% (Esc %) or C-x r   (prompts: Search: … then Replace with: …)
 Meta     Esc is the Meta prefix — press Esc, then a key, for M-<key>

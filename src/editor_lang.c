@@ -68,6 +68,10 @@ void gtcaca_editor_langcfg_add_string_delimiter(gtcaca_editor_langcfg_t *cfg, co
   if (cfg->n_delims < LANG_MAX_DELIMS) cfg->string_delims[cfg->n_delims++] = delim[0];
 }
 
+const char *gtcaca_editor_langcfg_get_line_comment(gtcaca_editor_langcfg_t *cfg) { return cfg ? cfg->line_comment : ""; }
+const char *gtcaca_editor_langcfg_get_block_comment_open(gtcaca_editor_langcfg_t *cfg) { return cfg ? cfg->block_open : ""; }
+const char *gtcaca_editor_langcfg_get_block_comment_close(gtcaca_editor_langcfg_t *cfg) { return cfg ? cfg->block_close : ""; }
+
 void gtcaca_editor_langcfg_set_keywords(gtcaca_editor_langcfg_t *cfg, const char *const *words, int count)
 {
   int i;

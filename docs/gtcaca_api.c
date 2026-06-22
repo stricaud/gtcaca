@@ -2874,6 +2874,16 @@ const gtcaca_api_entry_t gtcaca_api[] = {
     "Nothing."
   },
   {
+    /* gtcaca_window_new_centered */
+    "gtcaca_window_new_centered",
+    "window",
+    "Perform window new centered operation",
+    "gtcaca_window_widget_t * gtcaca_window_new_centered(gtcaca_widget_t *parent, char *window_title, int width, int height)",
+    "Perform window new centered operation.",
+    "parent\\tParent widget\\nwindow_title\\tTitle string displayed in the header\\nwidth\\tWidth in characters\\nheight\\tHeight in characters\\n",
+    "Pointer to the newly allocated widget, or NULL on allocation failure."
+  },
+  {
     /* gtcaca_window_draw */
     "gtcaca_window_draw",
     "window",
