@@ -14,3 +14,6 @@ add_executable(devhelp
 target_include_directories(devhelp PRIVATE ${CMAKE_SOURCE_DIR}/docs)
 
 target_link_libraries(devhelp ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(cacamacs cacamacs.c)
+target_link_libraries(cacamacs ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})

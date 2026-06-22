@@ -24,6 +24,7 @@ char *gtcaca_widget_type_to_string(gtcaca_widget_type_t type)
   case GTCACA_WIDGET_RADIOBUTTON:   return "RadioButton";
   case GTCACA_WIDGET_STATUSBAR:     return "StatusBar";
   case GTCACA_WIDGET_TEXTVIEW:      return "TextView";
+  case GTCACA_WIDGET_EDITOR:        return "Editor";
   default:                          return "Unknown";
   }
 }
@@ -113,6 +114,7 @@ int gtcaca_widget_is_focusable(gtcaca_widget_t *widget)
   case GTCACA_WIDGET_RADIOBUTTON:
   case GTCACA_WIDGET_COMBOBOX:
   case GTCACA_WIDGET_TEXTVIEW:
+  case GTCACA_WIDGET_EDITOR:
     return 1;
   default:
     return 0;

@@ -1,0 +1,29 @@
+{
+  "name": "c-lang",
+  "displayName": "C/C++ Language Basics",
+  "version": "0.0.1",
+  "engines": { "cacamacs": "*" },
+  "contributes": {
+    "languages": [
+      {
+        "id": "c",
+        "aliases": ["C"],
+        "extensions": [".c", ".h"],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "cpp",
+        "aliases": ["C++", "Cpp"],
+        "extensions": [".cpp", ".cc", ".hpp"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "c",
+        "scopeName": "source.c",
+        "path": "./syntaxes/c.tmLanguage.json"
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "//": "Copy to ~/.cacamacs/config.json",
+  "tabSize": 4,
+  "insertSpaces": true,
+  "indentSize": 4,
+  "languages": {
+    ".py": { "tabSize": 4, "insertSpaces": true, "indentSize": 4 },
+    ".c":  { "insertSpaces": false, "tabSize": 8 },
+    ".md": { "insertSpaces": true, "indentSize": 2 }
+  }
+}

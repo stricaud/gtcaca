@@ -1,0 +1,49 @@
+{
+  "scopeName": "source.python",
+  "name": "Python",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#triple-string" },
+    { "include": "#string" },
+    { "include": "#keyword" },
+    { "include": "#builtin" },
+    { "include": "#decorator" },
+    { "include": "#number" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.python",
+      "match": "#.*$"
+    },
+    "triple-string": {
+      "patterns": [
+        { "name": "string.quoted.triple.double.python", "begin": "\"\"\"", "end": "\"\"\"" },
+        { "name": "string.quoted.triple.single.python", "begin": "'''", "end": "'''" }
+      ]
+    },
+    "string": {
+      "patterns": [
+        { "name": "string.quoted.double.python", "begin": "\"", "end": "\"",
+          "patterns": [ { "name": "constant.character.escape.python", "match": "\\\\." } ] },
+        { "name": "string.quoted.single.python", "begin": "'", "end": "'",
+          "patterns": [ { "name": "constant.character.escape.python", "match": "\\\\." } ] }
+      ]
+    },
+    "keyword": {
+      "name": "keyword.control.python",
+      "match": "\\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield)\\b"
+    },
+    "builtin": {
+      "name": "constant.language.python",
+      "match": "\\b(True|False|None|self|cls|__init__|print|len|range|str|int|float|list|dict|set|tuple)\\b"
+    },
+    "decorator": {
+      "name": "entity.name.function.decorator.python",
+      "match": "^\\s*@[A-Za-z_][A-Za-z0-9_.]*"
+    },
+    "number": {
+      "name": "constant.numeric.python",
+      "match": "\\b(0[xX][0-9a-fA-F]+|[0-9]+\\.?[0-9]*)\\b"
+    }
+  }
+}

@@ -30,6 +30,7 @@ enum _gtcaca_widget_type_t {
   GTCACA_WIDGET_FRAME,
   GTCACA_WIDGET_SEPARATOR,
   GTCACA_WIDGET_EXPANDER,
+  GTCACA_WIDGET_EDITOR,
 };
 typedef enum _gtcaca_widget_type_t gtcaca_widget_type_t;
 

@@ -30,8 +30,16 @@
 #include <gtcaca/frame.h>
 #include <gtcaca/separator.h>
 #include <gtcaca/expander.h>
+#include <gtcaca/editor.h>
 
 gmo_t gmo;
+
+static int g_quit_requested = 0;
+
+void gtcaca_main_quit(void)
+{
+  g_quit_requested = 1;
+}
 
 int gtcaca_init(int *argc, char ***argv)
 {
@@ -126,6 +134,9 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
     break;
   case GTCACA_WIDGET_EXPANDER:
     gtcaca_expander_draw((gtcaca_expander_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_EDITOR:
+    gtcaca_editor_draw((gtcaca_editor_widget_t *)widget);
     break;
   case GTCACA_WIDGET_CALENDAR:
   case GTCACA_WIDGET_DIALOG:
@@ -251,6 +262,18 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
     exp = (gtcaca_expander_widget_t *)widget;
     gtcaca_expander_handle_key(exp, key);
     break;
+  case GTCACA_WIDGET_EDITOR: {
+    gtcaca_editor_widget_t *ed = (gtcaca_editor_widget_t *)widget;
+    int handled = 0;
+    /* An open autocompletion list intercepts keys first; then the container
+       (e.g. the Emacs keymap); whatever neither claims falls through to the
+       widget's built-in editing keys. */
+    if (gtcaca_editor_autoc_active(ed)) handled = _gtcaca_editor_autoc_key(ed, key);
+    if (!handled && ed->key_cb) handled = ed->key_cb(ed, key, ed->key_cb_userdata);
+    if (!handled)   ed->private_key_cb(ed, key, NULL);
+    if (ed->update_cb) ed->update_cb(ed, ed->update_cb_userdata);
+    break;
+  }
   case GTCACA_WIDGET_PROGRESSBAR:
   case GTCACA_WIDGET_STATUSBAR:
   case GTCACA_WIDGET_LABEL:
@@ -294,6 +317,15 @@ static void _gtcaca_widget_activate(gtcaca_widget_t *widget)
   widget->has_focus = saved;
 }
 
+/* The editor widget needs Tab, Ctrl+N/P, arrows and Esc for itself; when it is
+   focused the global shortcuts that use those keys step aside. */
+static int _focused_is_editor(void)
+{
+  gtcaca_window_widget_t *win = gtcaca_window_get_current_focus();
+  return win && win->focused_child &&
+         win->focused_child->type == GTCACA_WIDGET_EDITOR;
+}
+
 int gtcaca_widgets_handle_key_press(int key)
 {
   gtcaca_widget_t *widget = NULL;
@@ -311,14 +343,14 @@ int gtcaca_widgets_handle_key_press(int key)
   }
 
   /* TAB: cycle focus to next focusable child in focused window */
-  if (key == '\t') {
+  if (key == '\t' && !_focused_is_editor()) {
     gtcaca_window_widget_t *win = gtcaca_window_get_current_focus();
     if (win) gtcaca_window_focus_next_child(win);
     return 0;
   }
 
   /* Ctrl+N / Ctrl+P: switch between windows */
-  if (key == '\x0e' || key == '\x10') {
+  if ((key == '\x0e' || key == '\x10') && !_focused_is_editor()) {
     gtcaca_window_widget_t *win = gtcaca_window_get_current_focus();
     if (win) {
       gtcaca_window_widget_t *next = (key == '\x0e')
@@ -350,12 +382,14 @@ int gtcaca_widgets_handle_key_press(int key)
           navigate = (type != GTCACA_WIDGET_ENTRY &&
                       type != GTCACA_WIDGET_TEXTLIST &&
                       type != GTCACA_WIDGET_TEXTVIEW &&
-                      type != GTCACA_WIDGET_COMBOBOX);
+                      type != GTCACA_WIDGET_COMBOBOX &&
+                      type != GTCACA_WIDGET_EDITOR);
         } else {
           /* Left/Right: Entry, Scale, SpinButton use these internally. */
           navigate = (type != GTCACA_WIDGET_ENTRY &&
                       type != GTCACA_WIDGET_SCALE &&
-                      type != GTCACA_WIDGET_SPINBUTTON);
+                      type != GTCACA_WIDGET_SPINBUTTON &&
+                      type != GTCACA_WIDGET_EDITOR);
         }
         if (navigate) {
           if (key == CACA_KEY_UP || key == CACA_KEY_LEFT)
@@ -578,7 +612,7 @@ void gtcaca_main(void)
 
   gtcaca_redraw();
 
-  while (!quit) {
+  while (!quit && !g_quit_requested) {
     while (caca_get_event(gmo.dp, CACA_EVENT_ANY, &ev, 0)) {
       int evtype = caca_get_event_type(&ev);
       if (!(evtype & CACA_EVENT_KEY_PRESS)) {
@@ -599,14 +633,16 @@ void gtcaca_main(void)
       switch (key) {
       case 'q':
       case 'Q': {
-        int entry_focused = 0;
+        int text_focused = 0;
         CDL_FOREACH(gmo.widgets_list, widget) {
-          if (widget->has_focus && widget->type == GTCACA_WIDGET_ENTRY) {
-            entry_focused = 1;
+          if (widget->has_focus &&
+              (widget->type == GTCACA_WIDGET_ENTRY ||
+               widget->type == GTCACA_WIDGET_EDITOR)) {
+            text_focused = 1;
             break;
           }
         }
-        if (entry_focused)
+        if (text_focused)
           gtcaca_widgets_handle_key_press(key);
         else
           quit = 1;
@@ -614,6 +650,12 @@ void gtcaca_main(void)
       }
       case CACA_KEY_ESCAPE: {
         int handled = 0;
+        /* In the editor, Esc is the widget's (e.g. Emacs keyboard-quit), not
+           an application quit. */
+        if (_focused_is_editor()) {
+          gtcaca_widgets_handle_key_press(key);
+          break;
+        }
         CDL_FOREACH(gmo.widgets_list, widget) {
           if (widget->type == GTCACA_WIDGET_MENU && widget->has_focus) {
             gtcaca_menu_widget_t *m = (gtcaca_menu_widget_t *)widget;

@@ -1,5 +1,8 @@
 include_directories(AFTER ${LIBCACA_INCLUDE_DIRS})
 include_directories(AFTER "include/" ${GTCACA_INCLUDE_DIRS})
+if(ONIG_FOUND)
+  include_directories(AFTER ${ONIG_INCLUDE_DIRS})
+endif()
 
 set(GTCACA_LIB_SRC
   main.c
@@ -30,6 +33,14 @@ set(GTCACA_LIB_SRC
   separator.c
   expander.c
   box.c
+  editor.c
+  editor_lang.c
+  editor_autoc.c
+  editor_view.c
+  editor_json.c
+  editor_tm.c
+  editor_search.c
+  json.c
 )
 
 set(GTCACA_HEADERS
@@ -62,10 +73,13 @@ set(GTCACA_HEADERS
   include/gtcaca/separator.h
   include/gtcaca/expander.h
   include/gtcaca/box.h
+  include/gtcaca/editor.h
+  include/gtcaca/json.h
 )
 
 set(GTCACA_LINK_LIBRARIES
   ${LIBCACA_LDFLAGS}
+  ${ONIG_LDFLAGS}
 )
 
 add_library(gtcaca SHARED ${GTCACA_LIB_SRC})

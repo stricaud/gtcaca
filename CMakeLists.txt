@@ -84,6 +84,13 @@ endif()
 pkg_check_modules(LIBCACA REQUIRED caca)
 message("libcaca link library: ${LIBCACA_LDFLAGS}")
 
+# Oniguruma (optional): enables TextMate grammar (.tmLanguage.json) colourization.
+pkg_check_modules(ONIG oniguruma)
+if(ONIG_FOUND)
+  message("oniguruma found: ${ONIG_LDFLAGS}")
+  add_compile_definitions(GTCACA_HAVE_ONIG=1)
+endif()
+
 message("CMake system: ${CMAKE_SYSTEM_NAME}")
 # Mac OS Specifics
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

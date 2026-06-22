@@ -27,6 +27,7 @@ extern gmo_t gmo;
 
 int gtcaca_init(int *argc, char ***argv);
 void gtcaca_main(void);
+void gtcaca_main_quit(void);
 void gtcaca_redraw(void);
 unsigned int gtcaca_get_newid(void);
 

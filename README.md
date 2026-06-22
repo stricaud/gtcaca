@@ -86,6 +86,16 @@ Label
 
 A Window.
 
+### Editor
+
+A multi-line text-editing widget: caret/selection, undo/redo, scrolling, syntax
+colourization (VSCode language configs, TextMate `.tmLanguage.json` grammars via
+Oniguruma, and a built-in JSON mode), autocompletion, folding, annotations and
+Scintilla-style search/replace. See [docs/editor.md](docs/editor.md). The
+[cacamacs](apps/cacamacs.c) app ([docs/cacamacs.md](docs/cacamacs.md)) is an
+Emacs-keybinding editor built on it, reusing installed VSCode extensions for
+language support.
+
 ## Layout (vbox / hbox)
 
 Widgets can be placed by hand (explicit `x, y` in every constructor) or arranged
