@@ -31,6 +31,12 @@
 #include <gtcaca/separator.h>
 #include <gtcaca/expander.h>
 #include <gtcaca/editor.h>
+#include <gtcaca/sparkline.h>
+#include <gtcaca/gauge.h>
+#include <gtcaca/barchart.h>
+#include <gtcaca/tree.h>
+#include <gtcaca/table.h>
+#include <gtcaca/map.h>
 
 gmo_t gmo;
 
@@ -137,6 +143,24 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
     break;
   case GTCACA_WIDGET_EDITOR:
     gtcaca_editor_draw((gtcaca_editor_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_SPARKLINE:
+    gtcaca_sparkline_draw((gtcaca_sparkline_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_GAUGE:
+    gtcaca_gauge_draw((gtcaca_gauge_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_BARCHART:
+    gtcaca_barchart_draw((gtcaca_barchart_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_TREE:
+    gtcaca_tree_draw((gtcaca_tree_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_TABLE:
+    gtcaca_table_draw((gtcaca_table_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_MAP:
+    gtcaca_map_draw((gtcaca_map_widget_t *)widget);
     break;
   case GTCACA_WIDGET_CALENDAR:
   case GTCACA_WIDGET_DIALOG:
@@ -274,6 +298,15 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
     if (ed->update_cb) ed->update_cb(ed, ed->update_cb_userdata);
     break;
   }
+  case GTCACA_WIDGET_TREE:
+    gtcaca_tree_key((gtcaca_tree_widget_t *)widget, key, NULL);
+    break;
+  case GTCACA_WIDGET_TABLE:
+    gtcaca_table_key((gtcaca_table_widget_t *)widget, key, NULL);
+    break;
+  case GTCACA_WIDGET_MAP:
+    gtcaca_map_key((gtcaca_map_widget_t *)widget, key, NULL);
+    break;
   case GTCACA_WIDGET_PROGRESSBAR:
   case GTCACA_WIDGET_STATUSBAR:
   case GTCACA_WIDGET_LABEL:
@@ -284,6 +317,9 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
   case GTCACA_WIDGET_SPINNER:
   case GTCACA_WIDGET_FRAME:
   case GTCACA_WIDGET_SEPARATOR:
+  case GTCACA_WIDGET_SPARKLINE:
+  case GTCACA_WIDGET_GAUGE:
+  case GTCACA_WIDGET_BARCHART:
     break;
   }
 
@@ -383,13 +419,19 @@ int gtcaca_widgets_handle_key_press(int key)
                       type != GTCACA_WIDGET_TEXTLIST &&
                       type != GTCACA_WIDGET_TEXTVIEW &&
                       type != GTCACA_WIDGET_COMBOBOX &&
-                      type != GTCACA_WIDGET_EDITOR);
+                      type != GTCACA_WIDGET_EDITOR &&
+                      type != GTCACA_WIDGET_TREE &&
+                      type != GTCACA_WIDGET_TABLE &&
+                      type != GTCACA_WIDGET_MAP);
         } else {
-          /* Left/Right: Entry, Scale, SpinButton use these internally. */
+          /* Left/Right: Entry, Scale, SpinButton use these internally; the Tree
+             uses them to collapse/expand; the Map navigates between markers. */
           navigate = (type != GTCACA_WIDGET_ENTRY &&
                       type != GTCACA_WIDGET_SCALE &&
                       type != GTCACA_WIDGET_SPINBUTTON &&
-                      type != GTCACA_WIDGET_EDITOR);
+                      type != GTCACA_WIDGET_EDITOR &&
+                      type != GTCACA_WIDGET_TREE &&
+                      type != GTCACA_WIDGET_MAP);
         }
         if (navigate) {
           if (key == CACA_KEY_UP || key == CACA_KEY_LEFT)
@@ -696,4 +738,28 @@ void gtcaca_main(void)
 unsigned int gtcaca_get_newid(void)
 {
   return ++gmo.id;
+}
+
+int gtcaca_terminal_supports_blocks(void)
+{
+  const char *loc, *tp;
+  /* fine glyphs need a UTF-8 locale */
+  loc = getenv("LC_ALL");
+  if (!loc || !*loc) loc = getenv("LC_CTYPE");
+  if (!loc || !*loc) loc = getenv("LANG");
+  if (loc && !(strstr(loc, "UTF-8") || strstr(loc, "utf-8") ||
+               strstr(loc, "UTF8")  || strstr(loc, "utf8")))
+    return 0;
+  /* terminals that ship complete fonts */
+  if (getenv("KITTY_WINDOW_ID") || getenv("WEZTERM_PANE") || getenv("WT_SESSION") ||
+      getenv("ALACRITTY_WINDOW_ID") || getenv("ALACRITTY_SOCKET") ||
+      getenv("KONSOLE_VERSION") || getenv("VTE_VERSION") ||
+      getenv("GHOSTTY_RESOURCES_DIR") || getenv("FOOT_VERSION"))
+    return 1;
+  tp = getenv("TERM_PROGRAM");
+  if (tp && (!strcmp(tp, "iTerm.app") || !strcmp(tp, "WezTerm") ||
+             !strcmp(tp, "vscode") || !strcmp(tp, "ghostty") ||
+             !strcmp(tp, "rio") || !strcmp(tp, "Hyper")))
+    return 1;
+  return 0;   /* unknown (plain xterm, Terminal.app, …): assume ASCII-safe */
 }

@@ -20,7 +20,7 @@ It allows you to use widgets and have an amazing interface using code like this:
 
 Which will make the following:
 
-<p align="center"><img src="doc/firstwindow.png"/></p>
+<p align="center"><img src="docs/firstwindow.png"/></p>
 
 ## Text List widget
 
@@ -60,7 +60,7 @@ This code:
 
 Which will make this:
 
-<p align="center"><img src="doc/textlistcb.png"/></p>
+<p align="center"><img src="docs/textlistcb.png"/></p>
 
 When the user pressed the RETURN key, we printed the value of the selection.
 

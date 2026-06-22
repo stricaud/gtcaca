@@ -55,3 +55,15 @@ target_link_libraries(demo_monitor ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
 add_executable(demo_json demo_json.c)
 target_link_libraries(demo_json ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_charts demo_charts.c)
+target_link_libraries(demo_charts ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS} m)
+
+add_executable(demo_tree demo_tree.c)
+target_link_libraries(demo_tree ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_table demo_table.c)
+target_link_libraries(demo_table ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(demo_map demo_map.c)
+target_link_libraries(demo_map ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})

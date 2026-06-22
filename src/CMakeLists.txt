@@ -42,6 +42,12 @@ set(GTCACA_LIB_SRC
   editor_search.c
   editor_ops.c
   json.c
+  sparkline.c
+  gauge.c
+  barchart.c
+  tree.c
+  table.c
+  map.c
 )
 
 set(GTCACA_HEADERS
@@ -76,6 +82,12 @@ set(GTCACA_HEADERS
   include/gtcaca/box.h
   include/gtcaca/editor.h
   include/gtcaca/json.h
+  include/gtcaca/sparkline.h
+  include/gtcaca/gauge.h
+  include/gtcaca/barchart.h
+  include/gtcaca/tree.h
+  include/gtcaca/table.h
+  include/gtcaca/map.h
 )
 
 set(GTCACA_LINK_LIBRARIES

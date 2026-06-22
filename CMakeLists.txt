@@ -121,5 +121,5 @@ set(GTCACA_DATA_DIR "${CMAKE_INSTALL_PREFIX}/share/gtcaca/")
 add_definitions(-DGTCACA_DATA_DIR="${GTCACA_DATA_DIR}")
 
 add_subdirectory(src)
-add_subdirectory(tests)
+add_subdirectory(demo)
 add_subdirectory(apps)
