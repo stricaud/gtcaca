@@ -2204,6 +2204,13 @@ int main(int argc, char **argv)
   int open_dir = 0;
 
   gtcaca_init(&argc, &argv);
+  /* Emacs-like editor colours: a near-black background with light-grey text,
+     the same whether or not the pane is focused (focus is shown by the cursor,
+     not a background tint). The cyan statusbar is left as-is. */
+  gmo.theme.textviewfocus.bg = CACA_BLACK;
+  gmo.theme.textviewfocus.fg = CACA_LIGHTGRAY;
+  gmo.theme.textview.bg      = CACA_BLACK;
+  gmo.theme.textview.fg      = CACA_LIGHTGRAY;
   gtcaca_application_new("cacamacs");
   load_config();
 
