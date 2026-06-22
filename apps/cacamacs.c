@@ -116,6 +116,11 @@ static gtcaca_window_widget_t    *g_browser_win = NULL;
 static gtcaca_editor_widget_t    *g_browser_ed  = NULL;
 static char                       g_curdir[PATH_MAX] = "";
 
+/* help viewer (M-x help) — a modal, scrollable, read-only editor */
+static gtcaca_window_widget_t    *g_help_win = NULL;
+static gtcaca_editor_widget_t    *g_help_ed  = NULL;
+static int                        g_help_open = 0;
+
 /* save-as dialog (a real window with an entry + OK / Cancel buttons) */
 static gtcaca_window_widget_t    *g_save_win    = NULL;
 static gtcaca_label_widget_t     *g_save_label  = NULL;
@@ -142,6 +147,9 @@ static int  is_word_char(int c) { return isalnum((unsigned char)c) || c == '_' |
 static void complete_at_point(gtcaca_editor_widget_t *ed);   /* defined below */
 static void show_browser(void);                              /* defined below */
 static void hide_browser(void);
+static void show_help(void);
+static void hide_help(void);
+static void start_mx(void);
 static void browser_open_current(void);
 static void open_path_in_editor(const char *path);
 /* windows / buffers / split panes (defined below) */
@@ -460,6 +468,13 @@ static void recenter(gtcaca_editor_widget_t *ed)
 }
 
 /* ── view toggles (line numbers, folding, annotations) ─────────────────────── */
+
+static void toggle_wrap(gtcaca_editor_widget_t *ed)
+{
+  int on = !gtcaca_editor_get_wrap(ed);
+  gtcaca_editor_set_wrap(ed, on);
+  snprintf(g_message, sizeof g_message, "Line wrap %s", on ? "on" : "off (lines scroll)");
+}
 
 static void toggle_line_numbers(gtcaca_editor_widget_t *ed)
 {
@@ -797,6 +812,16 @@ static void string_rect_done(const char *s)
 }
 static void start_string_rectangle(void) { start_minibuffer("String rectangle: ", string_rect_done); }
 
+/* M-x — run a command by name (a small set, extend as needed) */
+static void mx_done(const char *cmd)
+{
+  if (!strcmp(cmd, "help") || !strcmp(cmd, "describe-bindings") || !strcmp(cmd, "?"))
+    show_help();
+  else if (cmd[0])
+    snprintf(g_message, sizeof g_message, "No command: %s  (try: help)", cmd);
+}
+static void start_mx(void) { start_minibuffer("M-x ", mx_done); }
+
 /* ── keyboard macros & numeric prefix ──────────────────────────────────────── */
 
 static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud);
@@ -859,7 +884,7 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     g_macro[g_macro_len++] = key;
 
   /* if focus landed on a different pane's editor, sync our notion of focus */
-  if (ed != g_ed && ed != g_browser_ed) {
+  if (ed != g_ed && ed != g_browser_ed && ed != g_help_ed) {
     int bi = buf_index_of(ed);
     if (bi >= 0 && g_buffers[bi].pane >= 0) focus_pane(g_buffers[bi].pane);
   }
@@ -867,6 +892,13 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
   /* incremental search and the minibuffer take keys first */
   if (g_isearch)   return isearch_key(ed, key);
   if (g_mb_active) return minibuffer_key(key);
+
+  /* help viewer: read-only and scrollable — q/Esc close it, C-s searches, and
+     arrows / PageUp / PageDown / C-v fall through to the editor for scrolling. */
+  if (ed == g_help_ed) {
+    if (key == 'q' || key == CACA_KEY_ESCAPE) { hide_help(); return 1; }
+    if (key == CACA_KEY_CTRL_X) return 1;   /* swallow C-x */
+  }
 
   /* browser mode: the listing is a read-only editor — Enter opens the entry,
      q/Esc close it, and everything else (arrows, C-s search, …) falls through
@@ -938,6 +970,7 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     case 'o':               pane_other_window();          return 1;  /* C-x o other window */
     case 'b':               pane_switch_buffer();         return 1;  /* C-x b switch buffer */
     case CACA_KEY_CTRL_T:   gtcaca_editor_line_transpose(ed); return 1;  /* C-x C-t transpose lines */
+    case CACA_KEY_CTRL_L:   toggle_wrap(ed);              return 1;  /* C-x C-l toggle line wrap */
     case CACA_KEY_CTRL_Q:
       gtcaca_editor_set_read_only(ed, !gtcaca_editor_get_read_only(ed));
       snprintf(g_message, sizeof g_message, "Read-only %s", gtcaca_editor_get_read_only(ed) ? "on" : "off");
@@ -967,6 +1000,9 @@ static int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     case 'u': case 'U':     case_word(ed, 1);    return 1;  /* M-u  upcase word    */
     case 'l': case 'L':     case_word(ed, 0);    return 1;  /* M-l  downcase word  */
     case ';':               comment_dwim(ed);    return 1;  /* M-;  comment-dwim   */
+    case 'x': case 'X':     start_mx();          return 1;  /* M-x  run command    */
+    case '<':               move(ed, gtcaca_editor_document_start, gtcaca_editor_document_start_extend); return 1; /* M-< */
+    case '>':               move(ed, gtcaca_editor_document_end,   gtcaca_editor_document_end_extend);   return 1; /* M-> */
     case CACA_KEY_ESCAPE:   keyboard_quit(ed); return 1;  /* Esc Esc cancels   */
     default:
       snprintf(g_message, sizeof(g_message), "M-%c is undefined", key >= 32 ? key : '?');
@@ -1646,6 +1682,60 @@ static void hide_browser(void)
   pane_show_all();                 /* restore the editor panes and focus */
 }
 
+/* ── help viewer (M-x help) ─────────────────────────────────────────────────── */
+
+static const char *help_text(void)
+{
+  return
+  "cacamacs key bindings        (Up/Down/PageUp/PageDown or C-v scroll, C-s search,\n"
+  "                              q or Esc closes this window)\n"
+  "\n"
+  "Motion   C-f C-b C-n C-p   C-a C-e   C-v   arrows / Home / End / PageUp / PageDown\n"
+  "         M-< / M->   beginning / end of buffer\n"
+  "         C-n / C-p step through wrapped rows when line wrap is on\n"
+  "Edit     C-d delete-fwd   C-k kill-line   Backspace   Tab indent / complete\n"
+  "Words    M-f / M-b move    M-d / M-DEL kill    M-u / M-l upcase / downcase\n"
+  "Region   C-Space mark   C-w kill   M-w (Esc w) copy   C-y yank   C-g cancel\n"
+  "Rect     C-x SPC rectangle mark, move to opposite corner, then:\n"
+  "         C-x r t insert string per line   C-x r k kill   C-x r y yank\n"
+  "         C-x r d delete   C-x r c blank   (C-w / M-w act on the box too)\n"
+  "Comment  M-;  comment / uncomment the line or region\n"
+  "Lines    C-x C-t transpose lines   C-t transpose chars\n"
+  "Search   C-s isearch fwd   C-r isearch back    Replace  M-% (Esc %)\n"
+  "Macros   C-x ( record   C-x ) finish   C-x e replay   (C-u N C-x e = N times)\n"
+  "Repeat   C-u N <command>   runs the next command N times (bare C-u = 4)\n"
+  "Windows  C-x 2 split below   C-x 3 split right   C-x 1 one   C-x 0 close\n"
+  "         C-x o other window   C-x b switch buffer\n"
+  "Files    C-x C-f find file   C-x C-s save   C-x C-w write-as   C-x C-c quit\n"
+  "         C-x d directory browser\n"
+  "View     C-x l line numbers   C-x f folding   C-x t toggle fold   C-x a annotate\n"
+  "         C-x C-l line wrap (on by default)   C-x w whitespace   C-l recenter\n"
+  "JSON     C-x p pretty-print (.json/.jsonl open in JSON mode)\n"
+  "Undo     C-/   (also C-x u)        Help   M-x help\n";
+}
+
+static void show_help(void)
+{
+  pane_hide_all();                 /* modal: only the help window is visible */
+  gtcaca_widget_show(GTCACA_WIDGET(g_help_win));
+  gtcaca_widget_show(GTCACA_WIDGET(g_help_ed));
+  gtcaca_editor_set_read_only(g_help_ed, 0);
+  gtcaca_editor_set_text(g_help_ed, help_text());
+  gtcaca_editor_set_read_only(g_help_ed, 1);
+  gtcaca_editor_goto_pos(g_help_ed, 0);
+  gtcaca_window_set_focus(g_help_win);
+  gtcaca_window_set_focused_child(g_help_win, GTCACA_WIDGET(g_help_ed));
+  g_help_open = 1;
+}
+
+static void hide_help(void)
+{
+  gtcaca_widget_hide(GTCACA_WIDGET(g_help_ed));
+  gtcaca_widget_hide(GTCACA_WIDGET(g_help_win));
+  g_help_open = 0;
+  pane_show_all();
+}
+
 /* Open whatever entry the caret is on: descend into a directory, or open a file. */
 static void browser_open_current(void)
 {
@@ -1726,6 +1816,7 @@ static int buffer_create(const char *path)
   strcpy(b->langname, "fundamental");
   b->ed = gtcaca_editor_new(NULL, 0, 0, 1, 1);
   gtcaca_editor_set_line_numbers(b->ed, 1);
+  gtcaca_editor_set_wrap(b->ed, 1);              /* wrap long lines by default */
   gtcaca_editor_key_cb_register(b->ed, on_key, NULL);
   gtcaca_editor_set_update_cb(b->ed, refresh_modeline, NULL);
   gtcaca_editor_set_caret_line_visible(b->ed, 1);
@@ -2152,6 +2243,25 @@ int main(int argc, char **argv)
       gtcaca_box_free(bb); }
     gtcaca_widget_hide(GTCACA_WIDGET(g_browser_ed));
     gtcaca_widget_hide(GTCACA_WIDGET(g_browser_win));
+  }
+
+  /* help viewer pop-up (M-x help) — a modal, scrollable, read-only editor */
+  {
+    int hw = cw * 4 / 5, hh = (ch - 1) * 4 / 5;
+    if (hw < 24) hw = cw > 24 ? cw - 2 : cw;
+    if (hh < 6)  hh = ch - 2;
+    g_help_win = gtcaca_window_new_centered(NULL, "Help — key bindings", hw, hh);
+    g_help_ed  = gtcaca_editor_new(GTCACA_WIDGET(g_help_win), 0, 0, 1, 1);
+    gtcaca_editor_set_line_numbers(g_help_ed, 0);
+    gtcaca_editor_set_read_only(g_help_ed, 1);
+    gtcaca_editor_key_cb_register(g_help_ed, on_key, NULL);
+    { gtcaca_box_t *hb = gtcaca_vbox_new(); gtcaca_box_set_margin(hb, 0);
+      gtcaca_box_add_expand(hb, GTCACA_WIDGET(g_help_ed));
+      gtcaca_box_apply(hb, g_help_win->x, g_help_win->y,
+                       g_help_win->width, g_help_win->height);
+      gtcaca_box_free(hb); }
+    gtcaca_widget_hide(GTCACA_WIDGET(g_help_ed));
+    gtcaca_widget_hide(GTCACA_WIDGET(g_help_win));
   }
 
   /* save-as dialog (created hidden; brought to front when shown) */

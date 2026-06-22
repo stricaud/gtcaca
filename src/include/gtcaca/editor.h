@@ -178,6 +178,7 @@ struct _gtcaca_editor_widget_t {
   int view_cols;         /* columns of text visible (updated on draw) */
   int tab_width;
   int show_line_numbers;
+  int wrap;              /* soft-wrap long lines onto continuation rows */
 
   /* State */
   int modified;
@@ -333,6 +334,10 @@ int  gtcaca_editor_get_modify(gtcaca_editor_widget_t *w);
 void gtcaca_editor_set_line_numbers(gtcaca_editor_widget_t *w, int on);
 void gtcaca_editor_set_tab_width(gtcaca_editor_widget_t *w, int n);
 int  gtcaca_editor_get_tab_width(gtcaca_editor_widget_t *w);
+/* Soft-wrap: long lines continue on the next screen row instead of scrolling
+   horizontally (cf. SCI_SETWRAPMODE). Off by default. */
+void gtcaca_editor_set_wrap(gtcaca_editor_widget_t *w, int on);
+int  gtcaca_editor_get_wrap(gtcaca_editor_widget_t *w);
 
 /* ── Colourization: element/style colours (cf. Scintilla element colours) ──── */
 /* Set the foreground/background colour of a syntax style (a caca colour). */

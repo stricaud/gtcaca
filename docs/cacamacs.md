@@ -20,6 +20,10 @@ cacamacs [file | directory] [language-configuration.json]
 
 ```
 Motion   C-f C-b C-n C-p  C-a C-e  C-v   arrows / Home / End / PageUp / PageDown
+         M-< / M->  beginning / end of buffer
+         (C-n / C-p step through wrapped rows when line wrap is on)
+Help     M-x help  (a scrollable key-binding window; q or Esc closes it)
+         M-x runs a command by name (currently: help)
 Edit     C-d delete-fwd   C-k kill-line  Backspace   Tab indent / complete
 Words    M-f / M-b move   M-d / M-DEL kill   M-u / M-l upcase / downcase
 Region   C-Space mark     C-w kill   M-w (Esc w) copy   C-y yank   C-g cancel
@@ -48,6 +52,7 @@ Files    C-x C-f find file (Tab completes; a directory opens the browser)
          (save dialog: type the name, Enter saves via the default OK button;
           Tab to the buttons, Cancel or C-g aborts)
 View     C-x l line numbers   C-x f folding   C-x t toggle fold   C-x a annotate
+         C-x C-l line wrap (on by default; turn off to scroll long lines)
 JSON     C-x p pretty-print (.json/.jsonl open in JSON mode automatically)
 Complete Tab (after a word)  — Up/Down choose, Enter/Tab accept, Esc cancel
 ```

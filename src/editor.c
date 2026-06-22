@@ -304,18 +304,49 @@ static void _move_vertical(gtcaca_editor_widget_t *w, int delta, int extend)
   int last = gtcaca_editor_get_line_count(w) - 1;
   int dir = delta < 0 ? -1 : 1;
   int steps = delta < 0 ? -delta : delta;
-  int target = gtcaca_editor_get_current_line(w);
   int s;
 
-  /* Step over collapsed (hidden) lines so motion follows what is on screen. */
-  for (s = 0; s < steps; s++) {
-    int nl = target + dir;
-    while (nl >= 0 && nl <= last && !gtcaca_editor_get_line_visible(w, nl)) nl += dir;
-    if (nl < 0 || nl > last) break;
-    target = nl;
-  }
   if (w->goal_col < 0) w->goal_col = _visual_col(w, w->current_pos);
-  _set_caret(w, _pos_from_visual_col(w, target, w->goal_col), extend);
+
+  /* Soft-wrap: move by *visual* rows so the caret steps through a long line's
+     continuation rows, keeping its column within the screen row (goal % width). */
+  if (w->wrap && w->view_cols > 0) {
+    int W    = w->view_cols;
+    int gcol = w->goal_col % W;
+    int line = gtcaca_editor_get_current_line(w);
+    int sub  = _visual_col(w, w->current_pos) / W;
+    for (s = 0; s < steps; s++) {
+      int last_sub = _visual_col(w, gtcaca_editor_get_line_end_position(w, line)) / W;
+      if (dir > 0) {
+        if (sub < last_sub) { sub++; continue; }
+        { int nl = line + 1;
+          while (nl <= last && !gtcaca_editor_get_line_visible(w, nl)) nl++;
+          if (nl > last) break;
+          line = nl; sub = 0; }
+      } else {
+        if (sub > 0) { sub--; continue; }
+        { int nl = line - 1;
+          while (nl >= 0 && !gtcaca_editor_get_line_visible(w, nl)) nl--;
+          if (nl < 0) break;
+          line = nl;
+          sub = _visual_col(w, gtcaca_editor_get_line_end_position(w, line)) / W; }
+      }
+    }
+    _set_caret(w, _pos_from_visual_col(w, line, sub * W + gcol), extend);
+    return;
+  }
+
+  /* No wrap: move by document lines, stepping over collapsed (hidden) lines. */
+  {
+    int target = gtcaca_editor_get_current_line(w);
+    for (s = 0; s < steps; s++) {
+      int nl = target + dir;
+      while (nl >= 0 && nl <= last && !gtcaca_editor_get_line_visible(w, nl)) nl += dir;
+      if (nl < 0 || nl > last) break;
+      target = nl;
+    }
+    _set_caret(w, _pos_from_visual_col(w, target, w->goal_col), extend);
+  }
 }
 
 #define _MOVE_H(name, newpos_expr)                                          \
@@ -721,12 +752,44 @@ static uint32_t _style_attr(gtcaca_editor_style_t *st)
 }
 
 /* number of display rows occupied by visible lines in [from, to) (incl. annotations) */
-static int _count_rows(gtcaca_editor_widget_t *w, int from, int to)
+void gtcaca_editor_set_wrap(gtcaca_editor_widget_t *w, int on) { w->wrap = on ? 1 : 0; if (on) w->x_offset = 0; }
+int  gtcaca_editor_get_wrap(gtcaca_editor_widget_t *w) { return w->wrap; }
+
+/* screen rows a document line occupies (1 unless soft-wrap splits it) */
+static int _line_rows(gtcaca_editor_widget_t *w, int line, int text_w)
+{
+  if (!w->wrap || text_w <= 0) return 1;
+  {
+    int width = _visual_col(w, gtcaca_editor_get_line_end_position(w, line));
+    return width / text_w + 1;   /* +1 leaves room for the end-of-line caret */
+  }
+}
+
+/* On-screen position of visual column `vc` of a line whose first screen row is
+   `row`. Returns 1 (and sets *sx,*sy) if that cell is within the text area. */
+static int _cell_pos(gtcaca_editor_widget_t *w, int vc, int row,
+                     int text_w, int text_h, int origin_x, int inner_y,
+                     int *sx, int *sy)
+{
+  if (w->wrap) {
+    int sub = vc / text_w;
+    if (row + sub < 0 || row + sub >= text_h) return 0;
+    *sx = origin_x + (vc % text_w);
+    *sy = inner_y + row + sub;
+    return 1;
+  }
+  if (vc < w->x_offset || vc >= w->x_offset + text_w) return 0;
+  *sx = origin_x + (vc - w->x_offset);
+  *sy = inner_y + row;
+  return 1;
+}
+
+static int _count_rows(gtcaca_editor_widget_t *w, int from, int to, int text_w)
 {
   int line, rows = 0;
   for (line = from; line < to; line++) {
     if (!gtcaca_editor_get_line_visible(w, line)) continue;
-    rows += 1 + gtcaca_editor_annotation_get_lines(w, line);
+    rows += _line_rows(w, line, text_w) + gtcaca_editor_annotation_get_lines(w, line);
   }
   return rows;
 }
@@ -790,13 +853,19 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
   if (caret_line < w->first_visible_line) w->first_visible_line = caret_line;
   while (w->first_visible_line > 0 && !gtcaca_editor_get_line_visible(w, w->first_visible_line))
     w->first_visible_line--;
-  while (_count_rows(w, w->first_visible_line, caret_line) >= text_h) {
-    int nl = w->first_visible_line + 1;
-    while (nl < line_count && !gtcaca_editor_get_line_visible(w, nl)) nl++;
-    if (nl >= line_count) break;
-    w->first_visible_line = nl;
-  }
   {
+    /* the caret's own continuation row must fit too (wrap mode) */
+    int caret_sub = w->wrap ? _visual_col(w, w->current_pos) / text_w : 0;
+    while (_count_rows(w, w->first_visible_line, caret_line, text_w) + caret_sub >= text_h) {
+      int nl = w->first_visible_line + 1;
+      while (nl < line_count && !gtcaca_editor_get_line_visible(w, nl)) nl++;
+      if (nl >= line_count || nl > caret_line) break;
+      w->first_visible_line = nl;
+    }
+  }
+  if (w->wrap) {
+    w->x_offset = 0;                     /* no horizontal scroll when wrapping */
+  } else {
     int caret_col = _visual_col(w, w->current_pos);
     if (caret_col < w->x_offset) w->x_offset = caret_col;
     if (caret_col >= w->x_offset + text_w) w->x_offset = caret_col - text_w + 1;
@@ -812,9 +881,10 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
     int draw_y = inner_y + row;
     int line_start = gtcaca_editor_position_from_line(w, line);
     int line_end   = gtcaca_editor_get_line_end_position(w, line);
-    int pos, vcol;
+    int line_rows  = _line_rows(w, line, text_w);
+    int pos, vcol, sx, sy;
 
-    /* line-number margin */
+    /* line-number margin (first screen row of the line) */
     if (ln_w > 0) {
       char numbuf[16];
       snprintf(numbuf, sizeof numbuf, "%*d", ln_w - 1, line + 1);
@@ -833,16 +903,17 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
       caca_put_char(gmo.cv, inner_x + ln_w, draw_y, mk);
     }
 
-    /* current-line highlight: paint the row background first */
+    /* current-line highlight: paint the background of every wrapped row */
     uint8_t rowbg = (w->caret_line_visible && line == caret_line && w->has_focus)
                       ? w->caret_line_back : nb;
     if (rowbg != nb) {
-      int cx;
+      int cx, rr;
       caca_set_color_ansi(gmo.cv, nf, rowbg); caca_set_attr(gmo.cv, 0);
-      for (cx = 0; cx < text_w; cx++) caca_put_char(gmo.cv, origin_x + cx, draw_y, ' ');
+      for (rr = 0; rr < line_rows && row + rr < text_h; rr++)
+        for (cx = 0; cx < text_w; cx++) caca_put_char(gmo.cv, origin_x + cx, inner_y + row + rr, ' ');
     }
 
-    /* line text, expanding tabs and applying horizontal scroll */
+    /* line text, expanding tabs; cells map to wrapped rows (or scroll if !wrap) */
     vcol = 0;
     for (pos = line_start; pos < line_end; pos++) {
       char c = w->text[pos];
@@ -850,8 +921,7 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
       int k;
       for (k = 0; k < cells; k++) {
         int vc = vcol + k;
-        if (vc >= w->x_offset && vc < w->x_offset + text_w) {
-          int sx = origin_x + (vc - w->x_offset);
+        if (_cell_pos(w, vc, row, text_w, text_h, origin_x, inner_y, &sx, &sy)) {
           int in_sel   = w->rect_select
                            ? (line >= r_top && line <= r_bot && vc >= r_left && vc < r_right)
                            : (pos >= sel_start && pos < sel_end);
@@ -879,7 +949,7 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
           } else {
             caca_set_color_ansi(gmo.cv, nf, rowbg); caca_set_attr(gmo.cv, 0);
           }
-          caca_put_char(gmo.cv, sx, draw_y, outc);
+          caca_put_char(gmo.cv, sx, sy, outc);
         }
       }
       vcol += cells;
@@ -890,30 +960,29 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
     if (w->rect_select && line >= r_top && line <= r_bot) {
       int vc;
       for (vc = (vcol > r_left ? vcol : r_left); vc < r_right; vc++) {
-        if (vc >= w->x_offset && vc < w->x_offset + text_w) {
+        if (_cell_pos(w, vc, row, text_w, text_h, origin_x, inner_y, &sx, &sy)) {
           caca_set_color_ansi(gmo.cv, w->sel_set ? w->sel_fore : nb,
                                       w->sel_set ? w->sel_back : nf);
           caca_set_attr(gmo.cv, 0);
-          caca_put_char(gmo.cv, origin_x + (vc - w->x_offset), draw_y, ' ');
+          caca_put_char(gmo.cv, sx, sy, ' ');
         }
       }
     }
 
-    /* edge column marker, where the line is shorter than the edge */
-    if (w->edge_column > 0 && w->edge_column >= vcol &&
+    /* edge column marker (only meaningful without wrap) */
+    if (!w->wrap && w->edge_column > 0 && w->edge_column >= vcol &&
         w->edge_column >= w->x_offset && w->edge_column < w->x_offset + text_w) {
       caca_set_color_ansi(gmo.cv, w->edge_colour, rowbg); caca_set_attr(gmo.cv, 0);
       caca_put_char(gmo.cv, origin_x + (w->edge_column - w->x_offset), draw_y, 0x2502); /* │ */
     }
     /* caret at end-of-line */
     if (w->has_focus && caret_line == line && w->current_pos == line_end) {
-      int vc = vcol;
-      if (vc >= w->x_offset && vc < w->x_offset + text_w) {
+      if (_cell_pos(w, vcol, row, text_w, text_h, origin_x, inner_y, &sx, &sy)) {
         caca_set_color_ansi(gmo.cv, nb, nf); caca_set_attr(gmo.cv, 0);
-        caca_put_char(gmo.cv, origin_x + (vc - w->x_offset), draw_y, ' ');
+        caca_put_char(gmo.cv, sx, sy, ' ');
       }
     }
-    row++;
+    row += line_rows;
 
     /* annotation rows beneath this line */
     if (w->annotation_visible != GTCACA_EDITOR_ANNOTATION_HIDDEN &&
