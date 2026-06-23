@@ -37,6 +37,13 @@
 #include <gtcaca/tree.h>
 #include <gtcaca/table.h>
 #include <gtcaca/map.h>
+#include <gtcaca/tabs.h>
+#include <gtcaca/mindmap.h>
+#include <gtcaca/segdisplay.h>
+#include <gtcaca/linechart.h>
+#include <gtcaca/calendar.h>
+#include <gtcaca/dialog.h>
+#include <gtcaca/filechooser.h>
 
 gmo_t gmo;
 
@@ -162,9 +169,26 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
   case GTCACA_WIDGET_MAP:
     gtcaca_map_draw((gtcaca_map_widget_t *)widget);
     break;
+  case GTCACA_WIDGET_TABS:
+    gtcaca_tabs_draw((gtcaca_tabs_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_MINDMAP:
+    gtcaca_mindmap_draw((gtcaca_mindmap_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_SEGDISPLAY:
+    gtcaca_segdisplay_draw((gtcaca_segdisplay_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_LINECHART:
+    gtcaca_linechart_draw((gtcaca_linechart_widget_t *)widget);
+    break;
   case GTCACA_WIDGET_CALENDAR:
+    gtcaca_calendar_draw((gtcaca_calendar_widget_t *)widget);
+    break;
   case GTCACA_WIDGET_DIALOG:
+    gtcaca_dialog_draw((gtcaca_dialog_widget_t *)widget);
+    break;
   case GTCACA_WIDGET_FILECHOOSERDIALOG:
+    gtcaca_filechooser_draw((gtcaca_filechooser_widget_t *)widget);
     break;
   }
 
@@ -307,12 +331,24 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
   case GTCACA_WIDGET_MAP:
     gtcaca_map_key((gtcaca_map_widget_t *)widget, key, NULL);
     break;
+  case GTCACA_WIDGET_TABS:
+    gtcaca_tabs_key((gtcaca_tabs_widget_t *)widget, key, NULL);
+    break;
+  case GTCACA_WIDGET_MINDMAP:
+    gtcaca_mindmap_key((gtcaca_mindmap_widget_t *)widget, key, NULL);
+    break;
   case GTCACA_WIDGET_PROGRESSBAR:
+  case GTCACA_WIDGET_CALENDAR:
+    gtcaca_calendar_key((gtcaca_calendar_widget_t *)widget, key, NULL);
+    break;
+  case GTCACA_WIDGET_DIALOG:
+    gtcaca_dialog_key((gtcaca_dialog_widget_t *)widget, key, NULL);
+    break;
+  case GTCACA_WIDGET_FILECHOOSERDIALOG:
+    gtcaca_filechooser_key((gtcaca_filechooser_widget_t *)widget, key, NULL);
+    break;
   case GTCACA_WIDGET_STATUSBAR:
   case GTCACA_WIDGET_LABEL:
-  case GTCACA_WIDGET_CALENDAR:
-  case GTCACA_WIDGET_DIALOG:
-  case GTCACA_WIDGET_FILECHOOSERDIALOG:
   case GTCACA_WIDGET_IMAGE:
   case GTCACA_WIDGET_SPINNER:
   case GTCACA_WIDGET_FRAME:
@@ -320,6 +356,8 @@ int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
   case GTCACA_WIDGET_SPARKLINE:
   case GTCACA_WIDGET_GAUGE:
   case GTCACA_WIDGET_BARCHART:
+  case GTCACA_WIDGET_SEGDISPLAY:
+  case GTCACA_WIDGET_LINECHART:
     break;
   }
 
@@ -422,7 +460,9 @@ int gtcaca_widgets_handle_key_press(int key)
                       type != GTCACA_WIDGET_EDITOR &&
                       type != GTCACA_WIDGET_TREE &&
                       type != GTCACA_WIDGET_TABLE &&
-                      type != GTCACA_WIDGET_MAP);
+                      type != GTCACA_WIDGET_MAP &&
+                      type != GTCACA_WIDGET_MINDMAP &&
+                      type != GTCACA_WIDGET_CALENDAR);
         } else {
           /* Left/Right: Entry, Scale, SpinButton use these internally; the Tree
              uses them to collapse/expand; the Map navigates between markers. */
@@ -432,7 +472,10 @@ int gtcaca_widgets_handle_key_press(int key)
                       type != GTCACA_WIDGET_EDITOR &&
                       type != GTCACA_WIDGET_TREE &&
                       type != GTCACA_WIDGET_TABLE &&
-                      type != GTCACA_WIDGET_MAP);
+                      type != GTCACA_WIDGET_MAP &&
+                      type != GTCACA_WIDGET_TABS &&
+                      type != GTCACA_WIDGET_MINDMAP &&
+                      type != GTCACA_WIDGET_CALENDAR);
         }
         if (navigate) {
           if (key == CACA_KEY_UP || key == CACA_KEY_LEFT)

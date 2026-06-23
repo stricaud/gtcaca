@@ -1,11 +1,123 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
 #include <caca.h>
 
 #include <gtcaca/map.h>
 #include <gtcaca/main.h>
+
+/* ── built-in gazetteer: world capitals + major cities (lat N+, lon E+) ─────── */
+static const gtcaca_map_city_t g_cities[] = {
+  /* North America */
+  { "Washington",       38.90,  -77.04 }, { "New York",        40.71,  -74.01 },
+  { "San Francisco",    37.77, -122.42 }, { "Los Angeles",     34.05, -118.24 },
+  { "Chicago",          41.88,  -87.63 }, { "Seattle",         47.61, -122.33 },
+  { "Boston",           42.36,  -71.06 }, { "Houston",         29.76,  -95.37 },
+  { "Miami",            25.76,  -80.19 }, { "Toronto",         43.65,  -79.38 },
+  { "Ottawa",           45.42,  -75.70 }, { "Montreal",        45.50,  -73.57 },
+  { "Vancouver",        49.28, -123.12 }, { "Mexico City",     19.43,  -99.13 },
+  { "Havana",           23.11,  -82.37 }, { "Guatemala City",  14.63,  -90.51 },
+  /* South America */
+  { "Brasilia",        -15.79,  -47.88 }, { "Rio de Janeiro", -22.91,  -43.17 },
+  { "Sao Paulo",       -23.55,  -46.63 }, { "Buenos Aires",   -34.60,  -58.38 },
+  { "Lima",            -12.05,  -77.04 }, { "Bogota",           4.71,  -74.07 },
+  { "Santiago",        -33.45,  -70.67 }, { "Caracas",         10.48,  -66.90 },
+  { "Quito",            -0.18,  -78.47 }, { "La Paz",         -16.50,  -68.15 },
+  { "Montevideo",      -34.90,  -56.16 }, { "Asuncion",       -25.30,  -57.64 },
+  /* Europe */
+  { "London",           51.51,   -0.13 }, { "Paris",           48.85,    2.35 },
+  { "Berlin",           52.52,   13.40 }, { "Madrid",          40.42,   -3.70 },
+  { "Rome",             41.90,   12.50 }, { "Lisbon",          38.72,   -9.14 },
+  { "Amsterdam",        52.37,    4.90 }, { "Brussels",        50.85,    4.35 },
+  { "Vienna",           48.21,   16.37 }, { "Bern",            46.95,    7.45 },
+  { "Zurich",           47.37,    8.54 }, { "Barcelona",       41.39,    2.17 },
+  { "Munich",           48.14,   11.58 }, { "Milan",           45.46,    9.19 },
+  { "Dublin",           53.35,   -6.26 }, { "Copenhagen",      55.68,   12.57 },
+  { "Stockholm",        59.33,   18.07 }, { "Oslo",            59.91,   10.75 },
+  { "Helsinki",         60.17,   24.94 }, { "Warsaw",          52.23,   21.01 },
+  { "Prague",           50.09,   14.42 }, { "Budapest",        47.50,   19.04 },
+  { "Athens",           37.98,   23.73 }, { "Moscow",          55.76,   37.62 },
+  { "Saint Petersburg", 59.93,   30.34 }, { "Kyiv",            50.45,   30.52 },
+  { "Bucharest",        44.43,   26.10 }, { "Belgrade",        44.79,   20.45 },
+  { "Sofia",            42.70,   23.32 }, { "Reykjavik",       64.15,  -21.94 },
+  /* Middle East + Turkey */
+  { "Istanbul",         41.01,   28.98 }, { "Ankara",          39.93,   32.86 },
+  { "Jerusalem",        31.78,   35.22 }, { "Tel Aviv",        32.07,   34.78 },
+  { "Riyadh",           24.71,   46.68 }, { "Dubai",           25.20,   55.27 },
+  { "Abu Dhabi",        24.45,   54.38 }, { "Doha",            25.29,   51.53 },
+  { "Kuwait City",      29.38,   47.99 }, { "Baghdad",         33.31,   44.36 },
+  { "Tehran",           35.69,   51.39 }, { "Amman",           31.95,   35.93 },
+  { "Beirut",           33.89,   35.50 }, { "Damascus",        33.51,   36.29 },
+  /* Africa */
+  { "Cairo",            30.04,   31.24 }, { "Lagos",            6.52,    3.38 },
+  { "Nairobi",          -1.29,   36.82 }, { "Cape Town",      -33.92,   18.42 },
+  { "Johannesburg",    -26.20,   28.05 }, { "Pretoria",       -25.75,   28.19 },
+  { "Casablanca",       33.57,   -7.59 }, { "Rabat",           34.02,   -6.83 },
+  { "Accra",             5.60,   -0.19 }, { "Addis Ababa",      9.03,   38.74 },
+  { "Algiers",          36.75,    3.06 }, { "Tunis",           36.81,   10.18 },
+  { "Dakar",            14.69,  -17.45 }, { "Khartoum",        15.50,   32.56 },
+  { "Kinshasa",         -4.32,   15.31 }, { "Luanda",          -8.84,   13.23 },
+  { "Harare",          -17.83,   31.05 }, { "Dar es Salaam",   -6.79,   39.21 },
+  /* Asia */
+  { "Tokyo",            35.68,  139.69 }, { "Osaka",           34.69,  135.50 },
+  { "Beijing",          39.90,  116.41 }, { "Shanghai",        31.23,  121.47 },
+  { "Hong Kong",        22.32,  114.17 }, { "Seoul",           37.57,  126.98 },
+  { "Taipei",           25.03,  121.57 }, { "Delhi",           28.61,   77.21 },
+  { "Mumbai",           19.08,   72.88 }, { "Bangalore",       12.97,   77.59 },
+  { "Kolkata",          22.57,   88.36 }, { "Chennai",         13.08,   80.27 },
+  { "Bangkok",          13.76,  100.50 }, { "Singapore",        1.35,  103.82 },
+  { "Jakarta",          -6.21,  106.85 }, { "Kuala Lumpur",     3.14,  101.69 },
+  { "Manila",           14.60,  120.98 }, { "Hanoi",           21.03,  105.85 },
+  { "Ho Chi Minh City", 10.82,  106.63 }, { "Kathmandu",       27.72,   85.32 },
+  { "Dhaka",            23.81,   90.41 }, { "Islamabad",       33.69,   73.06 },
+  { "Karachi",          24.86,   67.00 }, { "Colombo",          6.93,   79.86 },
+  { "Ulaanbaatar",      47.89,  106.91 }, { "Almaty",          43.24,   76.95 },
+  { "Tashkent",         41.30,   69.24 },
+  /* Oceania */
+  { "Sydney",          -33.87,  151.21 }, { "Melbourne",      -37.81,  144.96 },
+  { "Canberra",        -35.28,  149.13 }, { "Brisbane",       -27.47,  153.03 },
+  { "Perth",           -31.95,  115.86 }, { "Auckland",       -36.85,  174.76 },
+  { "Wellington",      -41.29,  174.78 },
+};
+
+/* case-insensitive compare that ignores leading/trailing blanks */
+static int city_name_eq(const char *a, const char *b)
+{
+  while (*a == ' ' || *a == '\t') a++;
+  while (*b == ' ' || *b == '\t') b++;
+  while (*a && *b) {
+    if (tolower((unsigned char)*a) != tolower((unsigned char)*b)) return 0;
+    a++; b++;
+  }
+  while (*a == ' ' || *a == '\t') a++;
+  while (*b == ' ' || *b == '\t') b++;
+  return *a == '\0' && *b == '\0';
+}
+
+const gtcaca_map_city_t *gtcaca_map_cities(int *count)
+{
+  if (count) *count = (int)(sizeof g_cities / sizeof g_cities[0]);
+  return g_cities;
+}
+
+const gtcaca_map_city_t *gtcaca_map_find_city(const char *name)
+{
+  int i, n = (int)(sizeof g_cities / sizeof g_cities[0]);
+  if (!name) return NULL;
+  for (i = 0; i < n; i++)
+    if (city_name_eq(name, g_cities[i].name)) return &g_cities[i];
+  return NULL;
+}
+
+int gtcaca_map_add_city(gtcaca_map_widget_t *m, const char *name, uint32_t glyph, uint8_t colour)
+{
+  const gtcaca_map_city_t *c = gtcaca_map_find_city(name);
+  if (!c) return 0;
+  gtcaca_map_add_point(m, c->lat, c->lon, glyph, colour, c->name);
+  return 1;
+}
 
 gtcaca_map_widget_t *gtcaca_map_new(gtcaca_widget_t *parent, int x, int y, int width, int height)
 {

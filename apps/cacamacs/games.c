@@ -18,6 +18,10 @@
 #define SNAKE_GRID(g, W, x, y) (g)[(y) * (W) + (x)]
 enum { SC_EMPTY = 0, SC_WALL = 1, SC_BODY = 2 };
 
+/* the play field is a fixed 80x25 (classic Nibbles), centred on the canvas; all
+   grid coordinates are offset by (snake_ox, snake_oy) when drawn to the screen */
+static int snake_ox = 0, snake_oy = 0;
+
 /* paint a solid cell with a full-block glyph █ in `colour`. Using a glyph (not a
    space with a coloured background) guarantees the display repaints the cell —
    some drivers don't repaint space cells whose only change is the background. */
@@ -25,17 +29,17 @@ static void snake_cell(int x, int y, uint8_t colour)
 {
   caca_set_color_ansi(gmo.cv, colour, CACA_BLACK);
   caca_set_attr(gmo.cv, 0);
-  caca_put_char(gmo.cv, x, y, 0x2588);   /* █ */
+  caca_put_char(gmo.cv, snake_ox + x, snake_oy + y, 0x2588);   /* █ */
 }
 
-/* fill the whole screen with solid black blocks (a clean, always-repainted bg) */
-static void snake_fill_bg(int W, int H)
+/* fill the whole canvas with solid black blocks (a clean, always-repainted bg) */
+static void snake_fill_bg(void)
 {
-  int x, y;
+  int x, y, CW = caca_get_canvas_width(gmo.cv), CH = caca_get_canvas_height(gmo.cv);
   caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_BLACK);
   caca_set_attr(gmo.cv, 0);
-  for (y = 0; y < H; y++)
-    for (x = 0; x < W; x++)
+  for (y = 0; y < CH; y++)
+    for (x = 0; x < CW; x++)
       caca_put_char(gmo.cv, x, y, 0x2588);
 }
 
@@ -82,6 +86,14 @@ static void snake_build_level(unsigned char *g, int W, int H, int level)
     }
     break;
   }
+
+  /* Always keep the worm's spawn runway clear. The worm starts at
+     (cx-3..cx, H/2) heading right (see snake_reset_worm), so open that row
+     around the centre — otherwise a pattern crossing the middle (e.g. the
+     central cross) buries the snake the instant the level starts. */
+  { int ry = H / 2, rx;
+    for (rx = cx - 3; rx <= cx + 6; rx++)
+      if (rx > 0 && rx < W - 1) SNAKE_GRID(g, W, rx, ry) = SC_EMPTY; }
 }
 
 static void snake_place_food(unsigned char *g, int W, int H, int *fx, int *fy)
@@ -114,8 +126,10 @@ static void snake_reset_worm(unsigned char *g, int W, int H, int *body, int *hea
 
 void run_snake(void)
 {
-  int W = caca_get_canvas_width(gmo.cv);
-  int H = caca_get_canvas_height(gmo.cv);
+  int CW = caca_get_canvas_width(gmo.cv);
+  int CH = caca_get_canvas_height(gmo.cv);
+  int W = CW < 80 ? CW : 80;        /* fixed 80x25 play field (classic Nibbles), */
+  int H = CH < 25 ? CH : 25;        /* shrunk only if the terminal is smaller     */
   unsigned char *g;
   int *body;                       /* ring of (x,y) pairs, cap W*H            */
   int cap = W * H, head = 0, tail = 0, len = 0, dx = 1, dy = 0, ndx = 1, ndy = 0;
@@ -124,6 +138,8 @@ void run_snake(void)
   caca_event_t ev;
 
   if (W < 20 || H < 8) { snprintf(g_message, sizeof g_message, "Window too small for snake"); return; }
+  snake_ox = (CW - W) / 2;          /* centre the play field on the canvas */
+  snake_oy = (CH - H) / 2;
   g = malloc((size_t)cap);
   body = malloc((size_t)cap * 2 * sizeof(int));
   if (!g || !body) { free(g); free(body); return; }
@@ -131,14 +147,14 @@ void run_snake(void)
 
   /* start screen: choose a starting level (as Nibbles prompts for skill) */
   {
-    int chosen = 0;
-    snake_fill_bg(W, H);
+    int chosen = 0, ox = snake_ox, oy = snake_oy;
+    snake_fill_bg();
     caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_BLACK); caca_set_attr(gmo.cv, CACA_BOLD);
-    caca_printf(gmo.cv, W / 2 - 4, H / 2 - 3, "S N A K E");
+    caca_printf(gmo.cv, ox + W / 2 - 4, oy + H / 2 - 3, "S N A K E");
     caca_set_attr(gmo.cv, 0);
-    caca_printf(gmo.cv, W / 2 - 18, H / 2 - 1, "Start at which level (1-9)?  Enter = 1");
-    caca_printf(gmo.cv, W / 2 - 18, H / 2 + 1, "Eat 1..9 to clear a level; it speeds up each level.");
-    caca_printf(gmo.cv, W / 2 - 18, H / 2 + 2, "Steer with the arrows.  p pauses, q quits.");
+    caca_printf(gmo.cv, ox + W / 2 - 18, oy + H / 2 - 1, "Start at which level (1-9)?  Enter = 1");
+    caca_printf(gmo.cv, ox + W / 2 - 18, oy + H / 2 + 1, "Eat 1..9 to clear a level; it speeds up each level.");
+    caca_printf(gmo.cv, ox + W / 2 - 18, oy + H / 2 + 2, "Steer with the arrows.  p pauses, q quits.");
     caca_refresh_display(gmo.dp);
     while (!chosen) {
       if (caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &ev, -1)) {
@@ -159,9 +175,9 @@ void run_snake(void)
     int nx, ny, ate, tx, ty, idx;
 
     /* ── draw the whole board ── */
-    snake_fill_bg(W, H);                       /* solid black field */
+    snake_fill_bg();                           /* solid black field */
     caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_BLACK); caca_set_attr(gmo.cv, 0);
-    caca_printf(gmo.cv, 1, 0, "SNAKE  level %d   eat: %d   score: %d   lives: %d   (arrows, p pause, q quit)",
+    caca_printf(gmo.cv, snake_ox + 1, snake_oy + 0, "SNAKE  level %d   eat: %d   score: %d   lives: %d   (p pause, q quit)",
                 level + 1, number, score, lives);
     for (y = 1; y < H; y++)
       for (x = 0; x < W; x++)
@@ -171,10 +187,10 @@ void run_snake(void)
       snake_cell(body[bi * 2], body[bi * 2 + 1], bi == head ? CACA_LIGHTGREEN : CACA_GREEN);
     }
     caca_set_color_ansi(gmo.cv, CACA_YELLOW, CACA_BLACK); caca_set_attr(gmo.cv, CACA_BOLD);
-    caca_put_char(gmo.cv, fx, fy, '0' + number);
+    caca_put_char(gmo.cv, snake_ox + fx, snake_oy + fy, '0' + number);
     if (!started) {                            /* keep clear of the worm's row */
       caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_BLACK); caca_set_attr(gmo.cv, CACA_BOLD);
-      caca_printf(gmo.cv, W / 2 - 12, H / 2 - 4, " press an arrow to start ");
+      caca_printf(gmo.cv, snake_ox + W / 2 - 12, snake_oy + H / 2 - 4, " press an arrow to start ");
     }
     caca_refresh_display(gmo.dp);
 
@@ -187,7 +203,7 @@ void run_snake(void)
       if (k == 'q' || k == 'Q' || k == CACA_KEY_ESCAPE) { running = 0; continue; }
       if (k == 'p' || k == 'P') {            /* pause */
         caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_BLACK); caca_set_attr(gmo.cv, CACA_BOLD);
-        caca_printf(gmo.cv, W / 2 - 5, H / 2 - 4, " paused ");
+        caca_printf(gmo.cv, snake_ox + W / 2 - 5, snake_oy + H / 2 - 4, " paused ");
         caca_refresh_display(gmo.dp);
         caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &ev, -1);
         continue;
@@ -215,7 +231,7 @@ void run_snake(void)
         (SNAKE_GRID(g, W, nx, ny) == SC_BODY && !(nx == tx && ny == ty && !ate))) {
       if (--lives <= 0) {                    /* game over */
         caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_RED); caca_set_attr(gmo.cv, CACA_BOLD);
-        caca_printf(gmo.cv, W / 2 - 14, H / 2, "  GAME OVER  -  score %d  -  r restart, q quit  ", score);
+        caca_printf(gmo.cv, snake_ox + W / 2 - 14, snake_oy + H / 2, "  GAME OVER  -  score %d  -  r restart, q quit  ", score);
         caca_refresh_display(gmo.dp);
         for (;;) {
           caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &ev, -1);
@@ -728,7 +744,7 @@ void run_sokoban(void)
     ox = (W - L.w * tw) / 2;       if (ox < 0) ox = 0;
     oy = 1 + ((H - 1) - L.h * th) / 2; if (oy < 1) oy = 1;
 
-    snake_fill_bg(W, H);                     /* solid black background */
+    snake_fill_bg();                         /* solid black background */
     caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_BLACK); caca_set_attr(gmo.cv, 0);
     caca_printf(gmo.cv, 1, 0, "SOKOBAN  level %d   moves %d   (arrows move, u undo, r reset, n/p level, q quit)%s",
                 idx, moves, have_dir ? "" : "   [built-in]");

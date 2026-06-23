@@ -37,6 +37,10 @@ enum _gtcaca_widget_type_t {
   GTCACA_WIDGET_TREE,
   GTCACA_WIDGET_TABLE,
   GTCACA_WIDGET_MAP,
+  GTCACA_WIDGET_TABS,
+  GTCACA_WIDGET_MINDMAP,
+  GTCACA_WIDGET_SEGDISPLAY,
+  GTCACA_WIDGET_LINECHART,
 };
 typedef enum _gtcaca_widget_type_t gtcaca_widget_type_t;
 

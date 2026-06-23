@@ -4,21 +4,14 @@
 #include <gtcaca/window.h>
 #include <gtcaca/map.h>
 
-struct city { const char *name; double lat, lon; uint8_t colour; };
-
 int main(int argc, char **argv)
 {
-  static const struct city cities[] = {
-    { "London",        51.5,   -0.13, CACA_YELLOW },
-    { "New York",      40.7,  -74.0,  CACA_LIGHTGREEN },
-    { "San Francisco", 37.8, -122.4,  CACA_LIGHTGREEN },
-    { "Tokyo",         35.7,  139.7,  CACA_LIGHTRED },
-    { "Sydney",       -33.9,  151.2,  CACA_LIGHTCYAN },
-    { "Rio",          -22.9,  -43.2,  CACA_LIGHTMAGENTA },
-    { "Cairo",         30.0,   31.2,  CACA_WHITE },
-    { "Moscow",        55.8,   37.6,  CACA_YELLOW },
-    { "Cape Town",    -33.9,   18.4,  CACA_WHITE },
-    { "Singapore",      1.35, 103.8,  CACA_LIGHTBLUE },
+  /* Plot well-known places straight from the built-in gazetteer — no need to
+     spell out coordinates (see gtcaca_map_add_city / gtcaca_map_find_city). */
+  static const char *places[] = {
+    "London", "New York", "San Francisco", "Tokyo", "Sydney",
+    "Rio de Janeiro", "Sao Paulo", "Cairo", "Moscow", "Cape Town",
+    "Singapore", "Mumbai", "Buenos Aires", "Nairobi", "Reykjavik",
   };
   gtcaca_application_widget_t *app;
   gtcaca_window_widget_t *win;
@@ -32,8 +25,8 @@ int main(int argc, char **argv)
   map = gtcaca_map_new(GTCACA_WIDGET(win), 0, 0, win->width, win->height);
   gtcaca_map_set_title(map, "World map - arrows move between cities, Tab cycles, q quits");
   gtcaca_map_add_world(map, CACA_GREEN);
-  for (i = 0; i < (int)(sizeof cities / sizeof cities[0]); i++)
-    gtcaca_map_add_point(map, cities[i].lat, cities[i].lon, 'o', cities[i].colour, cities[i].name);
+  for (i = 0; i < (int)(sizeof places / sizeof places[0]); i++)
+    gtcaca_map_add_city(map, places[i], 'o', CACA_LIGHTGREEN);
 
   gtcaca_window_set_focused_child(win, GTCACA_WIDGET(map));
   gtcaca_main();

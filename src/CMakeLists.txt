@@ -48,6 +48,13 @@ set(GTCACA_LIB_SRC
   tree.c
   table.c
   map.c
+  tabs.c
+  mindmap.c
+  segdisplay.c
+  linechart.c
+  calendar.c
+  dialog.c
+  filechooser.c
 )
 
 set(GTCACA_HEADERS
@@ -99,5 +106,5 @@ add_library(gtcaca SHARED ${GTCACA_LIB_SRC})
 set_target_properties(gtcaca PROPERTIES SOVERSION 1)
 target_link_libraries(gtcaca ${GTCACA_LINK_LIBRARIES})
 
-install(TARGETS gtcaca DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR} COMPONENT Libraries)
-install(FILES ${GTCACA_HEADERS} DESTINATION ${CMAKE_INSTALL_PREFIX}/include/gtcaca COMPONENT Headers)
+install(TARGETS gtcaca DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Libraries)
+install(FILES ${GTCACA_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gtcaca COMPONENT Headers)

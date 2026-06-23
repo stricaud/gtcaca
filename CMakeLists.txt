@@ -46,7 +46,7 @@ set(GTCACA_VERSION "0.0.0")
 include(FindPkgConfig)
 configure_file("${gtcaca-project_SOURCE_DIR}/gtcaca.pc.cmake" "${gtcaca-project_BINARY_DIR}/gtcaca.pc")
 message("pkg config path:${PKG_CONFIG_PATH}")
-install(FILES "${gtcaca-project_BINARY_DIR}/gtcaca.pc" DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/pkgconfig" COMPONENT Headers)
+install(FILES "${gtcaca-project_BINARY_DIR}/gtcaca.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig" COMPONENT Headers)
 
 if (DEBUG_MODE)
 add_definitions(-DGTCACA_DEBUG=1)
@@ -123,3 +123,27 @@ add_definitions(-DGTCACA_DATA_DIR="${GTCACA_DATA_DIR}")
 add_subdirectory(src)
 add_subdirectory(demo)
 add_subdirectory(apps)
+
+# Theme data (so installed apps find their default theme rather than falling
+# back to the built-in defaults with a warning).
+install(FILES "${gtcaca-project_SOURCE_DIR}/themes/default"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/gtcaca/themes" COMPONENT Applications)
+
+# ── packaging: `make package` ────────────────────────────────────────────────
+#   macOS : a productbuild .pkg INSTALLER that installs gtcaca + the apps under
+#           /usr/local (so cacamacs/cacasheet/rfmind/rtodo are on $PATH).
+#   else  : a .tar.gz of the same tree.
+set(CPACK_PACKAGE_NAME "gtcaca")
+set(CPACK_PACKAGE_VENDOR "gtcaca")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "gtcaca libcaca TUI toolkit and apps (cacamacs, cacasheet, rfmind, rtodo)")
+set(CPACK_PACKAGE_VERSION "${GTCACA_VERSION}")
+set(CPACK_PACKAGE_FILE_NAME "gtcaca-${GTCACA_VERSION}-${CMAKE_SYSTEM_NAME}")
+# install everything in one shot rather than offering per-component choices
+set(CPACK_COMPONENTS_GROUPING "ALL_COMPONENTS_IN_ONE")
+if(APPLE)
+  set(CPACK_GENERATOR "productbuild")
+  set(CPACK_PACKAGING_INSTALL_PREFIX "/usr/local")
+else()
+  set(CPACK_GENERATOR "TGZ")
+endif()
+include(CPack)

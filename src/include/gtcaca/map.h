@@ -55,6 +55,17 @@ struct _gtcaca_map_widget_t {
   char  *title;
 };
 
+/* ── built-in gazetteer ──────────────────────────────────────────────────────
+ * A table of world capitals and major cities, so callers can plot well-known
+ * places by name without looking up coordinates. Names are plain ASCII
+ * (e.g. "Sao Paulo", "Rio de Janeiro"); lookup is case-insensitive. */
+typedef struct { const char *name; double lat, lon; } gtcaca_map_city_t;
+
+/* the full table; *count is set to its length */
+const gtcaca_map_city_t *gtcaca_map_cities(int *count);
+/* find a city by name (case-insensitive, surrounding spaces ignored); NULL if unknown */
+const gtcaca_map_city_t *gtcaca_map_find_city(const char *name);
+
 gtcaca_map_widget_t *gtcaca_map_new(gtcaca_widget_t *parent, int x, int y, int width, int height);
 void gtcaca_map_draw(gtcaca_map_widget_t *m);
 void gtcaca_map_set_bounds(gtcaca_map_widget_t *m, double lon_min, double lon_max,
@@ -62,6 +73,10 @@ void gtcaca_map_set_bounds(gtcaca_map_widget_t *m, double lon_min, double lon_ma
 /* plot a marker at (lat,lon); glyph 0 => default dot; label may be NULL */
 void gtcaca_map_add_point(gtcaca_map_widget_t *m, double lat, double lon,
                           uint32_t glyph, uint8_t colour, const char *label);
+/* plot a named city from the built-in gazetteer (label = the city name);
+   returns 1 if the city is known and was added, 0 otherwise. glyph 0 => dot. */
+int  gtcaca_map_add_city(gtcaca_map_widget_t *m, const char *name,
+                         uint32_t glyph, uint8_t colour);
 /* add a polyline of `n` (lon,lat) vertices, e.g. a coastline */
 void gtcaca_map_add_polyline(gtcaca_map_widget_t *m, const double *lonlat, int n, uint8_t colour);
 /* add a built-in low-resolution world outline (continents) */

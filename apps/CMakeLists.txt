@@ -23,3 +23,19 @@ target_link_libraries(cacamacs ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
 add_executable(cacasheet cacasheet.c)
 target_link_libraries(cacasheet ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(rfmind rfmind.c)
+target_link_libraries(rfmind ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+add_executable(rtodo rtodo.c)
+target_link_libraries(rtodo ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+
+# Install the terminal apps so they land on PATH (e.g. /usr/local/bin) and ship
+# in the package. The rpath lets them find libgtcaca.dylib in the sibling libdir.
+if(APPLE)
+  set_target_properties(cacamacs cacasheet rfmind rtodo PROPERTIES
+    INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+endif()
+install(TARGETS cacamacs cacasheet rfmind rtodo
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        COMPONENT Applications)
