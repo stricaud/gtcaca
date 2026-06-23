@@ -95,6 +95,13 @@ set(GTCACA_HEADERS
   include/gtcaca/tree.h
   include/gtcaca/table.h
   include/gtcaca/map.h
+  include/gtcaca/tabs.h
+  include/gtcaca/mindmap.h
+  include/gtcaca/segdisplay.h
+  include/gtcaca/linechart.h
+  include/gtcaca/calendar.h
+  include/gtcaca/dialog.h
+  include/gtcaca/filechooser.h
 )
 
 set(GTCACA_LINK_LIBRARIES
