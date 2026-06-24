@@ -76,3 +76,6 @@ target_link_libraries(demo_events ${LIBCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
 add_executable(demo_dash demo_dash.c)
 target_link_libraries(demo_dash ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS} m)
+
+add_executable(demo_gallery demo_gallery.c)
+target_link_libraries(demo_gallery ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS} m)

@@ -2,7 +2,7 @@
 
 `editor` is gtcaca's multi-line text-editing widget. It provides a document
 model, caret and selection, undo/redo, scrolling, default key bindings and
-optional syntax colourization. [apps/cacamacs.c](../apps/cacamacs.c) is a full
+optional syntax colourization. [apps/cacamacs/](../apps/cacamacs/) is a full
 example: an editor with Emacs key bindings and VSCode-style language support.
 
 - Header: [src/include/gtcaca/editor.h](../src/include/gtcaca/editor.h)
@@ -487,6 +487,6 @@ and draws the selection, caret, fold markers and annotations.
 
 ## See also
 
-- [apps/cacamacs.c](../apps/cacamacs.c) — Emacs-keybinding editor using all of the above.
+- [apps/cacamacs/](../apps/cacamacs/) — Emacs-keybinding editor using all of the above.
 - [examples/cacamacs-extensions/](../examples/cacamacs-extensions/) — a sample language extension.
 - [layout.md](layout.md) — sizing the editor inside a window with box layouts.
