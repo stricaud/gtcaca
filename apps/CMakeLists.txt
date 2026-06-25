@@ -20,6 +20,8 @@ add_executable(cacamacs
   cacamacs/edit.c cacamacs/search.c cacamacs/keymap.c cacamacs/lang.c cacamacs/ui.c)
 target_include_directories(cacamacs PRIVATE cacamacs)
 target_link_libraries(cacamacs ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
+# the editor's binary is `ccm` (shorter to type); the CMake target stays cacamacs
+set_target_properties(cacamacs PROPERTIES OUTPUT_NAME ccm)
 
 add_executable(cacasheet cacasheet.c)
 target_link_libraries(cacasheet ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})

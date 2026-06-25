@@ -242,13 +242,13 @@ A ready-to-use sample ships in the repo:
 ```sh
 mkdir -p ~/.cacamacs/extensions
 cp -r examples/cacamacs-extensions/c-lang-0.0.1 ~/.cacamacs/extensions/
-./build/apps/cacamacs src/editor.c          # opens coloured
+./build/apps/ccm src/editor.c          # opens coloured
 ```
 
 You can also bypass discovery and pass a config explicitly:
 
 ```sh
-./build/apps/cacamacs file.c  path/to/language-configuration.json
+./build/apps/ccm file.c  path/to/language-configuration.json
 ```
 
 The `JSON` reader used here is also public

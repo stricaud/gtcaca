@@ -109,7 +109,7 @@ copy one into a root to try it:
 ```sh
 mkdir -p ~/.cacamacs/extensions
 cp -r examples/cacamacs-extensions/python-0.0.1 ~/.cacamacs/extensions/
-./build/apps/cacamacs somefile.py
+./build/apps/ccm somefile.py
 ```
 
 > Colour fidelity depends on the grammar. cacamacs maps TextMate scopes onto a

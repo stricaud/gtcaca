@@ -4,7 +4,7 @@ default_fg = white
 
 windowfocus_fg = yellow
 windowfocus_bg = blue
-window_fg = gray
+window_fg = lightgray
 window_bg = blue
 
 textfocus_fg = blue

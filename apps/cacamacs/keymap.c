@@ -171,6 +171,8 @@ int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     case 'w': case 'W':     copy_region(ed);   return 1;  /* M-w copy region   */
     case 'f': case 'F':     move(ed, gtcaca_editor_word_right, gtcaca_editor_word_right_extend); return 1; /* M-f */
     case 'b': case 'B':     move(ed, gtcaca_editor_word_left,  gtcaca_editor_word_left_extend);  return 1; /* M-b */
+    case CACA_KEY_RIGHT:    move(ed, gtcaca_editor_word_right, gtcaca_editor_word_right_extend); return 1; /* M-Right = forward word */
+    case CACA_KEY_LEFT:     move(ed, gtcaca_editor_word_left,  gtcaca_editor_word_left_extend);  return 1; /* M-Left  = back word    */
     case 'd': case 'D':     kill_word_right(ed); return 1;  /* M-d  kill word fwd  */
     case CACA_KEY_BACKSPACE:
     case CACA_KEY_DELETE:   kill_word_left(ed);  return 1;  /* M-DEL kill word back */

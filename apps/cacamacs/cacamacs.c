@@ -88,6 +88,48 @@ int   g_prefix_pending  = 0; /* a count is armed for the next command    */
 int   g_prefix_have     = 0; /* digits were actually typed (else default) */
 long  g_prefix_arg      = 0;
 
+int g_bottom_reserve = 0;   /* rows kept clear above the status bar */
+
+/* `ccm --test`: a terminal diagnostic. Numbers every row and marks the last two
+   rows in colour, so we can see which rows your terminal actually renders (and
+   prints the canvas vs terminal size). Screenshot it; key to quit. */
+static void run_test(void)
+{
+  int W = caca_get_canvas_width(gmo.cv), H = caca_get_canvas_height(gmo.cv), y, x;
+  const char *drv = caca_get_display_driver(gmo.dp);
+  struct winsize ws; int have = (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0);
+  caca_event_t ev;
+
+  caca_set_color_ansi(gmo.cv, CACA_LIGHTGRAY, CACA_BLACK); caca_clear_canvas(gmo.cv);
+  for (y = 0; y < H; y++) {
+    caca_set_color_ansi(gmo.cv, (y & 1) ? CACA_LIGHTGRAY : CACA_WHITE, CACA_BLACK);
+    caca_printf(gmo.cv, 0, y, "row %2d", y);
+    if (W > 8) caca_printf(gmo.cv, W - 7, y, "row %2d", y);
+  }
+  caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_BLACK); caca_set_attr(gmo.cv, CACA_BOLD);
+  caca_printf(gmo.cv, 8, 1, "ccm --test   libcaca canvas = %d cols x %d rows", W, H);
+  if (have) caca_printf(gmo.cv, 8, 2, "terminal (ioctl)            = %d cols x %d rows", ws.ws_col, ws.ws_row);
+  caca_printf(gmo.cv, 8, 3, "libcaca driver              = %s", drv ? drv : "(unknown)");
+  caca_printf(gmo.cv, 8, 5, "Do you see the CYAN bar on the very last row (row %d)?", H - 1);
+  caca_printf(gmo.cv, 8, 6, "And the YELLOW bar just above it (row %d)?", H - 2);
+  caca_printf(gmo.cv, 8, 7, "Screenshot this screen, then press any key to quit.");
+  caca_set_attr(gmo.cv, 0);
+  caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_YELLOW);
+  for (x = 0; x < W; x++) caca_put_char(gmo.cv, x, H - 2, ' ');
+  caca_printf(gmo.cv, 1, H - 2, " <<< SECOND-TO-LAST ROW (row %d) >>> ", H - 2);
+  caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_CYAN);
+  for (x = 0; x < W; x++) caca_put_char(gmo.cv, x, H - 1, ' ');
+  caca_printf(gmo.cv, 1, H - 1, " <<< LAST ROW (row %d) — the status bar belongs here >>> ", H - 1);
+  caca_refresh_display(gmo.dp);
+  caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &ev, -1);
+
+  /* also to stderr, so the numbers survive even if those rows don't render */
+  fprintf(stderr, "ccm --test:\n  libcaca canvas : %d cols x %d rows\n", W, H);
+  if (have) fprintf(stderr, "  terminal ioctl : %d cols x %d rows\n", ws.ws_col, ws.ws_row);
+  fprintf(stderr, "  libcaca driver : %s\n", drv ? drv : "(unknown)");
+  fprintf(stderr, "  If the status bar is missing, run with CCM_BOTTOM_MARGIN=1 (or 2).\n");
+}
+
 int main(int argc, char **argv)
 {
   int cw, ch, i, b0;
@@ -96,6 +138,9 @@ int main(int argc, char **argv)
   int open_dir = 0;
 
   gtcaca_init(&argc, &argv);
+  if (arg && !strcmp(arg, "--test")) { run_test(); caca_free_display(gmo.dp); return 0; }
+  { const char *m = getenv("CCM_BOTTOM_MARGIN"); int mv = m ? atoi(m) : 0;
+    if (mv > 0) g_bottom_reserve = mv; }
   /* Emacs-like editor colours: a near-black background with light-grey text,
      the same whether or not the pane is focused (focus is shown by the cursor,
      not a background tint). The cyan statusbar is left as-is. */
@@ -182,6 +227,7 @@ int main(int argc, char **argv)
   }
 
   g_modeline = gtcaca_statusbar_new("");
+  if (g_bottom_reserve > 0) gtcaca_statusbar_set_rows_from_bottom(g_modeline, 1 + g_bottom_reserve);
 
   /* initial buffer in a single (root) leaf window */
   g_cur_buf = -1;

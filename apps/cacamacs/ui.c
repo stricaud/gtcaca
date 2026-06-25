@@ -319,7 +319,7 @@ void layout_node(int n, int x, int y, int w, int h)
 void relayout(void)
 {
   int cw = caca_get_canvas_width(gmo.cv), ch = caca_get_canvas_height(gmo.cv), i;
-  if (g_root >= 0) layout_node(g_root, 0, 0, cw, ch - 1);
+  if (g_root >= 0) layout_node(g_root, 0, 0, cw, ch - 1 - g_bottom_reserve);
   for (i = 0; i < MAXLEAVES; i++) if (!g_win_used[i] && g_winpool[i]) gtcaca_widget_hide(GTCACA_WIDGET(g_winpool[i]));
 }
 

@@ -563,10 +563,14 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
     if (target) switch (target->type) {
     case GTCACA_WIDGET_TREE:   gtcaca_tree_key((gtcaca_tree_widget_t *)target, key, NULL); break;
     case GTCACA_WIDGET_TABLE:  gtcaca_table_key((gtcaca_table_widget_t *)target, key, NULL); break;
-    case GTCACA_WIDGET_EDITOR:
-      if (key == CACA_KEY_DOWN) gtcaca_editor_line_down((gtcaca_editor_widget_t *)target);
-      else                      gtcaca_editor_line_up((gtcaca_editor_widget_t *)target);
+    case GTCACA_WIDGET_EDITOR: {
+      gtcaca_editor_widget_t *e = (gtcaca_editor_widget_t *)target;
+      int n;
+      for (n = 0; n < 3; n++)        /* a wheel notch scrolls ~3 lines */
+        if (key == CACA_KEY_DOWN) gtcaca_editor_line_down(e);
+        else                      gtcaca_editor_line_up(e);
       break;
+    }
     default: break;
     }
     return;

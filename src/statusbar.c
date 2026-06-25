@@ -35,6 +35,7 @@ gtcaca_statusbar_widget_t *gtcaca_statusbar_new(const char *text)
   sb->color_nonfocus_bg = gmo.theme.statusbar.bg;
 
   sb->text = text ? strdup(text) : NULL;
+  sb->rows_from_bottom = 1;
 
   CDL_APPEND(gmo.widgets_list, GTCACA_WIDGET(sb));
 
@@ -45,9 +46,10 @@ void gtcaca_statusbar_draw(gtcaca_statusbar_widget_t *sb)
 {
   int canvas_w = caca_get_canvas_width(gmo.cv);
   int canvas_h = caca_get_canvas_height(gmo.cv);
+  int n = sb->rows_from_bottom > 0 ? sb->rows_from_bottom : 1;
 
-  /* Always pin to bottom of canvas */
-  sb->y = canvas_h - 1;
+  /* Pin near the bottom of the canvas (rows_from_bottom up from the last row). */
+  sb->y = canvas_h - n;
   sb->width = canvas_w;
 
   caca_set_color_ansi(gmo.cv, gmo.theme.statusbar.fg, gmo.theme.statusbar.bg);
@@ -62,4 +64,9 @@ void gtcaca_statusbar_set_text(gtcaca_statusbar_widget_t *sb, const char *text)
 {
   free(sb->text);
   sb->text = text ? strdup(text) : NULL;
+}
+
+void gtcaca_statusbar_set_rows_from_bottom(gtcaca_statusbar_widget_t *sb, int n)
+{
+  sb->rows_from_bottom = n > 0 ? n : 1;
 }

@@ -12,6 +12,9 @@ enum caca_color gtcaca_theme_string_to_caca_color(char *str)
   if (!strcmp(str, "black")) {
     return CACA_BLACK;
   }
+  if (!strcmp(str, "gray") || !strcmp(str, "grey")) {   /* common alias */
+    return CACA_LIGHTGRAY;
+  }
   if (!strcmp(str, "blue")) {
     return CACA_BLUE;
   }
@@ -129,12 +132,18 @@ int gtcaca_theme_parse_ini(char *theme)
   
   if (!theme) { theme = "default"; }
 
+  /* Seed every colour with the built-in defaults FIRST, so a theme file that
+     only sets some keys (e.g. one with no statusbar lines) doesn't leave the
+     rest at 0 = CACA_BLACK — which silently made the status bar black-on-black
+     (invisible) whenever a partial theme file was installed. The file below
+     then overrides only the keys it specifies. */
+  gtcaca_theme_default();
+
   asprintf(&theme_fullpath, "%s/themes/%s", GTCACA_DATA_DIR, theme);
 
   ini = ini_parse_file(theme_fullpath);
   if (!ini) {
     fprintf(stderr, "No theme file found at %s, using built-in defaults.\n", theme_fullpath);
-    gtcaca_theme_default();
   } else {
     for (count = 0; count < ini->n_items; count += 2) {
       char *k = ini->keyvals[count];

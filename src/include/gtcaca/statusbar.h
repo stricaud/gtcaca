@@ -25,10 +25,13 @@ struct _gtcaca_statusbar_widget_t {
   struct _gtcaca_statusbar_widget_t *next;
 
   char *text;
+  int   rows_from_bottom;   /* draw on canvas_h - rows_from_bottom (default 1 = last row) */
 };
 
 gtcaca_statusbar_widget_t *gtcaca_statusbar_new(const char *text);
 void gtcaca_statusbar_draw(gtcaca_statusbar_widget_t *sb);
 void gtcaca_statusbar_set_text(gtcaca_statusbar_widget_t *sb, const char *text);
+/* keep the bar off the very last row (some terminals don't render it); n rows up */
+void gtcaca_statusbar_set_rows_from_bottom(gtcaca_statusbar_widget_t *sb, int n);
 
 #endif /* _GTCACA_STATUSBAR_H_ */

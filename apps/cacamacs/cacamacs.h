@@ -8,6 +8,7 @@
 #include <time.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <limits.h>
 #include <caca.h>
@@ -113,6 +114,7 @@ extern int   g_prefix_pending;
 extern int   g_prefix_have;
 extern long  g_prefix_arg;
 extern char g_message[128];
+extern int  g_bottom_reserve;   /* rows kept clear above the status bar */
 extern int g_isearch;
 extern int g_mb_active;
 
