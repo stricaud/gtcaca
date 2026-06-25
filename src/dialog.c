@@ -16,8 +16,8 @@ gtcaca_dialog_widget_t *gtcaca_dialog_new(gtcaca_widget_t *parent, int x, int y,
   d->parent = parent; d->children = NULL;
   gtcaca_widget_position_size_parent(parent, GTCACA_WIDGET(d), x, y);
   d->width = width; d->height = height;
-  d->color_focus_fg = d->color_nonfocus_fg = gmo.theme.textview.fg;
-  d->color_focus_bg = d->color_nonfocus_bg = gmo.theme.textview.bg;
+  d->color_focus_fg = d->color_nonfocus_fg = gmo.theme.window.fg;
+  d->color_focus_bg = d->color_nonfocus_bg = gmo.theme.window.bg;
   d->title = NULL; d->message = NULL; d->buttons = NULL; d->nbuttons = 0;
   d->sel = 0; d->result = GTCACA_DIALOG_ONGOING;
   d->sel_fg = CACA_BLACK; d->sel_bg = CACA_CYAN;
@@ -64,7 +64,7 @@ static void measure(const char *msg, int *lines, int *maxw)
 
 void gtcaca_dialog_draw(gtcaca_dialog_widget_t *d)
 {
-  uint8_t fg = gmo.theme.textview.fg, bg = gmo.theme.textview.bg;
+  uint8_t fg = gmo.theme.window.fg, bg = gmo.theme.window.bg;
   int inner_x = d->x + 2, inner_y = d->y + 1, i, by, bx, btot = 0;
   const char *p, *start;
   int line = 0;
@@ -99,8 +99,9 @@ void gtcaca_dialog_draw(gtcaca_dialog_widget_t *d)
   bx = d->x + (d->width - btot) / 2; if (bx < d->x + 1) bx = d->x + 1;
   for (i = 0; i < d->nbuttons; i++) {
     int sel = (i == d->sel);
-    if (sel) { caca_set_color_ansi(gmo.cv, d->sel_fg, d->sel_bg); caca_set_attr(gmo.cv, CACA_BOLD); }
-    else     { caca_set_color_ansi(gmo.cv, fg, bg); caca_set_attr(gmo.cv, 0); }
+    /* reuse the shared button theme: active = buttonfocus (red), others = button */
+    if (sel) { caca_set_color_ansi(gmo.cv, gmo.theme.buttonfocus.fg, gmo.theme.buttonfocus.bg); caca_set_attr(gmo.cv, CACA_BOLD); }
+    else     { caca_set_color_ansi(gmo.cv, gmo.theme.button.fg, gmo.theme.button.bg); caca_set_attr(gmo.cv, 0); }
     caca_printf(gmo.cv, bx, by, "[ %s ]", d->buttons[i]);
     bx += (int)strlen(d->buttons[i]) + 4 + 1;
   }

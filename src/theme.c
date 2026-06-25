@@ -72,56 +72,45 @@ enum caca_color gtcaca_theme_string_to_caca_color(char *str)
 
 void gtcaca_theme_default(void)
 {
-  gmo.theme._default.bg = CACA_BLACK;
-  gmo.theme._default.fg = CACA_WHITE;
+  /* A consistent blue-desktop / red-button scheme, in the spirit of Debian's
+     `dialog`/whiptail and classic ncurses TUIs: surfaces are blue, the active
+     control is red, selections are cyan, text inputs are white. Every pair has
+     clear fg/bg contrast so no widget is ever invisible. */
+  gmo.theme._default.bg      = CACA_BLUE;       gmo.theme._default.fg      = CACA_WHITE;
 
-  gmo.theme.windowfocus.bg = CACA_BLUE;
-  gmo.theme.windowfocus.fg = CACA_YELLOW;
-  gmo.theme.window.bg = CACA_LIGHTBLUE;
-  gmo.theme.window.fg = CACA_YELLOW;
-  
-  gmo.theme.textfocus.bg = CACA_YELLOW;
-  gmo.theme.textfocus.fg = CACA_BLUE;
-  gmo.theme.text.bg = CACA_BLUE;
-  gmo.theme.text.fg = CACA_YELLOW;
+  gmo.theme.window.bg        = CACA_BLUE;       gmo.theme.window.fg        = CACA_WHITE;
+  gmo.theme.windowfocus.bg   = CACA_BLUE;       gmo.theme.windowfocus.fg   = CACA_YELLOW;
 
-  gmo.theme.buttonfocus.bg = CACA_RED;
-  gmo.theme.buttonfocus.fg = CACA_YELLOW;
-  gmo.theme.button.bg = CACA_LIGHTRED;
-  gmo.theme.button.fg = CACA_YELLOW;
+  /* text / label / list / expander */
+  gmo.theme.text.bg          = CACA_BLUE;       gmo.theme.text.fg          = CACA_WHITE;
+  gmo.theme.textfocus.bg     = CACA_CYAN;       gmo.theme.textfocus.fg     = CACA_BLACK;
 
-  gmo.theme.entry.bg = CACA_BLACK;
-  gmo.theme.entry.fg = CACA_LIGHTGRAY;
-  gmo.theme.entryfocus.bg = CACA_WHITE;
-  gmo.theme.entryfocus.fg = CACA_BLACK;
+  /* buttons: inactive blue, ACTIVE = red (the look) */
+  gmo.theme.button.bg        = CACA_BLUE;       gmo.theme.button.fg        = CACA_WHITE;
+  gmo.theme.buttonfocus.bg   = CACA_RED;        gmo.theme.buttonfocus.fg   = CACA_WHITE;
 
-  gmo.theme.checkbox.bg = CACA_BLUE;
-  gmo.theme.checkbox.fg = CACA_LIGHTGRAY;
-  gmo.theme.checkboxfocus.bg = CACA_BLUE;
-  gmo.theme.checkboxfocus.fg = CACA_YELLOW;
+  /* text inputs: a dark field, white when focused */
+  gmo.theme.entry.bg         = CACA_BLACK;      gmo.theme.entry.fg         = CACA_LIGHTGRAY;
+  gmo.theme.entryfocus.bg    = CACA_WHITE;      gmo.theme.entryfocus.fg    = CACA_BLACK;
 
-  gmo.theme.progressbar.bg = CACA_BLUE;
-  gmo.theme.progressbar.fg = CACA_WHITE;
+  /* checkbox / radio / switch */
+  gmo.theme.checkbox.bg      = CACA_BLUE;       gmo.theme.checkbox.fg      = CACA_WHITE;
+  gmo.theme.checkboxfocus.bg = CACA_CYAN;       gmo.theme.checkboxfocus.fg = CACA_BLACK;
 
-  gmo.theme.statusbar.bg = CACA_CYAN;
-  gmo.theme.statusbar.fg = CACA_BLACK;
+  gmo.theme.combobox.bg      = CACA_BLUE;       gmo.theme.combobox.fg      = CACA_WHITE;
+  gmo.theme.comboboxfocus.bg = CACA_CYAN;       gmo.theme.comboboxfocus.fg = CACA_BLACK;
 
-  gmo.theme.textview.bg = CACA_BLACK;
-  gmo.theme.textview.fg = CACA_LIGHTGRAY;
-  gmo.theme.textviewfocus.bg = CACA_DARKGRAY;
-  gmo.theme.textviewfocus.fg = CACA_WHITE;
+  gmo.theme.progressbar.bg   = CACA_BLUE;       gmo.theme.progressbar.fg   = CACA_LIGHTGREEN;
 
-  gmo.theme.combobox.bg = CACA_BLUE;
-  gmo.theme.combobox.fg = CACA_WHITE;
-  gmo.theme.comboboxfocus.bg = CACA_YELLOW;
-  gmo.theme.comboboxfocus.fg = CACA_BLUE;
+  gmo.theme.statusbar.bg     = CACA_CYAN;       gmo.theme.statusbar.fg     = CACA_BLACK;
 
-  gmo.theme.menu.bg = CACA_LIGHTGRAY;
-  gmo.theme.menu.fg = CACA_BLACK;
-  gmo.theme.menuitem.bg = CACA_LIGHTGRAY;
-  gmo.theme.menuitem.fg = CACA_BLACK;
-  gmo.theme.menuitemfocus.bg = CACA_BLUE;
-  gmo.theme.menuitemfocus.fg = CACA_WHITE;
+  /* the multi-line text/editor surface stays dark (apps like cacamacs want it) */
+  gmo.theme.textview.bg      = CACA_BLACK;      gmo.theme.textview.fg      = CACA_LIGHTGRAY;
+  gmo.theme.textviewfocus.bg = CACA_BLACK;      gmo.theme.textviewfocus.fg = CACA_WHITE;
+
+  gmo.theme.menu.bg          = CACA_LIGHTGRAY;  gmo.theme.menu.fg          = CACA_BLACK;
+  gmo.theme.menuitem.bg      = CACA_LIGHTGRAY;  gmo.theme.menuitem.fg      = CACA_BLACK;
+  gmo.theme.menuitemfocus.bg = CACA_RED;        gmo.theme.menuitemfocus.fg = CACA_WHITE;
 }
 
 int gtcaca_theme_parse_ini(char *theme)

@@ -44,6 +44,8 @@
 #include <gtcaca/linechart.h>
 #include <gtcaca/dialog.h>
 #include <gtcaca/filechooser.h>
+#include <gtcaca/menu.h>
+#include <strings.h>
 
 struct whdr { gtcaca_widget_type_t type; unsigned int id; int has_focus; };
 #define HFOCUS(o,f) (((struct whdr *)(o))->has_focus = (f))
@@ -79,11 +81,26 @@ static void*mk_switch(int x,int y,int w,int h){(void)w;(void)h;gtcaca_switch_wid
 static void*mk_scale(int x,int y,int w,int h){(void)h;gtcaca_scale_widget_t*s=gtcaca_scale_new(NULL,x,y,w,0,100,5);gtcaca_scale_set_value(s,60);return s;}
 static void*mk_spin(int x,int y,int w,int h){(void)w;(void)h;gtcaca_spinbutton_widget_t*s=gtcaca_spinbutton_new(NULL,x,y,0,100,1);gtcaca_spinbutton_set_value(s,42);return s;}
 static void*mk_progress(int x,int y,int w,int h){(void)h;gtcaca_progressbar_widget_t*p=gtcaca_progressbar_new(NULL,x,y,w);gtcaca_progressbar_set_value(p,0.62f);return p;}
-static void*mk_textlist(int x,int y,int w,int h){(void)w;(void)h;gtcaca_textlist_widget_t*t=gtcaca_textlist_new(NULL,x,y);gtcaca_textlist_append(t,"apple");gtcaca_textlist_append(t,"banana");gtcaca_textlist_append(t,"cherry");gtcaca_textlist_append(t,"date");return t;}
+static void*mk_textlist(int x,int y,int w,int h){(void)w;(void)h;gtcaca_textlist_widget_t*t=gtcaca_textlist_new(NULL,x,y);
+  static const char*it[]={"apple","banana","cherry","date","elderberry","fig","grape","kiwi","lemon","mango","nectarine","orange"};int i;
+  for(i=0;i<12;i++)gtcaca_textlist_append(t,(char*)it[i]);
+  gtcaca_textlist_widget_set_view_size(t,8);   /* show 8 of 12 (scrolls); also bounds the bg fill */
+  return t;}
 static void*mk_textview(int x,int y,int w,int h){gtcaca_textview_widget_t*t=gtcaca_textview_new(NULL,x,y,w,h);int i;for(i=1;i<=12;i++){char b[40];snprintf(b,sizeof b,"line %d — scroll me",i);gtcaca_textview_append(t,b);}return t;}
 static void*mk_frame(int x,int y,int w,int h){gtcaca_frame_widget_t*f=gtcaca_frame_new(NULL,"Account",x,y,w,h);gtcaca_label_new(NULL,"name: ada",x+2,y+2);return f;}
 static void*mk_sep(int x,int y,int w,int h){(void)h;return gtcaca_separator_new(NULL,x,y,w,0);}
-static void*mk_expander(int x,int y,int w,int h){(void)h;gtcaca_expander_widget_t*e=gtcaca_expander_new(NULL,"Advanced options (Space)",x,y,w);gtcaca_expander_set_expanded(e,1);return e;}
+static void*mk_expander(int x,int y,int w,int h){(void)h;gtcaca_expander_widget_t*e=gtcaca_expander_new(NULL,"Advanced options (Space)",x,y,w);
+  gtcaca_expander_add_managed(e,GTCACA_WIDGET(gtcaca_label_new(NULL,"  - verbose logging",x+2,y+1)));
+  gtcaca_expander_add_managed(e,GTCACA_WIDGET(gtcaca_label_new(NULL,"  - experimental features",x+2,y+2)));
+  gtcaca_expander_set_expanded(e,0);   /* collapsed; Space reveals the managed labels */
+  return e;}
+static void noop_action(void*u){(void)u;}
+static void*mk_menu(int x,int y,int w,int h){(void)x;(void)y;(void)w;(void)h;
+  gtcaca_menu_widget_t*m=gtcaca_menu_new();
+  int f=gtcaca_menu_add_entry(m,"File"); gtcaca_menu_add_item(m,f,"New","C-n",noop_action,NULL); gtcaca_menu_add_item(m,f,"Open","C-o",noop_action,NULL); gtcaca_menu_add_item(m,f,"Quit","C-q",noop_action,NULL);
+  int e=gtcaca_menu_add_entry(m,"Edit"); gtcaca_menu_add_item(m,e,"Cut","C-w",noop_action,NULL); gtcaca_menu_add_item(m,e,"Copy","M-w",noop_action,NULL); gtcaca_menu_add_item(m,e,"Paste","C-y",noop_action,NULL);
+  int h2=gtcaca_menu_add_entry(m,"Help"); gtcaca_menu_add_item(m,h2,"About",NULL,noop_action,NULL);
+  return m;}
 static void*mk_tabs(int x,int y,int w,int h){gtcaca_tabs_widget_t*t=gtcaca_tabs_new(NULL,x,y,w,h<3?3:h);gtcaca_tabs_set_title(t,"view");const char*ti[]={"Files","Edit","Build","Help"};gtcaca_tabs_set_titles(t,ti,4);return t;}
 static void*mk_spark(int x,int y,int w,int h){gtcaca_sparkline_widget_t*s=gtcaca_sparkline_new(NULL,x,y,w,h);float v[28];int i;for(i=0;i<28;i++)v[i]=(float)(10+9*((i*7)%13));gtcaca_sparkline_set_data(s,v,28);return s;}
 static void*mk_gauge(int x,int y,int w,int h){(void)h;gtcaca_gauge_widget_t*g=gtcaca_gauge_new(NULL,x,y,w);gtcaca_gauge_set_percent(g,72);return g;}
@@ -132,6 +149,7 @@ static page_t P[] = {
   {"Editor","type to edit",42,8,mk_editor},
   {"Dialog","Left/Right + Enter",36,6,mk_dialog},
   {"File chooser","browse a directory",46,14,mk_fc},
+  {"Menu","menu bar (drawn at the top)",1,1,mk_menu},
 };
 #define NP ((int)(sizeof P / sizeof P[0]))
 
@@ -152,7 +170,14 @@ static void draw_widget(void *o)
   case GTCACA_WIDGET_TEXTVIEW: gtcaca_textview_draw(o); break;
   case GTCACA_WIDGET_FRAME: gtcaca_frame_draw(o); break;
   case GTCACA_WIDGET_SEPARATOR: gtcaca_separator_draw(o); break;
-  case GTCACA_WIDGET_EXPANDER: gtcaca_expander_draw(o); break;
+  case GTCACA_WIDGET_EXPANDER: {
+    gtcaca_expander_widget_t *e = o; int i;
+    gtcaca_expander_draw(e);
+    for (i = 0; i < e->n_managed; i++)   /* show the managed labels when expanded */
+      if (e->managed[i] && e->managed[i]->is_visible) gtcaca_label_draw((gtcaca_label_widget_t *)e->managed[i]);
+    break;
+  }
+  case GTCACA_WIDGET_MENU: gtcaca_menu_draw(o); break;
   case GTCACA_WIDGET_TABS: gtcaca_tabs_draw(o); break;
   case GTCACA_WIDGET_SPARKLINE: gtcaca_sparkline_draw(o); break;
   case GTCACA_WIDGET_GAUGE: gtcaca_gauge_draw(o); break;
@@ -180,6 +205,8 @@ static void key_widget(void *o, int k)
   case GTCACA_WIDGET_RADIOBUTTON: ((gtcaca_radiobutton_widget_t*)o)->private_key_cb(o,k,NULL); break;
   case GTCACA_WIDGET_COMBOBOX:    ((gtcaca_combobox_widget_t*)o)->private_key_cb(o,k,NULL); break;
   case GTCACA_WIDGET_TEXTLIST:    ((gtcaca_textlist_widget_t*)o)->private_key_cb(o,k,NULL); break;
+  case GTCACA_WIDGET_TEXTVIEW:    ((gtcaca_textview_widget_t*)o)->private_key_cb(o,k,NULL); break;
+  case GTCACA_WIDGET_MENU:        gtcaca_menu_handle_key(o,k); break;
   case GTCACA_WIDGET_EDITOR:      ((gtcaca_editor_widget_t*)o)->private_key_cb(o,k,NULL); break;
   case GTCACA_WIDGET_SWITCH:      if(k==' '||k==CACA_KEY_RETURN||k==10) gtcaca_switch_set_active(o,!gtcaca_switch_get_active(o)); break;
   case GTCACA_WIDGET_SCALE:       gtcaca_scale_handle_key(o,k); break;
@@ -197,6 +224,9 @@ static void key_widget(void *o, int k)
   }
 }
 
+static int page_cmp(const void *a, const void *b)
+{ return strcasecmp(((const page_t *)a)->name, ((const page_t *)b)->name); }
+
 int main(int argc, char **argv)
 {
   int sel = 0, W, H, LW = 22, rx, ry, rw, rh, i;
@@ -209,6 +239,8 @@ int main(int argc, char **argv)
   gmo.theme.textviewfocus.fg = CACA_LIGHTGRAY; gmo.theme.textviewfocus.bg = CACA_BLACK;
   W = caca_get_canvas_width(gmo.cv); H = caca_get_canvas_height(gmo.cv);
   rx = LW + 2; ry = 2; rw = W - rx - 1; rh = H - ry - 2;
+
+  qsort(P, NP, sizeof P[0], page_cmp);   /* list the widgets alphabetically */
 
   for (i = 0; i < NP; i++) {
     int cw = P[i].w < rw ? P[i].w : rw, ch = P[i].h < rh ? P[i].h : rh;

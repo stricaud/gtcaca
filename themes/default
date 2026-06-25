@@ -1,18 +1,21 @@
 [gtcaca_theme]
-default_bg = black
+# Consistent blue-desktop / red-button scheme (Debian dialog / ncurses style).
+# Anything not listed here keeps the matching built-in default (see
+# gtcaca_theme_default in src/theme.c) — statusbar (cyan), inputs (white), etc.
+default_bg = blue
 default_fg = white
 
 windowfocus_fg = yellow
 windowfocus_bg = blue
-window_fg = lightgray
+window_fg = white
 window_bg = blue
 
-textfocus_fg = blue
-textfocus_bg = yellow
-text_fg = yellow
+textfocus_fg = black
+textfocus_bg = cyan
+text_fg = white
 text_bg = blue
 
-buttonfocus_fg = black
+buttonfocus_fg = white
 buttonfocus_bg = red
-button_fg = black
-button_bg = lightred
+button_fg = white
+button_bg = blue
