@@ -252,9 +252,31 @@ static const char *g_ext_roots[] = {
 };
 #define N_EXT_ROOTS ((int)(sizeof g_ext_roots / sizeof *g_ext_roots))
 
+/* Does a contributed language match this file? VSCode associates a language
+   either by file extension (`extensions`: ".cmake") or by exact base name
+   (`filenames`: "CMakeLists.txt", "Makefile", "Dockerfile", …). */
+static int lang_matches(gtcaca_json_value *L, const char *ext, const char *base)
+{
+  gtcaca_json_value *a;
+  int j, n;
+  a = gtcaca_json_object_get(L, "extensions"); n = gtcaca_json_array_size(a);
+  for (j = 0; j < n; j++) {
+    const char *s = gtcaca_json_string(gtcaca_json_array_get(a, j));
+    if (s && ext && strcmp(s, ext) == 0) return 1;
+  }
+  /* filenames are matched case-insensitively, like VSCode (and to tolerate
+     manifest typos such as twxs.cmake's "CMakelists.txt"). */
+  a = gtcaca_json_object_get(L, "filenames"); n = gtcaca_json_array_size(a);
+  for (j = 0; j < n; j++) {
+    const char *s = gtcaca_json_string(gtcaca_json_array_get(a, j));
+    if (s && base && strcasecmp(s, base) == 0) return 1;
+  }
+  return 0;
+}
+
 /* Try one extension directory: read <dir>/package.json and, if one of its
-   contributed languages matches `ext`, load its configuration relative to dir. */
-gtcaca_editor_langcfg_t *try_extension(const char *dir, const char *ext,
+   contributed languages matches `ext`/`base`, load its configuration. */
+gtcaca_editor_langcfg_t *try_extension(const char *dir, const char *ext, const char *base,
                                               char *out_id, int idsz)
 {
   char pkgpath[1024];
@@ -270,15 +292,9 @@ gtcaca_editor_langcfg_t *try_extension(const char *dir, const char *ext,
   nlang = gtcaca_json_array_size(langs);
   for (i = 0; i < nlang && !result; i++) {
     gtcaca_json_value *L = gtcaca_json_array_get(langs, i);
-    gtcaca_json_value *exts = gtcaca_json_object_get(L, "extensions");
-    int j, m = gtcaca_json_array_size(exts), matched = 0;
     const char *cfg, *id;
 
-    for (j = 0; j < m; j++) {
-      const char *s = gtcaca_json_string(gtcaca_json_array_get(exts, j));
-      if (s && strcmp(s, ext) == 0) { matched = 1; break; }
-    }
-    if (!matched) continue;
+    if (!lang_matches(L, ext, base)) continue;
 
     cfg = gtcaca_json_string(gtcaca_json_object_get(L, "configuration"));
     id  = gtcaca_json_string(gtcaca_json_object_get(L, "id"));
@@ -303,12 +319,12 @@ gtcaca_editor_langcfg_t *try_extension(const char *dir, const char *ext,
 
 /* Scan one root dir: a package.json dropped straight in, then one folder per
    extension (the normal VSCode layout). */
-gtcaca_editor_langcfg_t *scan_root_langcfg(const char *root, const char *ext,
+gtcaca_editor_langcfg_t *scan_root_langcfg(const char *root, const char *ext, const char *base,
                                                   char *out_id, int idsz)
 {
   DIR *d;
   struct dirent *de;
-  gtcaca_editor_langcfg_t *result = try_extension(root, ext, out_id, idsz);
+  gtcaca_editor_langcfg_t *result = try_extension(root, ext, base, out_id, idsz);
   if (result) return result;
   d = opendir(root);
   if (!d) return NULL;
@@ -316,7 +332,7 @@ gtcaca_editor_langcfg_t *scan_root_langcfg(const char *root, const char *ext,
     char sub[1024];
     if (de->d_name[0] == '.') continue;
     snprintf(sub, sizeof sub, "%s/%s", root, de->d_name);
-    result = try_extension(sub, ext, out_id, idsz);
+    result = try_extension(sub, ext, base, out_id, idsz);
   }
   closedir(d);
   return result;
@@ -327,13 +343,14 @@ gtcaca_editor_langcfg_t *discover_langcfg(const char *filename,
 {
   const char *home = getenv("HOME");
   const char *ext  = filename ? strrchr(filename, '.') : NULL;
+  const char *base = filename ? (strrchr(filename, '/') ? strrchr(filename, '/') + 1 : filename) : NULL;
   int r;
-  if (!home || !ext) return NULL;
+  if (!home || !filename) return NULL;
   for (r = 0; r < N_EXT_ROOTS; r++) {
     char extdir[1024];
     gtcaca_editor_langcfg_t *res;
     snprintf(extdir, sizeof extdir, "%s%s", home, g_ext_roots[r]);
-    res = scan_root_langcfg(extdir, ext, out_id, idsz);
+    res = scan_root_langcfg(extdir, ext, base, out_id, idsz);
     if (res) return res;
   }
   return NULL;
@@ -341,7 +358,7 @@ gtcaca_editor_langcfg_t *discover_langcfg(const char *filename,
 
 /* Find a TextMate grammar (contributes.grammars[].path) in <dir> whose language
    matches the file's extension. Fills out_path / out_id; returns 1 if found. */
-int try_grammar(const char *dir, const char *ext, char *out_path, int psz, char *out_id, int idsz)
+int try_grammar(const char *dir, const char *ext, const char *base, char *out_path, int psz, char *out_id, int idsz)
 {
   char pkgpath[1024];
   gtcaca_json_value *pkg, *langs, *grammars;
@@ -352,20 +369,14 @@ int try_grammar(const char *dir, const char *ext, char *out_path, int psz, char 
   pkg = gtcaca_json_parse_file(pkgpath);
   if (!pkg) return 0;
 
-  /* which language id owns this extension? */
+  /* which language id owns this extension / filename? */
   langs = gtcaca_json_object_get(gtcaca_json_object_get(pkg, "contributes"), "languages");
   nlang = gtcaca_json_array_size(langs);
   for (i = 0; i < nlang && !id[0]; i++) {
     gtcaca_json_value *L = gtcaca_json_array_get(langs, i);
-    gtcaca_json_value *exts = gtcaca_json_object_get(L, "extensions");
-    int j, m = gtcaca_json_array_size(exts);
-    for (j = 0; j < m; j++) {
-      const char *s = gtcaca_json_string(gtcaca_json_array_get(exts, j));
-      if (s && !strcmp(s, ext)) {
-        const char *lid = gtcaca_json_string(gtcaca_json_object_get(L, "id"));
-        if (lid) { strncpy(id, lid, sizeof id - 1); id[sizeof id - 1] = '\0'; }
-        break;
-      }
+    if (lang_matches(L, ext, base)) {
+      const char *lid = gtcaca_json_string(gtcaca_json_object_get(L, "id"));
+      if (lid) { strncpy(id, lid, sizeof id - 1); id[sizeof id - 1] = '\0'; }
     }
   }
   if (!id[0]) { gtcaca_json_free(pkg); return 0; }
@@ -389,12 +400,12 @@ int try_grammar(const char *dir, const char *ext, char *out_path, int psz, char 
   return found;
 }
 
-int scan_root_grammar(const char *root, const char *ext, char *out_path, int psz, char *out_id, int idsz)
+int scan_root_grammar(const char *root, const char *ext, const char *base, char *out_path, int psz, char *out_id, int idsz)
 {
   DIR *d;
   struct dirent *de;
   int found;
-  if (try_grammar(root, ext, out_path, psz, out_id, idsz)) return 1;
+  if (try_grammar(root, ext, base, out_path, psz, out_id, idsz)) return 1;
   d = opendir(root);
   if (!d) return 0;
   found = 0;
@@ -402,7 +413,7 @@ int scan_root_grammar(const char *root, const char *ext, char *out_path, int psz
     char sub[1024];
     if (de->d_name[0] == '.') continue;
     snprintf(sub, sizeof sub, "%s/%s", root, de->d_name);
-    found = try_grammar(sub, ext, out_path, psz, out_id, idsz);
+    found = try_grammar(sub, ext, base, out_path, psz, out_id, idsz);
   }
   closedir(d);
   return found;
@@ -412,12 +423,13 @@ int discover_grammar(const char *filename, char *out_path, int psz, char *out_id
 {
   const char *home = getenv("HOME");
   const char *ext  = filename ? strrchr(filename, '.') : NULL;
+  const char *base = filename ? (strrchr(filename, '/') ? strrchr(filename, '/') + 1 : filename) : NULL;
   int r;
-  if (!home || !ext) return 0;
+  if (!home || !filename) return 0;
   for (r = 0; r < N_EXT_ROOTS; r++) {
     char extdir[1024];
     snprintf(extdir, sizeof extdir, "%s%s", home, g_ext_roots[r]);
-    if (scan_root_grammar(extdir, ext, out_path, psz, out_id, idsz)) return 1;
+    if (scan_root_grammar(extdir, ext, base, out_path, psz, out_id, idsz)) return 1;
   }
   return 0;
 }

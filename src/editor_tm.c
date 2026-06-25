@@ -16,6 +16,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <gtcaca/editor.h>
 #include <gtcaca/main.h>
@@ -176,6 +177,153 @@ static int _grammar_add(gtcaca_editor_grammar_t *g, gtcaca_json_value *pat)
   return idx;
 }
 
+/* ── XML-plist grammars ──────────────────────────────────────────────────────
+ * Many TextMate/VSCode grammars ship as Apple XML property lists (.tmLanguage)
+ * rather than JSON (.tmLanguage.json). They carry the same structure, so we
+ * parse the plist into the same gtcaca_json_value DOM the loader consumes.
+ * Only the elements grammars use are handled: dict, array, string, integer/
+ * real, true/false. */
+static gtcaca_json_value *pl_new(gtcaca_json_type t)
+{
+  gtcaca_json_value *v = calloc(1, sizeof *v);
+  if (v) v->type = t;
+  return v;
+}
+static const char *pl_skip(const char *p)
+{
+  for (;;) {
+    while (*p && (unsigned char)*p <= ' ') p++;
+    if (p[0] == '<' && p[1] == '?') { const char *e = strstr(p, "?>"); p = e ? e + 2 : p + strlen(p); continue; }
+    if (p[0] == '<' && p[1] == '!') {
+      if (!strncmp(p, "<!--", 4)) { const char *e = strstr(p, "-->"); p = e ? e + 3 : p + strlen(p); }
+      else { const char *e = strchr(p, '>'); p = e ? e + 1 : p + strlen(p); }
+      continue;
+    }
+    break;
+  }
+  return p;
+}
+static char *pl_text(const char *s, const char *e)   /* decode XML entities */
+{
+  char *out = malloc((size_t)(e - s) + 1), *o;
+  if (!out) return NULL;
+  o = out;
+  while (s < e) {
+    if (*s == '&') {
+      if      (!strncmp(s, "&lt;", 4))   { *o++ = '<';  s += 4; }
+      else if (!strncmp(s, "&gt;", 4))   { *o++ = '>';  s += 4; }
+      else if (!strncmp(s, "&amp;", 5))  { *o++ = '&';  s += 5; }
+      else if (!strncmp(s, "&quot;", 6)) { *o++ = '"';  s += 6; }
+      else if (!strncmp(s, "&apos;", 6)) { *o++ = '\''; s += 6; }
+      else if (s[1] == '#') {
+        int base = (s[2] == 'x' || s[2] == 'X') ? 16 : 10;
+        const char *q = s + (base == 16 ? 3 : 2);
+        long v = strtol(q, (char **)&q, base);
+        if (*q == ';') q++;
+        if (v < 0x80) *o++ = (char)v;
+        else if (v < 0x800) { *o++ = (char)(0xC0 | (v >> 6)); *o++ = (char)(0x80 | (v & 0x3F)); }
+        else { *o++ = (char)(0xE0 | (v >> 12)); *o++ = (char)(0x80 | ((v >> 6) & 0x3F)); *o++ = (char)(0x80 | (v & 0x3F)); }
+        s = q;
+      } else *o++ = *s++;
+    } else *o++ = *s++;
+  }
+  *o = '\0';
+  return out;
+}
+static gtcaca_json_value *pl_value(const char **pp)
+{
+  const char *p = pl_skip(*pp), *t, *te, *gt, *body;
+  size_t nlen;
+  if (*p != '<') { *pp = p; return NULL; }
+  t = p + 1; te = t;
+  while (*te && *te != '>' && *te != ' ' && *te != '/' && *te != '\t' && *te != '\n') te++;
+  nlen = (size_t)(te - t);
+  gt = strchr(p, '>'); if (!gt) { *pp = p + strlen(p); return NULL; }
+  body = gt + 1;
+#define TAG(s) (nlen == strlen(s) && !strncmp(t, s, nlen))
+  if (TAG("plist")) { const char *q = body; gtcaca_json_value *v = pl_value(&q); *pp = q; return v; }
+  if (TAG("dict")) {
+    gtcaca_json_value *v = pl_new(GTCACA_JSON_OBJECT);
+    const char *q = body;
+    for (;;) {
+      const char *ks, *ke; char *key, **nk; gtcaca_json_value *val, **nv;
+      q = pl_skip(q);
+      if (!strncmp(q, "</dict>", 7)) { q += 7; break; }
+      if (strncmp(q, "<key>", 5)) break;
+      ks = q + 5; ke = strstr(ks, "</key>"); if (!ke) break;
+      key = pl_text(ks, ke); q = ke + 6;
+      val = pl_value(&q);
+      nk = realloc(v->u.object.keys, (size_t)(v->u.object.count + 1) * sizeof(char *));
+      nv = realloc(v->u.object.vals, (size_t)(v->u.object.count + 1) * sizeof(void *));
+      if (!nk || !nv) { free(key); break; }
+      v->u.object.keys = nk; v->u.object.vals = nv;
+      v->u.object.keys[v->u.object.count] = key;
+      v->u.object.vals[v->u.object.count] = val;
+      v->u.object.count++;
+    }
+    *pp = q; return v;
+  }
+  if (TAG("array")) {
+    gtcaca_json_value *v = pl_new(GTCACA_JSON_ARRAY);
+    const char *q = body;
+    for (;;) {
+      const char *before; gtcaca_json_value *item, **ni;
+      q = pl_skip(q);
+      if (!strncmp(q, "</array>", 8)) { q += 8; break; }
+      if (*q != '<') break;
+      before = q; item = pl_value(&q);
+      if (q == before) break;
+      ni = realloc(v->u.array.items, (size_t)(v->u.array.count + 1) * sizeof(void *));
+      if (!ni) break;
+      v->u.array.items = ni; v->u.array.items[v->u.array.count++] = item;
+    }
+    *pp = q; return v;
+  }
+  if (gt[-1] == '/') {                       /* self-closing */
+    gtcaca_json_value *v;
+    if (TAG("true"))       { v = pl_new(GTCACA_JSON_BOOL); v->u.boolean = 1; }
+    else if (TAG("false")) { v = pl_new(GTCACA_JSON_BOOL); v->u.boolean = 0; }
+    else                   { v = pl_new(GTCACA_JSON_STRING); v->u.string = calloc(1, 1); }
+    *pp = body; return v;
+  }
+  if (TAG("string")) {
+    const char *e = strstr(body, "</string>"); gtcaca_json_value *v = pl_new(GTCACA_JSON_STRING);
+    if (!e) { v->u.string = calloc(1, 1); *pp = body; return v; }
+    v->u.string = pl_text(body, e); *pp = e + 9; return v;
+  }
+  if (TAG("integer") || TAG("real")) {
+    gtcaca_json_value *v = pl_new(GTCACA_JSON_NUMBER); const char *e = strchr(body, '<');
+    v->u.number = strtod(body, NULL); *pp = e ? e : body; return v;
+  }
+  if (TAG("true"))  { const char *e = strstr(body, "</true>");  gtcaca_json_value *v = pl_new(GTCACA_JSON_BOOL); v->u.boolean = 1; *pp = e ? e + 7 : body; return v; }
+  if (TAG("false")) { const char *e = strstr(body, "</false>"); gtcaca_json_value *v = pl_new(GTCACA_JSON_BOOL); v->u.boolean = 0; *pp = e ? e + 8 : body; return v; }
+  *pp = body; return pl_new(GTCACA_JSON_NULL);   /* data/date/unknown: ignore */
+#undef TAG
+}
+static gtcaca_json_value *pl_parse_file(const char *path)
+{
+  FILE *f = fopen(path, "rb"); long n; char *buf; gtcaca_json_value *root; const char *p;
+  if (!f) return NULL;
+  fseek(f, 0, SEEK_END); n = ftell(f); fseek(f, 0, SEEK_SET);
+  if (n < 0) { fclose(f); return NULL; }
+  buf = malloc((size_t)n + 1);
+  if (!buf) { fclose(f); return NULL; }
+  n = (long)fread(buf, 1, (size_t)n, f); buf[n] = '\0'; fclose(f);
+  p = buf; root = pl_value(&p);
+  free(buf);
+  return root;
+}
+/* read a grammar DOM from JSON or XML-plist, sniffing the first non-blank byte */
+static gtcaca_json_value *load_grammar_dom(const char *path)
+{
+  FILE *f = fopen(path, "rb"); int c;
+  if (!f) return NULL;
+  do { c = fgetc(f); } while (c == ' ' || c == '\t' || c == '\n' || c == '\r');
+  fclose(f);
+  if (c == '<') return pl_parse_file(path);
+  return gtcaca_json_parse_file(path);
+}
+
 gtcaca_editor_grammar_t *gtcaca_editor_grammar_load(const char *path)
 {
   gtcaca_json_value *root, *repo;
@@ -189,7 +337,7 @@ gtcaca_editor_grammar_t *gtcaca_editor_grammar_load(const char *path)
     onig_inited = 1;
   }
 
-  root = gtcaca_json_parse_file(path);
+  root = load_grammar_dom(path);
   if (!root) return NULL;
 
   g = calloc(1, sizeof(*g));

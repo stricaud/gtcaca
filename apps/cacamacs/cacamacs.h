@@ -192,11 +192,11 @@ const char *langid_from_ext(const char *ext);
 void load_config(void);
 char *read_file(const char *path);
 void refresh_modeline(gtcaca_editor_widget_t *ed, void *ud);
-int scan_root_grammar(const char *root, const char *ext, char *out_path, int psz, char *out_id, int idsz);
-gtcaca_editor_langcfg_t *scan_root_langcfg(const char *root, const char *ext, char *out_id, int idsz);
+int scan_root_grammar(const char *root, const char *ext, const char *base, char *out_path, int psz, char *out_id, int idsz);
+gtcaca_editor_langcfg_t *scan_root_langcfg(const char *root, const char *ext, const char *base, char *out_id, int idsz);
 void setup_language(gtcaca_editor_widget_t *ed, const char *filename, const char *explicit_cfg);
-gtcaca_editor_langcfg_t *try_extension(const char *dir, const char *ext, char *out_id, int idsz);
-int try_grammar(const char *dir, const char *ext, char *out_path, int psz, char *out_id, int idsz);
+gtcaca_editor_langcfg_t *try_extension(const char *dir, const char *ext, const char *base, char *out_id, int idsz);
+int try_grammar(const char *dir, const char *ext, const char *base, char *out_path, int psz, char *out_id, int idsz);
 /* ui.c */
 int _cmp_bent(const void *a, const void *b);
 void browser_modeline(gtcaca_editor_widget_t *ed, void *ud);
