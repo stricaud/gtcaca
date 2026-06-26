@@ -117,6 +117,7 @@ extern char g_message[128];
 extern int  g_bottom_reserve;   /* rows kept clear above the status bar */
 extern int g_isearch;
 extern int g_qr_active;          /* query-replace stepping is in progress */
+extern int g_spell_active;       /* spell-check suggestion picker is up */
 extern int g_mb_active;
 
 /* games (games.c) */
@@ -174,6 +175,8 @@ void start_replace(void);
 int query_replace_key(gtcaca_editor_widget_t *ed, int key);
 void start_query_replace(void);
 void start_query_replace_regexp(void);
+void spell_word(gtcaca_editor_widget_t *ed);
+int  spell_key(gtcaca_editor_widget_t *ed, int key);
 void start_string_rectangle(void);
 void string_rect_done(const char *s);
 void start_minibuffer(const char *prompt, void (*cb)(const char *));

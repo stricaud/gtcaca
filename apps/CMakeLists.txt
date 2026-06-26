@@ -17,7 +17,8 @@ target_link_libraries(devhelp ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
 add_executable(cacamacs
   cacamacs/cacamacs.c cacamacs/games.c
-  cacamacs/edit.c cacamacs/search.c cacamacs/keymap.c cacamacs/lang.c cacamacs/ui.c)
+  cacamacs/edit.c cacamacs/search.c cacamacs/keymap.c cacamacs/lang.c cacamacs/ui.c
+  cacamacs/spell.c)
 target_include_directories(cacamacs PRIVATE cacamacs)
 target_link_libraries(cacamacs ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 # the editor's binary is `ccm` (shorter to type); the CMake target stays cacamacs

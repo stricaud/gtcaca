@@ -112,6 +112,7 @@ const char *help_text(void)
   "Search   C-s isearch fwd   C-r isearch back\n"
   "Replace  M-% query-replace: y replace, n skip, ! all, . last, q quit\n"
   "         M-x query-replace-regexp (regex)   M-x replace-string (all)\n"
+  "Spell    M-$ check word at point   (0-9 pick a suggestion, SPC skip)\n"
   "Mouse    click to move point   drag to select   wheel to scroll\n"
   "Macros   C-x ( record   C-x ) finish   C-x e replay   (C-u N C-x e = N times)\n"
   "Repeat   C-u N <command>   runs the next command N times (bare C-u = 4)\n"
