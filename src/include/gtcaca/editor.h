@@ -65,6 +65,8 @@ typedef struct {
   uint8_t fore;
   uint8_t back;
   int     back_set;   /* 0: inherit the widget's background colour */
+  int      fore12_set; /* 1: paint with the 12-bit (4096-colour) foreground below */
+  uint16_t fore12;     /* 0x0RGB, 4 bits/channel — used by the truecolour presenter */
   int     bold;
   int     italic;
   int     underline;
@@ -221,6 +223,9 @@ struct _gtcaca_editor_widget_t {
   int                   caret_line_visible;
   int                   caret_line_back_set;
   uint8_t               caret_line_back;
+  /* 12-bit (4096-colour) surface, used by the truecolour presenter when set */
+  int                   bg12_set;  uint16_t bg12;   /* editor background */
+  int                   fg12_set;  uint16_t fg12;   /* default foreground */
   int                   edge_column;          /* 0 = off */
   uint8_t               edge_colour;
   /* Brace highlight positions (-1 = none) */
@@ -352,6 +357,12 @@ void gtcaca_editor_style_set_back(gtcaca_editor_widget_t *w, int style, uint8_t 
 void gtcaca_editor_style_clear_back(gtcaca_editor_widget_t *w, int style);
 /* Override the selection element colours (defaults to inverting the text). */
 void gtcaca_editor_set_selection_colors(gtcaca_editor_widget_t *w, uint8_t fore, uint8_t back);
+
+/* 12-bit (0x0RGB, 4 bits/channel = 4096 colours) overrides for the truecolour
+   presenter. They fall back gracefully on a 16-colour libcaca terminal. */
+void gtcaca_editor_set_bg_rgb12(gtcaca_editor_widget_t *w, uint16_t rgb12);
+void gtcaca_editor_set_fg_rgb12(gtcaca_editor_widget_t *w, uint16_t rgb12);
+void gtcaca_editor_style_set_fore_rgb12(gtcaca_editor_widget_t *w, int style, uint16_t rgb12);
 /* Force a re-lex on the next draw (e.g. after changing styles or config). */
 void gtcaca_editor_colourize(gtcaca_editor_widget_t *w);
 

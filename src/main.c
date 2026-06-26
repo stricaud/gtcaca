@@ -4,6 +4,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include <caca.h>
 
@@ -194,6 +195,105 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
 
 }
 
+/* ── true(ish)colour presenter: bypass libcaca's 16-colour terminal output ─────
+ * libcaca only emits the 16 ANSI colours, but it still stores up to 4096 (12-bit)
+ * per cell. When stdout is a tty we render the canvas ourselves with 24-bit (or
+ * 256-colour) escapes, reading each cell's char + stored colour back from the
+ * canvas, diffing against the previous frame so only changed cells repaint.
+ * Set GTCACA_NO_TRUECOLOR=1 to fall back to libcaca's own output. */
+static int       g_present = -2;     /* -2 uninit, 0 = use libcaca, 1 = our renderer */
+static int       g_truecolor = 0;    /* 24-bit available (else 256-colour cube) */
+static char     *g_ob = NULL;        /* output buffer */
+static size_t    g_obcap = 0;
+
+static int _present_enabled(void)
+{
+  if (g_present == -2) {
+    const char *ct = getenv("COLORTERM");
+    g_present   = (isatty(1) && !getenv("GTCACA_NO_TRUECOLOR")) ? 1 : 0;
+    g_truecolor = ct && (strstr(ct, "truecolor") || strstr(ct, "24bit"));
+    if (g_present) {
+      int fl;
+      /* Let libcaca's driver flush its own init first (it defers entering the
+         alternate screen until the first refresh/input — otherwise it would
+         switch to the blank alt-screen *after* our first paint and hide it). */
+      caca_refresh_display(gmo.dp);
+      /* keep stdout blocking so a big frame can't short-write and leave the
+         bottom of the screen unpainted */
+      fl = fcntl(1, F_GETFL); if (fl != -1) fcntl(1, F_SETFL, fl & ~O_NONBLOCK);
+      /* hide the hw cursor (we draw our own caret) and stop autowrap so painting
+         the bottom-right cell can't scroll the screen */
+      if (write(1, "\033[?25l\033[?7l", 10) < 0) { /* ignore */ }
+    }
+  }
+  return g_present == 1;
+}
+
+void gtcaca_present_shutdown(void)   /* restore the terminal on exit */
+{
+  if (g_present == 1 && write(1, "\033[0m\033[?7h\033[?25h", 14) < 0) { /* ignore */ }
+}
+
+/* write the whole buffer, looping over short writes (a tty can accept fewer
+   bytes than asked on a big frame — the cause of the bottom of a large screen
+   never painting). */
+static void _write_all(const char *buf, size_t n)
+{
+  size_t off = 0;
+  while (off < n) {
+    ssize_t w = write(1, buf + off, n - off);
+    if (w > 0) { off += (size_t)w; continue; }
+    if (w < 0 && (errno == EINTR || errno == EAGAIN)) continue;   /* retry; tty will drain */
+    break;   /* a real error: give up */
+  }
+}
+
+static int _utf8(char *b, uint32_t c)
+{
+  if (c < 0x80)    { b[0] = (char)c; return 1; }
+  if (c < 0x800)   { b[0] = (char)(0xC0|(c>>6));  b[1] = (char)(0x80|(c&0x3f)); return 2; }
+  if (c < 0x10000) { b[0] = (char)(0xE0|(c>>12)); b[1] = (char)(0x80|((c>>6)&0x3f)); b[2] = (char)(0x80|(c&0x3f)); return 3; }
+  b[0] = (char)(0xF0|(c>>18)); b[1] = (char)(0x80|((c>>12)&0x3f)); b[2] = (char)(0x80|((c>>6)&0x3f)); b[3] = (char)(0x80|(c&0x3f)); return 4;
+}
+
+static int _emit_col(char *b, int rgb12, int fg)   /* 12-bit colour -> 24-bit or 256 escape */
+{
+  int r = ((rgb12>>8)&0xf)*17, g = ((rgb12>>4)&0xf)*17, bl = (rgb12&0xf)*17;
+  if (g_truecolor) return sprintf(b, "\033[%d;2;%d;%d;%dm", fg ? 38 : 48, r, g, bl);
+  return sprintf(b, "\033[%d;5;%dm", fg ? 38 : 48, 16 + 36*(r*5/255) + 6*(g*5/255) + (bl*5/255));
+}
+
+static void gtcaca_present(void)
+{
+  int w = caca_get_canvas_width(gmo.cv), h = caca_get_canvas_height(gmo.cv);
+  int x, y, cfg = -1, cbg = -1;
+  size_t need = (size_t)w * h * 64 + 64, n = 0;
+
+  if (need > g_obcap) { free(g_ob); g_ob = malloc(need); if (!g_ob) { g_obcap = 0; return; } g_obcap = need; }
+
+  /* Repaint every cell, every frame. A diff against the previous frame desyncs
+     from the physical screen whenever anything else clears it, so cells looked
+     "already painted" yet stayed black. Synchronised-update brackets (2026) make
+     the whole frame land atomically on terminals that support them (a no-op on
+     the rest), so a full repaint doesn't flicker. */
+  n += (size_t)sprintf(g_ob+n, "\033[?2026h\033[H");
+  for (y = 0; y < h; y++) {
+    n += (size_t)sprintf(g_ob+n, "\033[%d;1H", y+1);
+    for (x = 0; x < w; x++) {
+      uint32_t ch = caca_get_char(gmo.cv, x, y);
+      uint32_t at = caca_get_attr(gmo.cv, x, y);
+      int f  = (int)(uint16_t)caca_attr_to_rgb12_fg(at);
+      int bg = (int)(uint16_t)caca_attr_to_rgb12_bg(at);
+      if (ch < 0x20 || ch == 0x000fffffu) ch = ' ';      /* control / fullwidth-magic */
+      if (f  != cfg) { n += (size_t)_emit_col(g_ob+n, f,  1); cfg = f; }
+      if (bg != cbg) { n += (size_t)_emit_col(g_ob+n, bg, 0); cbg = bg; }
+      n += (size_t)_utf8(g_ob+n, ch);
+    }
+  }
+  n += (size_t)sprintf(g_ob+n, "\033[0m\033[?2026l");
+  _write_all(g_ob, n);
+}
+
 void gtcaca_redraw(void)
 {
   gtcaca_widget_t *widget = NULL;
@@ -215,7 +315,8 @@ void gtcaca_redraw(void)
     }
   }
 
-  caca_refresh_display(gmo.dp);
+  if (_present_enabled()) gtcaca_present();
+  else                    caca_refresh_display(gmo.dp);
 }
 
 int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
@@ -918,6 +1019,7 @@ void gtcaca_main(void)
 
   fputs("\033[?1002l\033[?1006l", stdout);   /* restore: disable SGR mouse reporting */
   fflush(stdout);
+  gtcaca_present_shutdown();                  /* restore cursor if we took over output */
   caca_set_mouse(gmo.dp, 0);
   caca_free_display(gmo.dp);
 }

@@ -1,0 +1,30 @@
+# cacamacs colour theme — copy to ~/.ccm/theme
+#
+# Syntax:  key = colour          (everything after a "  #" is a comment)
+#
+# Colours may be names (the 16 below), HTML hex (#rrggbb / #rgb), or rgb(r,g,b).
+# cacamacs renders the editor itself in up to 4096 colours (its presenter bypasses
+# libcaca's 16-colour output), so "background = #301934" is a real dark purple.
+# On a plain 16-colour terminal each colour falls back to the nearest of 16.
+#
+#   names:  run  ./demo.sh colors      colour range:  run  ./demo.sh truecolor
+#
+# Names: black red green yellow brown blue magenta(=purple) cyan white
+#        gray/lightgray darkgray(=brightblack)
+#        lightred lightgreen lightblue lightcyan lightmagenta brightyellow
+#        (light* also spell as bright*)
+
+# editor surface  (hex -> real colours via the presenter)
+background   = #1e1a2e        # a dark purple
+foreground   = #d0d0e0
+current_line = #2a2440        # highlight on the caret's line
+selection_fg = black
+selection_bg = #4a4a80
+
+# code colourization (syntax styles)
+comment  = #6a7a6a
+string   = #98c878
+number   = #80d0d0
+keyword  = #c890f0
+bracket  = #e0e0a0
+operator = #b0b0c0

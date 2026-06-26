@@ -602,6 +602,18 @@ void gtcaca_editor_style_clear_back(gtcaca_editor_widget_t *w, int style)
 {
   if (style >= 0 && style < GTCACA_EDITOR_STYLE_COUNT) w->style_table[style].back_set = 0;
 }
+void gtcaca_editor_set_bg_rgb12(gtcaca_editor_widget_t *w, uint16_t rgb12)
+{ w->bg12_set = 1; w->bg12 = rgb12; }
+void gtcaca_editor_set_fg_rgb12(gtcaca_editor_widget_t *w, uint16_t rgb12)
+{ w->fg12_set = 1; w->fg12 = rgb12; }
+void gtcaca_editor_style_set_fore_rgb12(gtcaca_editor_widget_t *w, int style, uint16_t rgb12)
+{
+  if (style >= 0 && style < GTCACA_EDITOR_STYLE_COUNT) {
+    w->style_table[style].fore12_set = 1;
+    w->style_table[style].fore12 = rgb12;
+    w->colorize_dirty = 1;
+  }
+}
 void gtcaca_editor_style_set_bold(gtcaca_editor_widget_t *w, int style, int on)
 {
   if (style >= 0 && style < GTCACA_EDITOR_STYLE_COUNT) w->style_table[style].bold = on ? 1 : 0;
@@ -838,6 +850,23 @@ int gtcaca_editor_position_from_point(gtcaca_editor_widget_t *w, int sx, int sy)
   return gtcaca_editor_get_length(w);
 }
 
+/* The 16 ANSI colours as 12-bit (0x0RGB) so we can mix them with argb cells. */
+static const uint16_t _ansi12[16] = {
+  0x000,0x00a,0x0a0,0x0aa,0xa00,0xa0a,0xa50,0xaaa,
+  0x555,0x55f,0x5f5,0x5ff,0xf55,0xf5f,0xff5,0xfff
+};
+/* Set the canvas colour; when either side carries a 12-bit (4096-colour)
+   override we use caca's argb path so the truecolour presenter can pick the
+   exact colour up, otherwise plain ANSI (identical on a 16-colour terminal). */
+static void _ed_color(uint8_t fa, uint16_t f12, int fset, uint8_t ba, uint16_t b12, int bset)
+{
+  if (fset || bset)
+    caca_set_color_argb(gmo.cv, (uint16_t)(0xf000 | (fset ? f12 : _ansi12[fa & 15])),
+                                (uint16_t)(0xf000 | (bset ? b12 : _ansi12[ba & 15])));
+  else
+    caca_set_color_ansi(gmo.cv, fa, ba);
+}
+
 void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
 {
   uint8_t nf = w->has_focus ? w->color_focus_fg : w->color_nonfocus_fg;
@@ -870,8 +899,9 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
   uint8_t mfg = w->color_nonfocus_fg;
   uint8_t mbg = w->color_nonfocus_bg;
 
-  /* frame */
+  /* frame (use the 12-bit surface colours when set) */
   gtcaca_widget_colorize(GTCACA_WIDGET(w));
+  _ed_color(nf, w->fg12, w->fg12_set, nb, w->bg12, w->bg12_set);
   caca_fill_box(gmo.cv, w->x, w->y, w->width, w->height, ' ');
   caca_draw_cp437_box(gmo.cv, w->x, w->y, w->width, w->height);
   caca_set_attr(gmo.cv, 0);
@@ -932,7 +962,7 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
     if (ln_w > 0) {
       char numbuf[16];
       snprintf(numbuf, sizeof numbuf, "%*d", ln_w - 1, line + 1);
-      caca_set_color_ansi(gmo.cv, mfg, mbg);
+      _ed_color(mfg, 0, 0, mbg, w->bg12, w->bg12_set);
       caca_set_attr(gmo.cv, 0);
       caca_printf(gmo.cv, inner_x, draw_y, "%s", numbuf);
       caca_put_char(gmo.cv, inner_x + ln_w - 1, draw_y, ' ');
@@ -942,7 +972,7 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
       int fl = gtcaca_editor_get_fold_level(w, line);
       char mk = (fl & GTCACA_EDITOR_FOLDLEVELHEADERFLAG)
                   ? (gtcaca_editor_get_fold_expanded(w, line) ? '-' : '+') : ' ';
-      caca_set_color_ansi(gmo.cv, CACA_YELLOW, mbg);
+      _ed_color(CACA_YELLOW, 0, 0, mbg, w->bg12, w->bg12_set);
       caca_set_attr(gmo.cv, 0);
       caca_put_char(gmo.cv, inner_x + ln_w, draw_y, mk);
     }
@@ -950,6 +980,9 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
     /* current-line highlight: paint the background of every wrapped row */
     uint8_t rowbg = (w->caret_line_visible && line == caret_line && w->has_focus)
                       ? w->caret_line_back : nb;
+    /* normal rows take the 12-bit background; the caret line keeps its own colour */
+    int      rb12set = w->bg12_set && (rowbg == nb);
+    uint16_t rb12    = w->bg12;
     if (rowbg != nb) {
       int cx, rr;
       caca_set_color_ansi(gmo.cv, nf, rowbg); caca_set_attr(gmo.cv, 0);
@@ -987,11 +1020,13 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
             outc = (c == '\t') ? (k == 0 ? 0xBB : (uint32_t)' ') : 0xB7;  /* » and · */
           } else if ((w->colorize_enabled || w->json_mode || w->grammar) && w->styles && pos < w->length) {
             gtcaca_editor_style_t *st = &w->style_table[w->styles[pos]];
-            caca_set_color_ansi(gmo.cv, st->fore, st->back_set ? st->back : rowbg);
+            _ed_color(st->fore, st->fore12, st->fore12_set,
+                      st->back_set ? st->back : rowbg,
+                      st->back_set ? 0 : rb12, st->back_set ? 0 : rb12set);
             caca_set_attr(gmo.cv, _style_attr(st));
             if (!st->visible) outc = ' ';
           } else {
-            caca_set_color_ansi(gmo.cv, nf, rowbg); caca_set_attr(gmo.cv, 0);
+            _ed_color(nf, w->fg12, w->fg12_set, rowbg, rb12, rb12set); caca_set_attr(gmo.cv, 0);
           }
           caca_put_char(gmo.cv, sx, sy, outc);
         }

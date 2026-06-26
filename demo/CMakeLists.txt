@@ -77,6 +77,8 @@ target_link_libraries(demo_events ${LIBCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 add_executable(demo_colors demo_colors.c)
 target_link_libraries(demo_colors ${LIBCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})
 
+add_executable(demo_truecolor demo_truecolor.c)   # raw escapes; no caca needed
+
 add_executable(demo_dash demo_dash.c)
 target_link_libraries(demo_dash ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS} m)
 

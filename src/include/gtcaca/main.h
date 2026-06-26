@@ -29,6 +29,7 @@ int gtcaca_init(int *argc, char ***argv);
 void gtcaca_main(void);
 void gtcaca_main_quit(void);
 void gtcaca_redraw(void);
+void gtcaca_present_shutdown(void);   /* restore terminal if the truecolour presenter is active */
 unsigned int gtcaca_get_newid(void);
 /* Best-effort guess of whether the terminal/font can render fine Unicode glyphs
    (fractional block elements, etc.). Uses the locale + known terminal env vars;
