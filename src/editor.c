@@ -794,6 +794,50 @@ static int _count_rows(gtcaca_editor_widget_t *w, int from, int to, int text_w)
   return rows;
 }
 
+/* Map a screen cell (sx,sy) to the document position under it, accounting for
+   the box border, line-number/fold margins, vertical scroll, soft wrap and
+   horizontal scroll. Clicks outside the text area clamp into it. Mirrors the
+   layout walk in gtcaca_editor_draw(). */
+int gtcaca_editor_position_from_point(gtcaca_editor_widget_t *w, int sx, int sy)
+{
+  int line_count = gtcaca_editor_get_line_count(w);
+  int total_w  = w->width  - 2;
+  int text_h   = w->height - 2;
+  int ln_w     = w->show_line_numbers ? _digits(line_count) + 1 : 0;
+  int fold_w   = w->show_fold_margin ? 1 : 0;
+  int margin_w = ln_w + fold_w;
+  int text_w   = total_w - margin_w;
+  int inner_x  = w->x + 1, inner_y = w->y + 1, origin_x = inner_x + margin_w;
+  int target_row, col, row = 0, line;
+
+  if (text_w <= 0 || text_h <= 0 || line_count <= 0)
+    return gtcaca_editor_get_current_pos(w);
+
+  target_row = sy - inner_y;
+  if (target_row < 0) target_row = 0;
+  if (target_row >= text_h) target_row = text_h - 1;
+  col = sx - origin_x;
+  if (col < 0) col = 0;
+
+  line = w->first_visible_line < 0 ? 0 : w->first_visible_line;
+  while (line < line_count && !gtcaca_editor_get_line_visible(w, line)) line++;
+
+  while (line < line_count) {
+    int line_rows = _line_rows(w, line, text_w);
+    int ann = gtcaca_editor_annotation_get_lines(w, line);
+    if (target_row < row + line_rows) {                /* on this line's text */
+      int sub  = target_row - row;
+      int vcol = w->wrap ? sub * text_w + col : w->x_offset + col;
+      return gtcaca_editor_find_column(w, line, vcol);
+    }
+    if (target_row < row + line_rows + ann)            /* on an annotation row */
+      return gtcaca_editor_get_line_end_position(w, line);
+    row += line_rows + ann;
+    do { line++; } while (line < line_count && !gtcaca_editor_get_line_visible(w, line));
+  }
+  return gtcaca_editor_get_length(w);
+}
+
 void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
 {
   uint8_t nf = w->has_focus ? w->color_focus_fg : w->color_nonfocus_fg;

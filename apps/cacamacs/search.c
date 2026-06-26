@@ -136,7 +136,9 @@ void minibuffer_complete_path(void)
 }
 
 /* M-x command names offered by completion (aliases still run, see mx_done) */
-static const char *g_mx_commands[] = { "help", "snake", "sokoban", "describe-bindings", NULL };
+static const char *g_mx_commands[] = { "help", "snake", "sokoban", "describe-bindings",
+                                       "query-replace", "query-replace-regexp",
+                                       "replace-string", NULL };
 
 void minibuffer_complete_command(void)
 {
@@ -251,6 +253,95 @@ void replace_phase1(const char *search)
 
 void start_replace(void) { start_minibuffer("Replace: ", replace_phase1); }
 
+/* ── query replace (M-%): step through matches, ask y/n/!/./q at each ───────── */
+
+int g_qr_active = 0;
+static char g_qr_search[256], g_qr_with[256];
+static int  g_qr_count = 0, g_qr_regexp = 0;
+
+static void qr_prompt(void)
+{
+  snprintf(g_message, sizeof g_message,
+           "Query replac%s %s with %s  (y replace, n skip, ! all, . last, q quit)",
+           g_qr_regexp ? "ing regexp" : "ing", g_qr_search, g_qr_with);
+}
+
+/* Find the next match in [from, end]; on success select it (so it's highlighted)
+   and return 1, else 0. Honours the regexp flag chosen for this session. */
+static int qr_search_from(int from)
+{
+  int s, e, len = gtcaca_editor_get_length(g_ed);
+  gtcaca_editor_set_search_flags(g_ed, g_qr_regexp ? GTCACA_EDITOR_FIND_REGEXP : 0);
+  gtcaca_editor_set_target_range(g_ed, from, len);
+  if (gtcaca_editor_search_in_target(g_ed, g_qr_search) < 0) return 0;
+  s = gtcaca_editor_get_target_start(g_ed);
+  e = gtcaca_editor_get_target_end(g_ed);
+  gtcaca_editor_set_selection(g_ed, e, s);   /* caret at end, anchor at start */
+  return 1;
+}
+
+static void qr_finish(void)
+{
+  g_qr_active = 0;
+  gtcaca_editor_set_search_flags(g_ed, 0);
+  gtcaca_editor_set_empty_selection(g_ed, gtcaca_editor_get_current_pos(g_ed));
+  snprintf(g_message, sizeof g_message, "Replaced %d occurrence%s",
+           g_qr_count, g_qr_count == 1 ? "" : "s");
+}
+
+int query_replace_key(gtcaca_editor_widget_t *ed, int key)
+{
+  int from;
+  switch (key) {
+  case 'y': case ' ':                                   /* replace this, go to next */
+    gtcaca_editor_replace_target(ed, g_qr_with); g_qr_count++;
+    from = gtcaca_editor_get_target_end(ed);
+    if (qr_search_from(from)) qr_prompt(); else qr_finish();
+    return 1;
+  case 'n': case CACA_KEY_DELETE: case CACA_KEY_BACKSPACE:
+    from = gtcaca_editor_get_target_end(ed);           /* skip this one */
+    if (qr_search_from(from)) qr_prompt(); else qr_finish();
+    return 1;
+  case '!':                                             /* replace this and all the rest */
+    for (;;) {
+      gtcaca_editor_replace_target(ed, g_qr_with); g_qr_count++;
+      from = gtcaca_editor_get_target_end(ed);
+      if (!qr_search_from(from)) break;
+    }
+    qr_finish();
+    return 1;
+  case '.':                                             /* replace this one, then stop */
+    gtcaca_editor_replace_target(ed, g_qr_with); g_qr_count++;
+    qr_finish();
+    return 1;
+  case 'q': case 10: case CACA_KEY_RETURN: case CACA_KEY_ESCAPE:
+    qr_finish();
+    return 1;
+  default:
+    return 1;                                           /* swallow other keys while stepping */
+  }
+}
+
+static void qr_get_with(const char *with)
+{
+  strncpy(g_qr_with, with, sizeof g_qr_with - 1); g_qr_with[sizeof g_qr_with - 1] = '\0';
+  g_qr_count = 0;
+  if (qr_search_from(gtcaca_editor_get_current_pos(g_ed))) { g_qr_active = 1; qr_prompt(); }
+  else snprintf(g_message, sizeof g_message, "No occurrences of %s", g_qr_search);
+}
+
+static void qr_get_search(const char *search)
+{
+  char prompt[160];
+  if (!search[0]) { snprintf(g_message, sizeof g_message, "Nothing to replace"); return; }
+  strncpy(g_qr_search, search, sizeof g_qr_search - 1); g_qr_search[sizeof g_qr_search - 1] = '\0';
+  snprintf(prompt, sizeof prompt, "Query replace %s%s with: ", g_qr_regexp ? "regexp " : "", g_qr_search);
+  start_minibuffer(prompt, qr_get_with);
+}
+
+void start_query_replace(void)        { g_qr_regexp = 0; start_minibuffer("Query replace: ", qr_get_search); }
+void start_query_replace_regexp(void) { g_qr_regexp = 1; start_minibuffer("Query replace regexp: ", qr_get_search); }
+
 /* C-x r t — prompt for a string and insert it into the rectangle on each line */
 void string_rect_done(const char *s)
 {
@@ -269,8 +360,14 @@ void mx_done(const char *cmd)
     run_snake();
   else if (!strcmp(cmd, "sokoban"))
     run_sokoban();
+  else if (!strcmp(cmd, "query-replace"))
+    start_query_replace();
+  else if (!strcmp(cmd, "query-replace-regexp"))
+    start_query_replace_regexp();
+  else if (!strcmp(cmd, "replace-string"))
+    start_replace();
   else if (cmd[0])
-    snprintf(g_message, sizeof g_message, "No command: %s  (try: help, snake, sokoban)", cmd);
+    snprintf(g_message, sizeof g_message, "No command: %s  (try: help, snake, sokoban, query-replace)", cmd);
 }
 void start_mx(void) { start_minibuffer_init("M-x ", mx_done, 2, NULL); }  /* 2 = command completion */
 

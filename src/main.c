@@ -541,6 +541,12 @@ static void _focus_widget_in_window(gtcaca_widget_t *hit)
   }
 }
 
+/* While the left button is held down over an editor, motion extends the
+   selection from where the press landed. g_drag_editor is non-NULL between
+   press and release; g_drag_anchor is the position the press selected. */
+static gtcaca_editor_widget_t *g_drag_editor = NULL;
+static int g_drag_anchor = 0;
+
 static void _gtcaca_handle_mouse_press(int mx, int my, int button)
 {
   gtcaca_widget_t *widget;
@@ -743,12 +749,32 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
     if (best >= 0) m->sel = best;
     break;
   }
+  case GTCACA_WIDGET_EDITOR: {
+    gtcaca_editor_widget_t *e = (gtcaca_editor_widget_t *)hit;
+    int pos = gtcaca_editor_position_from_point(e, mx, my);
+    _focus_widget_in_window(hit);
+    gtcaca_editor_set_empty_selection(e, pos);   /* place the caret, clear selection */
+    g_drag_editor = e;                            /* begin a possible click-drag */
+    g_drag_anchor = pos;
+    break;
+  }
   default:
     /* Entry, TextView, TextList, ProgressBar, Label, etc.: just focus. */
     _focus_widget_in_window(hit);
     break;
   }
 }
+
+/* Left button held + moved over the editor: extend the selection to the cursor. */
+static void _gtcaca_handle_mouse_motion(int mx, int my)
+{
+  int pos;
+  if (!g_drag_editor) return;
+  pos = gtcaca_editor_position_from_point(g_drag_editor, mx, my);
+  gtcaca_editor_set_selection(g_drag_editor, pos, g_drag_anchor);  /* caret=pos, anchor=press */
+}
+
+static void _gtcaca_handle_mouse_release(void) { g_drag_editor = NULL; }
 
 void gtcaca_main(void)
 {
@@ -775,6 +801,13 @@ void gtcaca_main(void)
             caca_get_mouse_y(gmo.dp),
             caca_get_event_mouse_button(&ev));
           gtcaca_redraw();
+        } else if (evtype & CACA_EVENT_MOUSE_MOTION) {
+          if (g_drag_editor) {   /* only redraw while a drag-select is in progress */
+            _gtcaca_handle_mouse_motion(caca_get_mouse_x(gmo.dp), caca_get_mouse_y(gmo.dp));
+            gtcaca_redraw();
+          }
+        } else if (evtype & CACA_EVENT_MOUSE_RELEASE) {
+          _gtcaca_handle_mouse_release();
         }
         continue;
       }

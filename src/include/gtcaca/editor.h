@@ -277,6 +277,11 @@ int gtcaca_editor_get_current_line(gtcaca_editor_widget_t *w);
    the line end when the line is shorter than `column` (cf. SCI_FINDCOLUMN). */
 int gtcaca_editor_find_column(gtcaca_editor_widget_t *w, int line, int column);
 
+/* document position under screen cell (sx,sy): accounts for the border, the
+   line-number/fold margins, vertical scroll, soft wrap and horizontal scroll.
+   Clicks outside the text area clamp into it. Used for mouse click-to-position. */
+int gtcaca_editor_position_from_point(gtcaca_editor_widget_t *w, int sx, int sy);
+
 /* ── Rectangular (column-box) selection ──────────────────────────────────────
    The box has the caret and anchor as opposite corners. Turn the mode on, move
    the caret (extending) to size the box, then apply one of the ops below. */

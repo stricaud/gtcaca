@@ -66,8 +66,9 @@ int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     if (bi >= 0 && g_buffers[bi].pane >= 0) focus_pane(g_buffers[bi].pane);
   }
 
-  /* incremental search and the minibuffer take keys first */
+  /* incremental search, query-replace stepping and the minibuffer take keys first */
   if (g_isearch)   return isearch_key(ed, key);
+  if (g_qr_active) return query_replace_key(ed, key);
   if (g_mb_active) return minibuffer_key(key);
 
   /* help viewer: read-only and scrollable — q/Esc close it, C-s searches, and
@@ -167,7 +168,7 @@ int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     (void)take_prefix();   /* consume any armed count (M- commands run once) */
     g_meta = 0;
     switch (key) {
-    case '%':               start_replace();   return 1;  /* M-% query replace */
+    case '%':               start_query_replace(); return 1;  /* M-% query replace (y/n/!/./q) */
     case 'w': case 'W':     copy_region(ed);   return 1;  /* M-w copy region   */
     case 'f': case 'F':     move(ed, gtcaca_editor_word_right, gtcaca_editor_word_right_extend); return 1; /* M-f */
     case 'b': case 'B':     move(ed, gtcaca_editor_word_left,  gtcaca_editor_word_left_extend);  return 1; /* M-b */

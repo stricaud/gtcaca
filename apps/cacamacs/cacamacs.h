@@ -116,6 +116,7 @@ extern long  g_prefix_arg;
 extern char g_message[128];
 extern int  g_bottom_reserve;   /* rows kept clear above the status bar */
 extern int g_isearch;
+extern int g_qr_active;          /* query-replace stepping is in progress */
 extern int g_mb_active;
 
 /* games (games.c) */
@@ -170,6 +171,9 @@ void start_find_file(void);
 void start_isearch(gtcaca_editor_widget_t *ed, int dir);
 void start_mx(void);
 void start_replace(void);
+int query_replace_key(gtcaca_editor_widget_t *ed, int key);
+void start_query_replace(void);
+void start_query_replace_regexp(void);
 void start_string_rectangle(void);
 void string_rect_done(const char *s);
 void start_minibuffer(const char *prompt, void (*cb)(const char *));
