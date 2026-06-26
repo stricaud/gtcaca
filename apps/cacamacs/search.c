@@ -72,19 +72,56 @@ int isearch_key(gtcaca_editor_widget_t *ed, int key)
 int g_mb_active = 0;
 static char  g_mb_prompt[64], g_mb_buf[PATH_MAX];
 static int   g_mb_len = 0;
+static int   g_mb_point = 0;           /* caret index within g_mb_buf (0..len) */
 static int   g_mb_complete = 0;        /* Tab does filename completion */
+static int   g_mb_meta = 0;            /* an Esc (Meta) prefix is pending */
 static void (*g_mb_cb)(const char *) = NULL;
 
-void mb_status(void) { snprintf(g_message, sizeof g_message, "%s%s", g_mb_prompt, g_mb_buf); }
+/* Render the prompt + text with a caret bar (▏) drawn at point. */
+void mb_status(void)
+{
+  char shown[200];
+  int p = g_mb_point; if (p < 0) p = 0; if (p > g_mb_len) p = g_mb_len;
+  snprintf(shown, sizeof shown, "%.*s\xe2\x96\x8f%s", p, g_mb_buf, g_mb_buf + p);
+  snprintf(g_message, sizeof g_message, "%s%s", g_mb_prompt, shown);
+}
+
+/* A word is a run of alphanumerics; `_`, `/`, `.`, … are boundaries, so on
+   "foo_bar" backward-kill leaves "foo_" and a second one removes the "_". */
+static void mb_kill_word_left(void)
+{
+  int i = g_mb_point, start = g_mb_point;
+  if (i <= 0) return;
+  if (isalnum((unsigned char)g_mb_buf[i - 1]))
+    while (i > 0 &&  isalnum((unsigned char)g_mb_buf[i - 1])) i--;   /* the word; stop at _ / . */
+  else
+    while (i > 0 && !isalnum((unsigned char)g_mb_buf[i - 1])) i--;   /* a run of separators */
+  memmove(g_mb_buf + i, g_mb_buf + start, (size_t)(g_mb_len - start) + 1);
+  g_mb_len -= (start - i); g_mb_point = i;
+}
+
+/* Forward-kill the word right of point, with the same `_`/`/` boundaries. */
+static void mb_kill_word_right(void)
+{
+  int e = g_mb_point;
+  if (e >= g_mb_len) return;
+  if (isalnum((unsigned char)g_mb_buf[e]))
+    while (e < g_mb_len &&  isalnum((unsigned char)g_mb_buf[e])) e++;
+  else
+    while (e < g_mb_len && !isalnum((unsigned char)g_mb_buf[e])) e++;
+  memmove(g_mb_buf + g_mb_point, g_mb_buf + e, (size_t)(g_mb_len - e) + 1);
+  g_mb_len -= (e - g_mb_point);
+}
 
 /* Optional initial content for the prompt. */
 void start_minibuffer_init(const char *prompt, void (*cb)(const char *), int complete, const char *initial)
 {
-  g_mb_active = 1; g_mb_cb = cb; g_mb_complete = complete;
+  g_mb_active = 1; g_mb_cb = cb; g_mb_complete = complete; g_mb_meta = 0;
   strncpy(g_mb_prompt, prompt, sizeof g_mb_prompt - 1); g_mb_prompt[sizeof g_mb_prompt - 1] = '\0';
   if (initial) { strncpy(g_mb_buf, initial, sizeof g_mb_buf - 1); g_mb_buf[sizeof g_mb_buf - 1] = '\0'; }
   else g_mb_buf[0] = '\0';
   g_mb_len = (int)strlen(g_mb_buf);
+  g_mb_point = g_mb_len;
   mb_status();
 }
 void start_minibuffer(const char *prompt, void (*cb)(const char *)) { start_minibuffer_init(prompt, cb, 0, NULL); }
@@ -165,7 +202,27 @@ void minibuffer_complete_command(void)
 
 int minibuffer_key(int key)
 {
+  if (g_mb_meta) {                 /* Esc (Meta) prefix is pending */
+    g_mb_meta = 0;
+    switch (key) {
+    case CACA_KEY_BACKSPACE: case CACA_KEY_DELETE:               /* M-DEL backward-kill-word */
+      mb_kill_word_left();  mb_status(); return 1;
+    case 'd': case 'D':                                          /* M-d forward-kill-word */
+      mb_kill_word_right(); mb_status(); return 1;
+    case 'b': case 'B':                                          /* M-b / M-f word motion */
+      while (g_mb_point > 0 && !isalnum((unsigned char)g_mb_buf[g_mb_point - 1])) g_mb_point--;
+      while (g_mb_point > 0 &&  isalnum((unsigned char)g_mb_buf[g_mb_point - 1])) g_mb_point--;
+      mb_status(); return 1;
+    case 'f': case 'F':
+      while (g_mb_point < g_mb_len && !isalnum((unsigned char)g_mb_buf[g_mb_point])) g_mb_point++;
+      while (g_mb_point < g_mb_len &&  isalnum((unsigned char)g_mb_buf[g_mb_point])) g_mb_point++;
+      mb_status(); return 1;
+    default:                                                     /* Esc-anything else cancels */
+      g_mb_active = 0; snprintf(g_message, sizeof g_message, "Quit"); return 1;
+    }
+  }
   switch (key) {
+  case CACA_KEY_ESCAPE: g_mb_meta = 1; mb_status(); return 1;    /* Meta prefix (Esc Esc cancels) */
   case CACA_KEY_RETURN:
   case 10: {
     void (*cb)(const char *) = g_mb_cb;
@@ -176,13 +233,30 @@ int minibuffer_key(int key)
     return 1;
   }
   case CACA_KEY_TAB:    if (g_mb_complete == 2) minibuffer_complete_command();
-                       else if (g_mb_complete) minibuffer_complete_path(); return 1;
-  case CACA_KEY_CTRL_G:
-  case CACA_KEY_ESCAPE: g_mb_active = 0; snprintf(g_message, sizeof g_message, "Quit"); return 1;
-  case CACA_KEY_BACKSPACE:
-  case CACA_KEY_DELETE:  if (g_mb_len > 0) g_mb_buf[--g_mb_len] = '\0'; mb_status(); return 1;
+                       else if (g_mb_complete) minibuffer_complete_path();
+                       g_mb_point = g_mb_len; return 1;
+  case CACA_KEY_CTRL_G: g_mb_active = 0; snprintf(g_message, sizeof g_message, "Quit"); return 1;
+  case CACA_KEY_LEFT:  case 2 /* C-b */: if (g_mb_point > 0)        g_mb_point--; mb_status(); return 1;
+  case CACA_KEY_RIGHT: case 6 /* C-f */: if (g_mb_point < g_mb_len) g_mb_point++; mb_status(); return 1;
+  case CACA_KEY_HOME:  case 1 /* C-a */: g_mb_point = 0;       mb_status(); return 1;
+  case CACA_KEY_END:   case 5 /* C-e */: g_mb_point = g_mb_len; mb_status(); return 1;
+  case CACA_KEY_BACKSPACE:                                          /* delete char before point */
+    if (g_mb_point > 0) {
+      memmove(g_mb_buf + g_mb_point - 1, g_mb_buf + g_mb_point, (size_t)(g_mb_len - g_mb_point) + 1);
+      g_mb_len--; g_mb_point--;
+    }
+    mb_status(); return 1;
+  case CACA_KEY_DELETE: case 4 /* C-d */:                           /* delete char at point */
+    if (g_mb_point < g_mb_len) {
+      memmove(g_mb_buf + g_mb_point, g_mb_buf + g_mb_point + 1, (size_t)(g_mb_len - g_mb_point));
+      g_mb_len--;
+    }
+    mb_status(); return 1;
   default:
-    if (key >= 32 && key <= 126 && g_mb_len < (int)sizeof g_mb_buf - 1) { g_mb_buf[g_mb_len++] = (char)key; g_mb_buf[g_mb_len] = '\0'; }
+    if (key >= 32 && key <= 126 && g_mb_len < (int)sizeof g_mb_buf - 1) {  /* insert at point */
+      memmove(g_mb_buf + g_mb_point + 1, g_mb_buf + g_mb_point, (size_t)(g_mb_len - g_mb_point) + 1);
+      g_mb_buf[g_mb_point] = (char)key; g_mb_len++; g_mb_point++;
+    }
     mb_status();
     return 1;
   }

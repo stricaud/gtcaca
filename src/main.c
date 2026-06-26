@@ -776,13 +776,106 @@ static void _gtcaca_handle_mouse_motion(int mx, int my)
 
 static void _gtcaca_handle_mouse_release(void) { g_drag_editor = NULL; }
 
+/* One key's worth of the application keymap (the editor/widgets see it). */
+static void _dispatch_key(int key, int *quit)
+{
+  gtcaca_widget_t *widget;
+  switch (key) {
+  case 'q':
+  case 'Q': {
+    int text_focused = 0;
+    CDL_FOREACH(gmo.widgets_list, widget) {
+      if (widget->has_focus &&
+          (widget->type == GTCACA_WIDGET_ENTRY || widget->type == GTCACA_WIDGET_EDITOR)) {
+        text_focused = 1; break;
+      }
+    }
+    if (text_focused) gtcaca_widgets_handle_key_press(key);
+    else *quit = 1;
+    break;
+  }
+  case CACA_KEY_ESCAPE: {
+    int handled = 0;
+    if (_focused_is_editor()) { gtcaca_widgets_handle_key_press(key); break; }
+    CDL_FOREACH(gmo.widgets_list, widget) {
+      if (widget->type == GTCACA_WIDGET_MENU && widget->has_focus) {
+        ((gtcaca_menu_widget_t *)widget)->is_open = 0;
+        ((gtcaca_menu_widget_t *)widget)->has_focus = 0;
+        handled = 1; break;
+      }
+      if (widget->type == GTCACA_WIDGET_COMBOBOX) {
+        gtcaca_combobox_widget_t *cb = (gtcaca_combobox_widget_t *)widget;
+        if (cb->is_open) { cb->is_open = 0; handled = 1; break; }
+      }
+    }
+    if (!handled) *quit = 1;
+    break;
+  }
+  default:
+    gtcaca_widgets_handle_key_press(key);
+    break;
+  }
+}
+
+/* ── mouse via the terminal's SGR protocol (1006), bypassing libcaca ──────────
+ * libcaca's own wheel decoder silently drops one scroll direction and reports
+ * garbage coordinates (verified on macOS terminals), so we turn its mouse off,
+ * enable SGR mouse reporting ourselves, and parse the "ESC [ < b ; x ; y ; M|m"
+ * reports out of the key stream. SGR gives exact coordinates and *both* wheel
+ * directions. */
+static int _next_key(int *k)
+{
+  caca_event_t e;
+  if (!caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &e, 30000)) return 0;  /* 30 ms */
+  *k = caca_get_event_key_ch(&e);
+  return 1;
+}
+
+static void _handle_sgr_mouse(int b, int x, int y, int press)
+{
+  if (b & 0x40) {                                /* wheel: 64 = up, 65 = down */
+    _gtcaca_handle_mouse_press(x, y, (b & 1) ? 4 : 5);   /* down -> 4, up -> 5 */
+    gtcaca_redraw();
+  } else if (b & 0x20) {                          /* motion while a button is held (drag) */
+    if (g_drag_editor) { _gtcaca_handle_mouse_motion(x, y); gtcaca_redraw(); }
+  } else if (press) {                             /* button down: 0 left, 1 middle, 2 right */
+    _gtcaca_handle_mouse_press(x, y, (b & 3) + 1);
+    gtcaca_redraw();
+  } else {                                        /* button release */
+    _gtcaca_handle_mouse_release();
+  }
+}
+
+/* We just read an ESC. Peek ahead a few ms: if it begins an SGR mouse report,
+   parse and handle it; otherwise dispatch the ESC (and any peeked key) as keys
+   so Meta/Escape still work. */
+static void _esc_or_sgr_mouse(int *quit)
+{
+  int k, b = 0, x = 0, y = 0, field = 0, fin = 0, i;
+  if (!_next_key(&k)) { _dispatch_key(CACA_KEY_ESCAPE, quit); return; }
+  if (k != '[')       { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key(k, quit); return; }
+  if (!_next_key(&k)) { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); return; }
+  if (k != '<')       { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); _dispatch_key(k, quit); return; }
+  for (i = 0; i < 32; i++) {
+    if (!_next_key(&k)) return;                   /* truncated report: drop it */
+    if      (k >= '0' && k <= '9') { if (field == 0) b = b*10 + (k-'0'); else if (field == 1) x = x*10 + (k-'0'); else y = y*10 + (k-'0'); }
+    else if (k == ';')             field++;
+    else if (k == 'M' || k == 'm') { fin = k; break; }
+    else return;                                 /* malformed: drop it */
+  }
+  if (fin) _handle_sgr_mouse(b, x - 1, y - 1, fin == 'M');   /* SGR coords are 1-based */
+}
+
 void gtcaca_main(void)
 {
   caca_event_t ev;
   int quit = 0;
   int key;
-  gtcaca_widget_t *widget = NULL;
-  caca_set_mouse(gmo.dp, 1);
+
+  /* Drive the mouse via SGR ourselves (see above); libcaca's decoder is off. */
+  caca_set_mouse(gmo.dp, 0);
+  fputs("\033[?1002h\033[?1006h", stdout);   /* button-event tracking + SGR encoding */
+  fflush(stdout);
 
   gtcaca_redraw();
 
@@ -814,62 +907,17 @@ void gtcaca_main(void)
 
       key = caca_get_event_key_ch(&ev);
 
-      switch (key) {
-      case 'q':
-      case 'Q': {
-        int text_focused = 0;
-        CDL_FOREACH(gmo.widgets_list, widget) {
-          if (widget->has_focus &&
-              (widget->type == GTCACA_WIDGET_ENTRY ||
-               widget->type == GTCACA_WIDGET_EDITOR)) {
-            text_focused = 1;
-            break;
-          }
-        }
-        if (text_focused)
-          gtcaca_widgets_handle_key_press(key);
-        else
-          quit = 1;
-        break;
-      }
-      case CACA_KEY_ESCAPE: {
-        int handled = 0;
-        /* In the editor, Esc is the widget's (e.g. Emacs keyboard-quit), not
-           an application quit. */
-        if (_focused_is_editor()) {
-          gtcaca_widgets_handle_key_press(key);
-          break;
-        }
-        CDL_FOREACH(gmo.widgets_list, widget) {
-          if (widget->type == GTCACA_WIDGET_MENU && widget->has_focus) {
-            gtcaca_menu_widget_t *m = (gtcaca_menu_widget_t *)widget;
-            m->is_open = 0;
-            m->has_focus = 0;
-            handled = 1;
-            break;
-          }
-          if (widget->type == GTCACA_WIDGET_COMBOBOX) {
-            gtcaca_combobox_widget_t *cb = (gtcaca_combobox_widget_t *)widget;
-            if (cb->is_open) {
-              cb->is_open = 0;
-              handled = 1;
-              break;
-            }
-          }
-        }
-        if (!handled) quit = 1;
-        break;
-      }
-      default:
-        gtcaca_widgets_handle_key_press(key);
-        break;
-      }
+      /* An ESC may be a real Esc/Meta or the start of an SGR mouse report. */
+      if (key == CACA_KEY_ESCAPE) { _esc_or_sgr_mouse(&quit); gtcaca_redraw(); continue; }
 
+      _dispatch_key(key, &quit);
       gtcaca_redraw();
     }
     usleep(10000);
   }
 
+  fputs("\033[?1002l\033[?1006l", stdout);   /* restore: disable SGR mouse reporting */
+  fflush(stdout);
   caca_set_mouse(gmo.dp, 0);
   caca_free_display(gmo.dp);
 }

@@ -177,6 +177,11 @@ void start_query_replace(void);
 void start_query_replace_regexp(void);
 void spell_word(gtcaca_editor_widget_t *ed);
 int  spell_key(gtcaca_editor_widget_t *ed, int key);
+
+/* theme.c — per-user colour theme (~/.ccm/theme) */
+void ccm_theme_load(void);
+void ccm_theme_apply_global(void);
+void ccm_theme_apply_editor(gtcaca_editor_widget_t *ed);
 void start_string_rectangle(void);
 void string_rect_done(const char *s);
 void start_minibuffer(const char *prompt, void (*cb)(const char *));

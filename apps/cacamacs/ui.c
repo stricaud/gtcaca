@@ -235,6 +235,7 @@ int buffer_create(const char *path)
   gtcaca_editor_set_caret_line_back(b->ed, CACA_BLACK);
   gtcaca_editor_set_edge_column(b->ed, g_cfg_edge);
   gtcaca_editor_set_tab_width(b->ed, g_cfg_tab > 0 ? g_cfg_tab : 8);
+  ccm_theme_apply_editor(b->ed);                 /* ~/.ccm/theme colours, if any */
   gtcaca_widget_hide(GTCACA_WIDGET(b->ed));
   if (path) {
     char *c = read_file(path);

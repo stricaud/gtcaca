@@ -150,6 +150,8 @@ int main(int argc, char **argv)
   gmo.theme.textview.fg      = CACA_LIGHTGRAY;
   gtcaca_application_new("cacamacs");
   load_config();
+  ccm_theme_load();          /* ~/.ccm/theme overrides the defaults above */
+  ccm_theme_apply_global();  /* tint the editor surface before editors exist */
 
   if (arg) {
     struct stat st;
