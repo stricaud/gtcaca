@@ -57,7 +57,7 @@ JSON     C-x p pretty-print (.json/.jsonl open in JSON mode automatically)
 Complete Tab (after a word)  — Up/Down choose, Enter/Tab accept, Esc cancel
 ```
 
-## Configuration — `~/.cacamacs/config.json`
+## Configuration — `~/.ccm/cacamacs-config.json`
 
 Controls indentation, with optional per-extension overrides:
 
@@ -93,7 +93,7 @@ containing a `package.json` that declares `contributes.languages` (a
 It scans these roots, in order, so **installed VSCode extensions work directly**:
 
 ```
-~/.cacamacs/extensions      (cacamacs' own)
+~/.ccm/extensions      (cacamacs' own)
 ~/.vscode/extensions        (VSCode)
 ~/.vscode-oss/extensions    (VSCodium)
 ~/.cursor/extensions        (Cursor)
@@ -107,8 +107,8 @@ matches, the modeline says so. Two sample extensions ship in
 copy one into a root to try it:
 
 ```sh
-mkdir -p ~/.cacamacs/extensions
-cp -r examples/cacamacs-extensions/python-0.0.1 ~/.cacamacs/extensions/
+mkdir -p ~/.ccm/extensions
+cp -r examples/cacamacs-extensions/python-0.0.1 ~/.ccm/extensions/
 ./build/apps/ccm somefile.py
 ```
 

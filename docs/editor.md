@@ -213,7 +213,7 @@ widget's background until you set one.
 Drop an extension folder under:
 
 ```
-~/.cacamacs/extensions/<name>-<version>/
+~/.ccm/extensions/<name>-<version>/
     package.json
     language-configuration.json
 ```
@@ -232,7 +232,7 @@ Drop an extension folder under:
 }
 ```
 
-Opening a file makes `cacamacs` scan every `~/.cacamacs/extensions/*/package.json`,
+Opening a file makes `cacamacs` scan every `~/.ccm/extensions/*/package.json`,
 match the file's suffix against each language's `extensions`, load that
 language's `configuration` and enable colourization (first match wins; multiple
 languages and extensions are supported).
@@ -240,8 +240,8 @@ languages and extensions are supported).
 A ready-to-use sample ships in the repo:
 
 ```sh
-mkdir -p ~/.cacamacs/extensions
-cp -r examples/cacamacs-extensions/c-lang-0.0.1 ~/.cacamacs/extensions/
+mkdir -p ~/.ccm/extensions
+cp -r examples/cacamacs-extensions/c-lang-0.0.1 ~/.ccm/extensions/
 ./build/apps/ccm src/editor.c          # opens coloured
 ```
 

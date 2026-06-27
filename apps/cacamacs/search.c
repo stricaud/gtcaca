@@ -175,7 +175,7 @@ void minibuffer_complete_path(void)
 /* M-x command names offered by completion (aliases still run, see mx_done) */
 static const char *g_mx_commands[] = { "help", "snake", "sokoban", "describe-bindings",
                                        "query-replace", "query-replace-regexp",
-                                       "replace-string", NULL };
+                                       "replace-string", "goto-line", NULL };
 
 void minibuffer_complete_command(void)
 {
@@ -300,6 +300,25 @@ void start_find_file(void)
   }
   start_minibuffer_init("Find file: ", find_file_done, 1, defdir);
 }
+
+/* ── goto-line (M-g M-g / M-g g / M-x goto-line) ────────────────────────────── */
+
+void goto_line_done(const char *input)
+{
+  long ln;
+  int nlines;
+  char *end;
+  if (!g_ed || !input || !input[0]) { g_message[0] = '\0'; return; }
+  ln = strtol(input, &end, 10);
+  if (end == input) { snprintf(g_message, sizeof g_message, "Not a line number: %s", input); return; }
+  nlines = gtcaca_editor_get_line_count(g_ed);
+  if (ln < 1) ln = 1;
+  if (ln > nlines) ln = nlines;
+  gtcaca_editor_goto_line(g_ed, (int)(ln - 1));   /* goto_line is 0-based */
+  snprintf(g_message, sizeof g_message, "Line %ld", ln);
+}
+
+void start_goto_line(void) { start_minibuffer("Goto line: ", goto_line_done); }
 
 /* ── replace (two-phase prompt; uses the search/replace API) ───────────────── */
 
@@ -440,6 +459,8 @@ void mx_done(const char *cmd)
     start_query_replace_regexp();
   else if (!strcmp(cmd, "replace-string"))
     start_replace();
+  else if (!strcmp(cmd, "goto-line"))
+    start_goto_line();
   else if (cmd[0])
     snprintf(g_message, sizeof g_message, "No command: %s  (try: help, snake, sokoban, query-replace)", cmd);
 }

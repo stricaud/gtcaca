@@ -20,6 +20,8 @@ static struct {
   col_t bg, fg, comment, string, number, keyword, bracket, op, sel_fg, sel_bg, curline;
 } T;
 
+static char g_theme_warn[128] = "";   /* first parse mistake, shown at startup */
+
 /* the 16 ANSI colours as 12-bit (0x0RGB) */
 static const uint16_t ANSI12[16] = {
   0x000,0x00a,0x0a0,0x0aa,0xa00,0xa0a,0xa50,0xaaa,
@@ -140,10 +142,17 @@ void ccm_theme_load(void)
   fclose(f);
   T.loaded = 1;
 
-  if (nbad) {   /* surface mistakes: on the status line at startup and on stderr */
-    snprintf(g_message, sizeof g_message, "~/.ccm/theme: %s%s", badbuf, nbad > 1 ? "  (+ more)" : "");
-    fprintf(stderr, "ccm: ~/.ccm/theme: %s%s\n", badbuf, nbad > 1 ? " (and more)" : "");
-  }
+  if (nbad)     /* stash the mistake; shown once the UI is up (see ccm_theme_show_warning) */
+    snprintf(g_theme_warn, sizeof g_theme_warn, "~/.ccm/theme: %s%s", badbuf, nbad > 1 ? "  (+ more)" : "");
+}
+
+/* Put any theme-file warning on the status line. Call it last in startup, after
+   the buffer/language messages, so the warning isn't immediately overwritten. */
+void ccm_theme_show_warning(void)
+{
+  if (!g_theme_warn[0]) return;
+  snprintf(g_message, sizeof g_message, "%s", g_theme_warn);
+  if (g_ed) refresh_modeline(g_ed, NULL);   /* rebuild the status text with the warning */
 }
 
 /* run before any editors are created: tints the shared editor surface (ANSI) */

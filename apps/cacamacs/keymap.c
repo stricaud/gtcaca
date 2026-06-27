@@ -164,6 +164,16 @@ int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     }
   }
 
+  /* second key of an M-g chord: M-g M-g or M-g g -> goto-line.  (The second g of
+     M-g M-g arrives with Esc/Meta pending, which we clear here. Esc passes
+     through so it can arm Meta for that second g.) */
+  if (g_goto_prefix && key != CACA_KEY_ESCAPE) {
+    g_goto_prefix = 0; g_meta = 0;
+    if (key == 'g' || key == 'G') { start_goto_line(); return 1; }
+    snprintf(g_message, sizeof g_message, "M-g %c is undefined", key >= 32 ? key : '?');
+    return 1;
+  }
+
   /* second key of a Meta (Esc) chord — Esc then a key acts as M-<key> */
   if (g_meta) {
     (void)take_prefix();   /* consume any armed count (M- commands run once) */
@@ -183,6 +193,7 @@ int on_key(gtcaca_editor_widget_t *ed, int key, void *ud)
     case 'l': case 'L':     case_word(ed, 0);    return 1;  /* M-l  downcase word  */
     case ';':               comment_dwim(ed);    return 1;  /* M-;  comment-dwim   */
     case 'x': case 'X':     start_mx();          return 1;  /* M-x  run command    */
+    case 'g': case 'G':     g_goto_prefix = 1; snprintf(g_message, sizeof g_message, "M-g-"); return 1;  /* M-g … */
     case '<':               move(ed, gtcaca_editor_document_start, gtcaca_editor_document_start_extend); return 1; /* M-< */
     case '>':               move(ed, gtcaca_editor_document_end,   gtcaca_editor_document_end_extend);   return 1; /* M-> */
     case CACA_KEY_ESCAPE:   keyboard_quit(ed); return 1;  /* Esc Esc cancels   */

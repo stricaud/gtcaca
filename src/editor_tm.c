@@ -35,7 +35,9 @@ typedef struct { int group; int style; } tm_cap;
 typedef struct {
   int       kind;
   regex_t  *re_match;     /* MATCH match, or BEGINEND begin */
-  regex_t  *re_end;       /* BEGINEND end */
+  regex_t  *re_end;       /* BEGINEND end (used when it has no \N back-refs) */
+  char     *end_src;      /* BEGINEND end source, for rebuilding \1.. back-refs */
+  int       line_bounded; /* end can match a newline ($/\n) -> close it at EOL */
   int       style;        /* mapped from `name`        */
   int       content_style;/* mapped from `contentName`, or -1 */
   tm_cap   *caps;    int ncaps;     /* captures / beginCaptures */
@@ -55,8 +57,10 @@ struct _gtcaca_editor_grammar_t {
 static int _scope_style(const char *scope)
 {
   if (!scope) return -1;
-  if (!strncmp(scope, "comment", 7))            return GTCACA_EDITOR_STYLE_COMMENT;
-  if (!strncmp(scope, "string", 6))             return GTCACA_EDITOR_STYLE_STRING;
+  /* substring so the '#'/quotes (punctuation.definition.comment / .string) take
+     the comment / string colour too, not the generic punctuation colour */
+  if (strstr(scope, "comment"))                 return GTCACA_EDITOR_STYLE_COMMENT;
+  if (strstr(scope, "string"))                  return GTCACA_EDITOR_STYLE_STRING;
   if (!strncmp(scope, "constant.numeric", 16))  return GTCACA_EDITOR_STYLE_NUMBER;
   if (!strncmp(scope, "constant.language", 17)) return GTCACA_EDITOR_STYLE_KEYWORD;
   if (!strncmp(scope, "constant", 8))           return GTCACA_EDITOR_STYLE_NUMBER;
@@ -83,6 +87,43 @@ static regex_t *_compile(const char *pat)
                 ONIG_OPTION_CAPTURE_GROUP, ONIG_ENCODING_UTF8, ONIG_SYNTAX_ONIGURUMA, &einfo);
   if (rc != ONIG_NORMAL) return NULL;
   return re;
+}
+
+/* Build a concrete end regex from an end pattern that uses \1.. back-references,
+   substituting each \N with the (regex-escaped) text the begin rule captured in
+   group N. Returns NULL if the pattern has no back-refs (use the rule's static
+   re_end then) or on failure. `base` is the begin-search base (line start);
+   `reg` holds the begin match's groups. Fixes e.g. Python strings whose end is
+   `\1` (close with the same quote that opened). */
+static regex_t *_build_dynamic_end(const char *src, OnigRegion *reg, const char *base)
+{
+  char out[2048];
+  size_t o = 0;
+  const char *p;
+  int has = 0;
+
+  if (!src || !reg) return NULL;
+  for (p = src; p[0]; p++) if (p[0] == '\\' && p[1] >= '1' && p[1] <= '9') { has = 1; break; }
+  if (!has) return NULL;
+
+  for (p = src; *p && o < sizeof out - 8; ) {
+    if (p[0] == '\\' && p[1] >= '1' && p[1] <= '9') {
+      int gn = p[1] - '0';
+      if (gn < reg->num_regs && reg->beg[gn] >= 0) {
+        const char *cap = base + reg->beg[gn];
+        int caplen = reg->end[gn] - reg->beg[gn], k;
+        for (k = 0; k < caplen && o < sizeof out - 4; k++) {
+          if (strchr(".^$*+?()[]{}|\\/-", cap[k])) out[o++] = '\\';   /* escape metachars */
+          out[o++] = cap[k];
+        }
+      }
+      p += 2;
+    } else {
+      out[o++] = *p++;
+    }
+  }
+  out[o] = '\0';
+  return _compile(out);
 }
 
 static int _grammar_add(gtcaca_editor_grammar_t *g, gtcaca_json_value *pat);
@@ -145,6 +186,11 @@ static int _grammar_add(gtcaca_editor_grammar_t *g, gtcaca_json_value *pat)
     r.kind = RULE_BEGINEND;
     r.re_match = _compile(begin);
     r.re_end   = _compile(end);
+    r.end_src  = strdup(end);   /* kept so \1.. back-refs can be substituted per match */
+    /* a rule whose end anchors on a newline (\n) or line end ($) is meant to be
+       line-bounded; we use that to stop a stuck context (e.g. a regex char-class
+       our simplified engine can't fully close) from leaking past its line. */
+    r.line_bounded = (strstr(end, "\\n") != NULL) || (strchr(end, '$') != NULL);
     r.style = _scope_style(name);
     r.content_style = _scope_style(content);
     _parse_caps(gtcaca_json_object_get(pat, "beginCaptures"), &r.caps, &r.ncaps);
@@ -376,6 +422,7 @@ void gtcaca_editor_grammar_free(gtcaca_editor_grammar_t *g)
   for (i = 0; i < g->nrules; i++) {
     if (g->rules[i].re_match) onig_free(g->rules[i].re_match);
     if (g->rules[i].re_end)   onig_free(g->rules[i].re_end);
+    free(g->rules[i].end_src);
     free(g->rules[i].caps);
     free(g->rules[i].endcaps);
     free(g->rules[i].patterns);
@@ -442,6 +489,7 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
   /* context stack: rule index of the active begin/end (-1 = root) + its style */
   int stack[TM_MAX_STACK]; int sp = 0;
   int style_stack[TM_MAX_STACK];
+  regex_t *end_stack[TM_MAX_STACK];   /* per-context end regex when it has back-refs (else NULL) */
   OnigRegion *region = onig_region_new();
 
   if (!g) return;
@@ -452,13 +500,14 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
   }
   memset(w->styles, GTCACA_EDITOR_STYLE_DEFAULT, (size_t)len);
 
-  stack[0] = -1; style_stack[0] = GTCACA_EDITOR_STYLE_DEFAULT;  /* root */
+  stack[0] = -1; style_stack[0] = GTCACA_EDITOR_STYLE_DEFAULT; end_stack[0] = NULL;  /* root */
 
   line_count = gtcaca_editor_get_line_count(w);
   for (line = 0; line < line_count; line++) {
     int ls = gtcaca_editor_position_from_line(w, line);
     int le = gtcaca_editor_get_line_end_position(w, line);
     int pos = ls;
+    int prev_pos = -1, stall = 0;   /* break any zero-width match loop */
 
     while (pos <= le) {
       int active_style = style_stack[sp];
@@ -489,9 +538,12 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
           }
         }
       }
-      /* the active context's end pattern (lower priority on ties) */
-      if (stack[sp] != -1 && g->rules[stack[sp]].re_end) {
-        int rc = onig_search(g->rules[stack[sp]].re_end, (const OnigUChar *)(t + ls), (const OnigUChar *)(t + le),
+      /* the active context's end pattern (lower priority on ties); a per-context
+         regex (with \N back-refs filled in) takes precedence over the static one */
+      regex_t *endre = (stack[sp] != -1)
+                         ? (end_stack[sp] ? end_stack[sp] : g->rules[stack[sp]].re_end) : NULL;
+      if (endre) {
+        int rc = onig_search(endre, (const OnigUChar *)(t + ls), (const OnigUChar *)(t + le),
                              (const OnigUChar *)(t + pos), (const OnigUChar *)(t + le), region, ONIG_OPTION_NONE);
         if (rc >= 0) {
           int s = ls + region->beg[0];
@@ -511,7 +563,7 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
         tm_rule *r = &g->rules[stack[sp]];
         _fill(w, best_start, best_end, r->style >= 0 ? r->style : active_style);
         _apply_caps(w, best_region, ls, r->endcaps, r->nendcaps);
-        if (sp > 0) sp--;
+        if (sp > 0) { if (end_stack[sp]) { onig_free(end_stack[sp]); end_stack[sp] = NULL; } sp--; }
       } else {
         tm_rule *r = &g->rules[best_rule];
         _fill(w, best_start, best_end, r->style >= 0 ? r->style : active_style);
@@ -521,13 +573,34 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
           stack[sp] = best_rule;
           style_stack[sp] = r->content_style >= 0 ? r->content_style
                           : (r->style >= 0 ? r->style : active_style);
+          /* if this rule's end uses \N back-refs, bind them to what begin captured */
+          end_stack[sp] = _build_dynamic_end(r->end_src, best_region, t + ls);
         }
       }
 
       if (best_region) onig_region_free(best_region, 1);
-      pos = (best_end > best_start) ? best_end : best_start + 1;  /* avoid zero-width loop */
+      /* Advance. A zero-width END (a lookahead like `(?=\))`) must NOT step past
+         its anchor char, or an enclosing context that ends on that same char
+         (e.g. a function call's `)`) never matches and leaks forever. Such a pop
+         still makes progress (the stack shrank), so it's safe; a zero-width
+         begin/match must advance to avoid stalling. */
+      if (best_end > best_start)      pos = best_end;
+      else if (best_is_end)           pos = best_end;          /* lookahead end: let the parent match here too */
+      else                            pos = best_start + 1;    /* zero-width begin/match: step on */
+      /* hard stall guard: if we sit on one position too long, force progress */
+      if (pos <= prev_pos) { if (++stall > 4 * TM_MAX_STACK) { pos = prev_pos + 1; stall = 0; } }
+      else                 { stall = 0; prev_pos = pos; }
+    }
+    /* close any line-bounded contexts still open at end of line, so a construct
+       our engine couldn't fully close (e.g. a regex char-class) can't leak its
+       colour onto every following line. Multi-line strings/comments (whose end
+       isn't newline-anchored) are kept open. */
+    while (sp > 0 && g->rules[stack[sp]].line_bounded) {
+      if (end_stack[sp]) { onig_free(end_stack[sp]); end_stack[sp] = NULL; }
+      sp--;
     }
   }
+  while (sp > 0) { if (end_stack[sp]) onig_free(end_stack[sp]); sp--; }   /* free open contexts' end regexes */
   onig_region_free(region, 1);
 }
 

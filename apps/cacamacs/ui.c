@@ -99,7 +99,7 @@ const char *help_text(void)
   "                              q or Esc closes this window)\n"
   "\n"
   "Motion   C-f C-b C-n C-p   C-a C-e   C-v   arrows / Home / End / PageUp / PageDown\n"
-  "         M-< / M->   beginning / end of buffer\n"
+  "         M-< / M->   beginning / end of buffer   M-g M-g (or M-x goto-line) jump to line\n"
   "         C-n / C-p step through wrapped rows when line wrap is on\n"
   "Edit     C-d delete-fwd   C-k kill-line   Backspace   Tab indent / complete\n"
   "Words    M-f / M-b move    M-d / M-DEL kill    M-u / M-l upcase / downcase\n"

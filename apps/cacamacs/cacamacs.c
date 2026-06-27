@@ -3,7 +3,8 @@
  *           with Emacs key bindings.
  *
  * Usage:
- *   cacamacs [file | directory] [language-configuration.json]
+ *   cacamacs [file | directory] [+N] [language-configuration.json]
+ *   (+N opens the file at line N, e.g.  ccm file.c +123)
  *
  * Given a directory (or C-x d), a file browser opens: Up/Down to move, Enter to
  * descend into a folder ("../" goes up) or open a file in the editor.
@@ -77,6 +78,7 @@ int             g_tab_size = 8, g_insert_spaces = 1, g_indent_size = 2; /* effec
 int   g_mark_active   = 0;
 int   g_ctrl_x        = 0;   /* C-x prefix pending */
 int   g_rect_prefix   = 0;   /* C-x r rectangle sub-prefix pending */
+int   g_goto_prefix   = 0;   /* M-g … (goto) prefix pending */
 int   g_meta          = 0;   /* Meta (Esc) prefix pending */
 char *g_killbuf       = NULL;
 int   g_macro[MACRO_MAX];
@@ -136,6 +138,7 @@ int main(int argc, char **argv)
   const char *arg = argc > 1 ? argv[1] : NULL;
   const char *open_file_path = NULL;
   int open_dir = 0;
+  long goto_line_arg = 0;
 
   gtcaca_init(&argc, &argv);
   if (arg && !strcmp(arg, "--test")) { run_test(); caca_free_display(gmo.dp); return 0; }
@@ -153,6 +156,15 @@ int main(int argc, char **argv)
   ccm_theme_load();          /* ~/.ccm/theme overrides the defaults above */
   ccm_theme_apply_global();  /* tint the editor surface before editors exist */
 
+  /* args: a file/dir plus an optional "+N" line number (vim/less style), e.g.
+     `ccm file.c +123`. The +N may appear before or after the path. */
+  arg = NULL;
+  for (i = 1; i < argc; i++) {
+    if (argv[i][0] == '+' && argv[i][1] >= '0' && argv[i][1] <= '9')
+      goto_line_arg = strtol(argv[i] + 1, NULL, 10);
+    else if (!arg)
+      arg = argv[i];
+  }
   if (arg) {
     struct stat st;
     if (stat(arg, &st) == 0 && S_ISDIR(st.st_mode)) open_dir = 1;
@@ -245,11 +257,20 @@ int main(int argc, char **argv)
   relayout();
   focus_pane(0);
 
+  /* `ccm <file> +N` — jump to line N once the buffer is open */
+  if (goto_line_arg > 0 && !open_dir && g_ed) {
+    int nl = gtcaca_editor_get_line_count(g_ed);
+    long ln = goto_line_arg > nl ? nl : goto_line_arg;
+    gtcaca_editor_goto_line(g_ed, (int)(ln - 1));
+    refresh_modeline(g_ed, NULL);   /* update L/C so the modeline isn't stale */
+  }
+
   if (open_dir) {
     if (!realpath(arg, g_curdir)) { strncpy(g_curdir, arg, sizeof g_curdir - 1); g_curdir[sizeof g_curdir - 1] = '\0'; }
     show_browser();
   }
 
+  ccm_theme_show_warning();   /* surface any ~/.ccm/theme mistake (last, so it sticks) */
   gtcaca_main();
 
   buffer_store_globals(g_cur_buf);

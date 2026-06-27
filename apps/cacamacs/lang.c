@@ -41,7 +41,7 @@ char *read_file(const char *path)
   return buf;
 }
 
-/* ── configuration (~/.cacamacs/config.json) ───────────────────────────────── */
+/* ── configuration (~/.ccm/cacamacs-config.json) ───────────────────────────────── */
 
 int _json_int(gtcaca_json_value *o, const char *key, int dflt)
 {
@@ -60,8 +60,12 @@ void load_config(void)
   char path[1024];
   gtcaca_json_value *root, *langs;
   if (!home) return;
-  snprintf(path, sizeof path, "%s/.cacamacs/config.json", home);
+  snprintf(path, sizeof path, "%s/.ccm/cacamacs-config.json", home);
   root = gtcaca_json_parse_file(path);
+  if (!root) {   /* fall back to the old location */
+    snprintf(path, sizeof path, "%s/.cacamacs/config.json", home);
+    root = gtcaca_json_parse_file(path);
+  }
   if (!root) return;   /* keep built-in defaults */
 
   g_cfg_tab    = _json_int(root, "tabSize", g_cfg_tab);
@@ -236,7 +240,7 @@ const char *langid_from_ext(const char *ext)
 }
 
 /*
- * Look through ~/.cacamacs/extensions for a contributed language whose
+ * Look through ~/.ccm/extensions for a contributed language whose
  * `extensions` include the opened file's suffix, then load its `configuration`
  * (the language-configuration.json). Mirrors how VSCode resolves a language
  * from installed extensions.
@@ -245,12 +249,28 @@ const char *langid_from_ext(const char *ext)
 /* Extension roots, scanned in order. The first is cacamacs' own; the rest are
    real editor extension folders so installed VSCode extensions work directly. */
 static const char *g_ext_roots[] = {
+  "/.ccm/extensions",
   "/.cacamacs/extensions",
   "/.vscode/extensions",
   "/.vscode-oss/extensions",
   "/.cursor/extensions",
 };
 #define N_EXT_ROOTS ((int)(sizeof g_ext_roots / sizeof *g_ext_roots))
+
+/* Built-in extension folders shipped inside the editor app itself: the stock
+   grammars (Python's MagicPython, C, JS, …) live here, NOT in the per-user
+   extensions dir, so installing e.g. ms-python doesn't bring the grammar. These
+   are absolute paths, scanned as-is. Override/add one with $CCM_BUILTIN_EXTENSIONS. */
+static const char *g_ext_roots_abs[] = {
+  "/Applications/VSCodium.app/Contents/Resources/app/extensions",
+  "/Applications/Visual Studio Code.app/Contents/Resources/app/extensions",
+  "/Applications/Cursor.app/Contents/Resources/app/extensions",
+  "/usr/share/codium/resources/app/extensions",
+  "/usr/share/code/resources/app/extensions",
+  "/usr/lib/code/extensions",
+  "/opt/visual-studio-code/resources/app/extensions",
+};
+#define N_EXT_ROOTS_ABS ((int)(sizeof g_ext_roots_abs / sizeof *g_ext_roots_abs))
 
 /* Does a contributed language match this file? VSCode associates a language
    either by file extension (`extensions`: ".cmake") or by exact base name
@@ -353,6 +373,12 @@ gtcaca_editor_langcfg_t *discover_langcfg(const char *filename,
     res = scan_root_langcfg(extdir, ext, base, out_id, idsz);
     if (res) return res;
   }
+  { const char *e = getenv("CCM_BUILTIN_EXTENSIONS");
+    if (e && *e) { gtcaca_editor_langcfg_t *res = scan_root_langcfg(e, ext, base, out_id, idsz); if (res) return res; } }
+  for (r = 0; r < N_EXT_ROOTS_ABS; r++) {
+    gtcaca_editor_langcfg_t *res = scan_root_langcfg(g_ext_roots_abs[r], ext, base, out_id, idsz);
+    if (res) return res;
+  }
   return NULL;
 }
 
@@ -431,6 +457,10 @@ int discover_grammar(const char *filename, char *out_path, int psz, char *out_id
     snprintf(extdir, sizeof extdir, "%s%s", home, g_ext_roots[r]);
     if (scan_root_grammar(extdir, ext, base, out_path, psz, out_id, idsz)) return 1;
   }
+  { const char *e = getenv("CCM_BUILTIN_EXTENSIONS");
+    if (e && *e && scan_root_grammar(e, ext, base, out_path, psz, out_id, idsz)) return 1; }
+  for (r = 0; r < N_EXT_ROOTS_ABS; r++)
+    if (scan_root_grammar(g_ext_roots_abs[r], ext, base, out_path, psz, out_id, idsz)) return 1;
   return 0;
 }
 
@@ -496,6 +526,6 @@ void setup_language(gtcaca_editor_widget_t *ed, const char *filename,
 
   if (!g_grammar && !g_langcfg && ext)
     snprintf(g_message, sizeof g_message,
-             "No language for '%s' in ~/.cacamacs/extensions — colourization off", ext);
+             "No language for '%s' in ~/.ccm/extensions or the editor's built-ins — colourization off", ext);
 }
 
