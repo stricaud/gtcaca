@@ -203,6 +203,7 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
  * Set GTCACA_NO_TRUECOLOR=1 to fall back to libcaca's own output. */
 static int       g_present = -2;     /* -2 uninit, 0 = use libcaca, 1 = our renderer */
 static int       g_truecolor = 0;    /* 24-bit available (else 256-colour cube) */
+static int       g_mouse_sgr = 0;    /* re-assert SGR mouse on each redraw while the UI loop runs */
 static char     *g_ob = NULL;        /* output buffer */
 static size_t    g_obcap = 0;
 
@@ -210,28 +211,24 @@ static int _present_enabled(void)
 {
   if (g_present == -2) {
     const char *ct = getenv("COLORTERM");
+    /* Overlay truecolour on top of libcaca's paint: libcaca keeps managing the
+       alt screen / mouse / input, and we just repaint the cells in 24-bit colour
+       (terminals without truecolour down-sample it — e.g. Apple Terminal still
+       shows the right background). We deliberately do NOT use synchronised-update
+       (?2026): Apple Terminal mishandles it, which swallowed the alt-screen + mouse
+       setup. Off with GTCACA_NO_TRUECOLOR=1. */
     g_present   = (isatty(1) && !getenv("GTCACA_NO_TRUECOLOR")) ? 1 : 0;
     g_truecolor = ct && (strstr(ct, "truecolor") || strstr(ct, "24bit"));
-    if (g_present) {
-      int fl;
-      /* Let libcaca's driver flush its own init first (it defers entering the
-         alternate screen until the first refresh/input — otherwise it would
-         switch to the blank alt-screen *after* our first paint and hide it). */
-      caca_refresh_display(gmo.dp);
-      /* keep stdout blocking so a big frame can't short-write and leave the
-         bottom of the screen unpainted */
-      fl = fcntl(1, F_GETFL); if (fl != -1) fcntl(1, F_SETFL, fl & ~O_NONBLOCK);
-      /* hide the hw cursor (we draw our own caret) and stop autowrap so painting
-         the bottom-right cell can't scroll the screen */
-      if (write(1, "\033[?25l\033[?7l", 10) < 0) { /* ignore */ }
-    }
   }
   return g_present == 1;
 }
 
-void gtcaca_present_shutdown(void)   /* restore the terminal on exit */
+void gtcaca_present_shutdown(void)   /* restore the terminal on exit (libcaca handles the rest) */
 {
-  if (g_present == 1 && write(1, "\033[0m\033[?7h\033[?25h", 14) < 0) { /* ignore */ }
+  if (g_present == 1) {
+    const char *s = "\033[0m\033[?25h";   /* reset colours, show the cursor */
+    if (write(1, s, strlen(s)) < 0) { /* ignore */ }
+  }
 }
 
 /* write the whole buffer, looping over short writes (a tty can accept fewer
@@ -276,7 +273,7 @@ static void gtcaca_present(void)
      "already painted" yet stayed black. Synchronised-update brackets (2026) make
      the whole frame land atomically on terminals that support them (a no-op on
      the rest), so a full repaint doesn't flicker. */
-  n += (size_t)sprintf(g_ob+n, "\033[?2026h\033[H");
+  n += (size_t)sprintf(g_ob+n, "\033[?25l\033[H");   /* hide cursor (we draw our caret); sync is opened in gtcaca_redraw */
   for (y = 0; y < h; y++) {
     n += (size_t)sprintf(g_ob+n, "\033[%d;1H", y+1);
     for (x = 0; x < w; x++) {
@@ -290,7 +287,7 @@ static void gtcaca_present(void)
       n += (size_t)_utf8(g_ob+n, ch);
     }
   }
-  n += (size_t)sprintf(g_ob+n, "\033[0m\033[?2026l");
+  n += (size_t)sprintf(g_ob+n, "\033[0m");
   _write_all(g_ob, n);
 }
 
@@ -315,8 +312,18 @@ void gtcaca_redraw(void)
     }
   }
 
+  /* Let libcaca paint and keep managing the terminal (alt screen, mouse, input),
+     then overlay our truecolour on top of the same cells. No synchronised-update
+     wrapper — Apple Terminal mishandles it and that broke the alt screen + mouse. */
+  caca_refresh_display(gmo.dp);
   if (_present_enabled()) gtcaca_present();
-  else                    caca_refresh_display(gmo.dp);
+
+  /* Re-assert SGR mouse reporting AFTER the paint. Entering the alternate screen
+     (and some terminals' refresh) resets mouse mode, so an enable done once at
+     startup gets wiped when libcaca switches to the alt screen — which is exactly
+     why the wheel stopped reaching us. Keeping it on every frame is cheap and
+     robust. */
+  if (g_mouse_sgr) { const char *s = "\033[?1002h\033[?1006h"; if (write(1, s, strlen(s)) < 0) { /* ignore */ } }
 }
 
 int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
@@ -676,6 +683,7 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
       for (n = 0; n < 3; n++)        /* a wheel notch scrolls ~3 lines */
         if (key == CACA_KEY_DOWN) gtcaca_editor_line_down(e);
         else                      gtcaca_editor_line_up(e);
+      if (e->update_cb) e->update_cb(e, e->update_cb_userdata);  /* refresh modeline/colourize */
       break;
     }
     default: break;
@@ -973,16 +981,32 @@ void gtcaca_main(void)
   int quit = 0;
   int key;
 
-  /* Drive the mouse via SGR ourselves (see above); libcaca's decoder is off. */
+  /* Drive the mouse via SGR ourselves; libcaca's decoder is off so the raw
+     reports reach our parser (handles both wheel directions). This is exactly
+     the setup that worked before the truecolour work. */
   caca_set_mouse(gmo.dp, 0);
   fputs("\033[?1002h\033[?1006h", stdout);   /* button-event tracking + SGR encoding */
   fflush(stdout);
+  g_mouse_sgr = 1;   /* keep it asserted after every redraw (alt-screen switch resets it) */
 
   gtcaca_redraw();
+
+  if (getenv("CCM_EVLOG"))
+    fprintf(stderr, "[ccm] present=%d truecolor=%d isatty(1)=%d TERM=%s COLORTERM=%s driver=%s\n",
+            g_present, g_truecolor, isatty(1), getenv("TERM") ? getenv("TERM") : "?",
+            getenv("COLORTERM") ? getenv("COLORTERM") : "?",
+            caca_get_display_driver(gmo.dp) ? caca_get_display_driver(gmo.dp) : "?");
 
   while (!quit && !g_quit_requested) {
     while (caca_get_event(gmo.dp, CACA_EVENT_ANY, &ev, 0)) {
       int evtype = caca_get_event_type(&ev);
+      if (getenv("CCM_EVLOG")) {
+        if (evtype & CACA_EVENT_KEY_PRESS)         fprintf(stderr, "[ccm] KEY ch=%d 0x%02x\n", caca_get_event_key_ch(&ev), caca_get_event_key_ch(&ev) & 0xff);
+        else if (evtype & CACA_EVENT_MOUSE_PRESS)  fprintf(stderr, "[ccm] MOUSE-PRESS button=%d\n", caca_get_event_mouse_button(&ev));
+        else if (evtype & CACA_EVENT_MOUSE_RELEASE)fprintf(stderr, "[ccm] MOUSE-RELEASE\n");
+        else if (evtype & CACA_EVENT_MOUSE_MOTION) fprintf(stderr, "[ccm] MOUSE-MOTION\n");
+        else                                       fprintf(stderr, "[ccm] EVENT type=0x%x\n", evtype);
+      }
       if (!(evtype & CACA_EVENT_KEY_PRESS)) {
         if (evtype & CACA_EVENT_RESIZE) {
           gtcaca_redraw();
@@ -1017,6 +1041,7 @@ void gtcaca_main(void)
     usleep(10000);
   }
 
+  g_mouse_sgr = 0;
   fputs("\033[?1002l\033[?1006l", stdout);   /* restore: disable SGR mouse reporting */
   fflush(stdout);
   gtcaca_present_shutdown();                  /* restore cursor if we took over output */

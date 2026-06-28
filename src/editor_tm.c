@@ -60,6 +60,10 @@ static int _scope_style(const char *scope)
   /* substring so the '#'/quotes (punctuation.definition.comment / .string) take
      the comment / string colour too, not the generic punctuation colour */
   if (strstr(scope, "comment"))                 return GTCACA_EDITOR_STYLE_COMMENT;
+  /* `string.unquoted.*` is what shell grammars tag *bare words* (command names,
+     arguments) with — it is not a visual string. Colouring it green is what made
+     shell scripts "all green", so keep it the default text colour. */
+  if (strstr(scope, "string.unquoted"))         return GTCACA_EDITOR_STYLE_DEFAULT;
   if (strstr(scope, "string"))                  return GTCACA_EDITOR_STYLE_STRING;
   if (!strncmp(scope, "constant.numeric", 16))  return GTCACA_EDITOR_STYLE_NUMBER;
   if (!strncmp(scope, "constant.language", 17)) return GTCACA_EDITOR_STYLE_KEYWORD;
@@ -559,6 +563,7 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
 
       _fill(w, pos, best_start, active_style);   /* text before the match */
 
+      int pushed = 0;
       if (best_is_end) {
         tm_rule *r = &g->rules[stack[sp]];
         _fill(w, best_start, best_end, r->style >= 0 ? r->style : active_style);
@@ -569,6 +574,7 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
         _fill(w, best_start, best_end, r->style >= 0 ? r->style : active_style);
         _apply_caps(w, best_region, ls, r->caps, r->ncaps);
         if (r->kind == RULE_BEGINEND && sp + 1 < TM_MAX_STACK) {
+          pushed = 1;
           sp++;
           stack[sp] = best_rule;
           style_stack[sp] = r->content_style >= 0 ? r->content_style
@@ -581,23 +587,37 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
       if (best_region) onig_region_free(best_region, 1);
       /* Advance. A zero-width END (a lookahead like `(?=\))`) must NOT step past
          its anchor char, or an enclosing context that ends on that same char
-         (e.g. a function call's `)`) never matches and leaks forever. Such a pop
-         still makes progress (the stack shrank), so it's safe; a zero-width
-         begin/match must advance to avoid stalling. */
-      if (best_end > best_start)      pos = best_end;
-      else if (best_is_end)           pos = best_end;          /* lookahead end: let the parent match here too */
-      else                            pos = best_start + 1;    /* zero-width begin/match: step on */
+         (e.g. a function call's `)`) never matches and leaks forever. Likewise a
+         zero-width BEGIN that pushed a context (e.g. shell's `(?:\G(?<="))`
+         command-name-in-quotes rule) must NOT step on, or it skips the first
+         content char and that char keeps the parent's colour (the white first
+         letter inside a "string"). Both make progress (the stack changed), so the
+         stall guard below still breaks any true loop. A zero-width plain match
+         (no push/pop) must advance to avoid stalling. */
+      if (best_end > best_start)         pos = best_end;
+      else if (best_is_end)              pos = best_end;        /* lookahead end: let the parent match here too */
+      else if (pushed && style_stack[sp] == GTCACA_EDITOR_STYLE_STRING)
+                                         pos = best_end;        /* zero-width string begin: don't skip the first content char */
+      else                               pos = best_start + 1;  /* zero-width plain match: step on */
       /* hard stall guard: if we sit on one position too long, force progress */
       if (pos <= prev_pos) { if (++stall > 4 * TM_MAX_STACK) { pos = prev_pos + 1; stall = 0; } }
       else                 { stall = 0; prev_pos = pos; }
     }
-    /* close any line-bounded contexts still open at end of line, so a construct
-       our engine couldn't fully close (e.g. a regex char-class) can't leak its
-       colour onto every following line. Multi-line strings/comments (whose end
-       isn't newline-anchored) are kept open. */
-    while (sp > 0 && g->rules[stack[sp]].line_bounded) {
-      if (end_stack[sp]) { onig_free(end_stack[sp]); end_stack[sp] = NULL; }
-      sp--;
+    /* Close line-bounded contexts still open at end of line so a construct our
+       engine couldn't fully close can't leak its colour onto every following
+       line. A line-bounded context (its end anchors on $/\n) MUST end at EOL —
+       and so must everything nested inside it. The old code only popped while the
+       *top* was line-bounded, so a stuck non-line-bounded child (e.g. shell's
+       command-name word context, or an unterminated quote) on top of a
+       line-bounded statement blocked the cleanup and the whole stack bled green.
+       Instead, find the OUTERMOST open line-bounded context and pop from there up.
+       Genuine multi-line constructs (Python triple-quoted strings, block
+       comments) aren't nested under a line-bounded context, so they're kept. */
+    {
+      int cut = -1, q;
+      for (q = 1; q <= sp; q++) if (g->rules[stack[q]].line_bounded) { cut = q; break; }
+      if (cut >= 1)
+        while (sp >= cut) { if (end_stack[sp]) { onig_free(end_stack[sp]); end_stack[sp] = NULL; } sp--; }
     }
   }
   while (sp > 0) { if (end_stack[sp]) onig_free(end_stack[sp]); sp--; }   /* free open contexts' end regexes */
