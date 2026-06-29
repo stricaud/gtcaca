@@ -60,10 +60,13 @@ static int _gtcaca_menu_private_key_press(gtcaca_menu_widget_t *menu, int key, v
       menu->active_item = _skip_separators_fwd(&menu->entries[menu->active_entry], 0);
     } else if (key == CACA_KEY_RETURN) {
       gtcaca_menu_item_t *item = &entry->items[menu->active_item];
-      if (item->action)
-        item->action(item->userdata);
+      /* Close the menu BEFORE running the action: an action that opens a modal
+         window runs its own draw loop, and a still-open dropdown would be drawn
+         on top of it. */
       menu->is_open = 0;
       menu->has_focus = 0;
+      if (item->action)
+        item->action(item->userdata);
     }
   }
   return 0;

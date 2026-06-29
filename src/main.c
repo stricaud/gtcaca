@@ -720,9 +720,9 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
         if (item_idx >= 0 && item_idx < entry->n_items &&
             !entry->items[item_idx].is_separator) {
           gtcaca_menu_item_t *item = &entry->items[item_idx];
-          if (item->action) item->action(item->userdata);
-          menu->is_open    = 0;
+          menu->is_open    = 0;   /* close before running the action (modal-safe) */
           menu->has_focus  = 0;
+          if (item->action) item->action(item->userdata);
         }
         return;
       }
