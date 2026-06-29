@@ -52,6 +52,7 @@ set(GTCACA_LIB_SRC
   mindmap.c
   segdisplay.c
   linechart.c
+  hexview.c
   calendar.c
   dialog.c
   filechooser.c
@@ -99,6 +100,7 @@ set(GTCACA_HEADERS
   include/gtcaca/mindmap.h
   include/gtcaca/segdisplay.h
   include/gtcaca/linechart.h
+  include/gtcaca/hexview.h
   include/gtcaca/calendar.h
   include/gtcaca/dialog.h
   include/gtcaca/filechooser.h

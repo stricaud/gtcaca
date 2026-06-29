@@ -42,6 +42,7 @@
 #include <gtcaca/mindmap.h>
 #include <gtcaca/segdisplay.h>
 #include <gtcaca/linechart.h>
+#include <gtcaca/hexview.h>
 #include <gtcaca/calendar.h>
 #include <gtcaca/dialog.h>
 #include <gtcaca/filechooser.h>
@@ -190,6 +191,9 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
     break;
   case GTCACA_WIDGET_FILECHOOSERDIALOG:
     gtcaca_filechooser_draw((gtcaca_filechooser_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_HEXVIEW:
+    gtcaca_hexview_draw((gtcaca_hexview_widget_t *)widget);
     break;
   }
 
