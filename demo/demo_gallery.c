@@ -36,6 +36,7 @@
 #include <gtcaca/barchart.h>
 #include <gtcaca/tree.h>
 #include <gtcaca/table.h>
+#include <gtcaca/hexview.h>
 #include <gtcaca/map.h>
 #include <gtcaca/tabs.h>
 #include <gtcaca/calendar.h>
@@ -109,6 +110,8 @@ static void*mk_line(int x,int y,int w,int h){gtcaca_linechart_widget_t*c=gtcaca_
 static void*mk_seg(int x,int y,int w,int h){gtcaca_segdisplay_widget_t*s=gtcaca_segdisplay_new(NULL,x,y,w,h);gtcaca_segdisplay_set_title(s,"clock");gtcaca_segdisplay_set_text(s,"12:45");return s;}
 static void*mk_tree(int x,int y,int w,int h){gtcaca_tree_widget_t*t=gtcaca_tree_new(NULL,x,y,w,h);gtcaca_tree_set_title(t,"files");gtcaca_tree_set_model(t,&TREE);gtcaca_tree_key(t,CACA_KEY_RIGHT,NULL);return t;}
 static void*mk_table(int x,int y,int w,int h){gtcaca_table_widget_t*t=gtcaca_table_new(NULL,x,y,w,h);gtcaca_table_set_title(t,"people");gtcaca_table_set_model(t,&TBL);gtcaca_table_set_current(t,0,0);return t;}
+static unsigned char HEXBUF[256];
+static void*mk_hexview(int x,int y,int w,int h){int i;for(i=0;i<256;i++)HEXBUF[i]=(unsigned char)i;gtcaca_hexview_widget_t*hv=gtcaca_hexview_new(NULL,x,y,w,h);gtcaca_hexview_set_title(hv,"bytes");gtcaca_hexview_set_data(hv,HEXBUF,256);gtcaca_hexview_set_highlight(hv,16,8);return hv;}
 static void*mk_map(int x,int y,int w,int h){gtcaca_map_widget_t*m=gtcaca_map_new(NULL,x,y,w,h);gtcaca_map_set_title(m,"world");gtcaca_map_add_world(m,CACA_GREEN);const char*c[]={"London","New York","Tokyo","Sao Paulo","Sydney","Cairo"};int i;for(i=0;i<6;i++)gtcaca_map_add_city(m,c[i],'o',CACA_LIGHTGREEN);return m;}
 static void*mk_cal(int x,int y,int w,int h){gtcaca_calendar_widget_t*c=gtcaca_calendar_new(NULL,x,y,w,h);gtcaca_calendar_set_date(c,2026,6,25);return c;}
 static void*mk_mind(int x,int y,int w,int h){gtcaca_mindmap_widget_t*m=gtcaca_mindmap_new(NULL,x,y,w,h);gtcaca_mindmap_set_title(m,"plan");gtcaca_mindmap_set_text(m->root,"Project");
@@ -143,6 +146,7 @@ static page_t P[] = {
   {"Seven-segment","LED digits",30,9,mk_seg},
   {"Tree","Right/Left fold, arrows",36,12,mk_tree},
   {"Table","arrows move the cell",36,9,mk_table},
+  {"Hex view","Up/Down/PgDn scroll; range highlit",60,12,mk_hexview},
   {"Map","arrows hop cities",62,17,mk_map},
   {"Calendar","arrows by day/week, PgUp/Dn",30,11,mk_cal},
   {"Mind map","arrows + / - fold",52,9,mk_mind},
@@ -186,6 +190,7 @@ static void draw_widget(void *o)
   case GTCACA_WIDGET_SEGDISPLAY: gtcaca_segdisplay_draw(o); break;
   case GTCACA_WIDGET_TREE: gtcaca_tree_draw(o); break;
   case GTCACA_WIDGET_TABLE: gtcaca_table_draw(o); break;
+  case GTCACA_WIDGET_HEXVIEW: gtcaca_hexview_draw(o); break;
   case GTCACA_WIDGET_MAP: gtcaca_map_draw(o); break;
   case GTCACA_WIDGET_CALENDAR: gtcaca_calendar_draw(o); break;
   case GTCACA_WIDGET_MINDMAP: gtcaca_mindmap_draw(o); break;
@@ -214,6 +219,7 @@ static void key_widget(void *o, int k)
   case GTCACA_WIDGET_EXPANDER:    gtcaca_expander_handle_key(o,k); break;
   case GTCACA_WIDGET_TREE:        gtcaca_tree_key(o,k,NULL); break;
   case GTCACA_WIDGET_TABLE:       gtcaca_table_key(o,k,NULL); break;
+  case GTCACA_WIDGET_HEXVIEW:     gtcaca_hexview_key(o,k,NULL); break;
   case GTCACA_WIDGET_MAP:         gtcaca_map_key(o,k,NULL); break;
   case GTCACA_WIDGET_TABS:        gtcaca_tabs_key(o,k,NULL); break;
   case GTCACA_WIDGET_CALENDAR:    gtcaca_calendar_key(o,k,NULL); break;

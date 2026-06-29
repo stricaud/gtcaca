@@ -226,11 +226,19 @@ void gtcaca_tree_draw(gtcaca_tree_widget_t *t)
       caca_set_color_ansi(gmo.cv, ri.has_kids ? CACA_YELLOW : fg, rbg);
       caca_put_char(gmo.cv, inner_x + indent, y, mk);
     }
-    /* label */
-    t->model->label(t->model, ri.node, buf, sizeof buf);
-    caca_set_color_ansi(gmo.cv, selected ? CACA_WHITE : fg, rbg); caca_set_attr(gmo.cv, 0);
-    caca_printf(gmo.cv, inner_x + indent + 2, y, "%-.*s",
-                inner_w - indent - 2 > 0 ? inner_w - indent - 2 : 0, buf);
+    /* row content: a custom cell renderer if the model provides one, else the
+       plain text label. The content area is to the right of the marker. */
+    {
+      int cx = inner_x + indent + 2;
+      int cw = inner_w - indent - 2; if (cw < 0) cw = 0;
+      caca_set_color_ansi(gmo.cv, selected ? CACA_WHITE : fg, rbg); caca_set_attr(gmo.cv, 0);
+      if (t->model->draw_row) {
+        t->model->draw_row(t->model, ri.node, cx, y, cw, selected);
+      } else {
+        t->model->label(t->model, ri.node, buf, sizeof buf);
+        caca_printf(gmo.cv, cx, y, "%-.*s", cw, buf);
+      }
+    }
   }
 }
 

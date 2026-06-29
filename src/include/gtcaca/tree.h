@@ -31,6 +31,13 @@ struct gtcaca_tree_model {
   /* non-zero if `node` can be expanded (draws a ▸/▾ marker) */
   int   (*has_children)(gtcaca_tree_model_t *m, void *node);
   void  *userdata;
+  /* Optional cell renderer (à la GTK CellRenderer / Qt item delegate). When
+     non-NULL it is called instead of label() to paint a row's content area —
+     the rectangle to the right of the indent + expand marker. The caller may
+     draw text columns, or position and draw real widgets (e.g. a progressbar)
+     within [x, x+width). The row background is already painted; `selected`
+     indicates the highlighted row. */
+  void  (*draw_row)(gtcaca_tree_model_t *m, void *node, int x, int y, int width, int selected);
 };
 
 typedef struct _gtcaca_tree_widget_t gtcaca_tree_widget_t;

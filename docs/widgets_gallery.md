@@ -138,15 +138,54 @@ Big "LED" digits for clocks and counters (0-9, A-F, `:` `-`).
 
 ### Tree (lazy model/view)
 A hierarchy backed by a model — handles **billions** of nodes because only the
-visible rows are ever queried. Right/Left expand/collapse.
+visible rows are ever queried. Right/Left expand/collapse, Up/Down/PageUp/Down/
+Home/End move.
 ![tree](images/tree.png)
-`gtcaca_tree_new(…)` · `gtcaca_tree_set_model(t, &model)`
+`gtcaca_tree_new(…)` · `gtcaca_tree_set_model(t, &model)` · `gtcaca_tree_selected_node(t)`
+
+The model is a small vtable; nodes are opaque handles you define (an index, an
+id, a pointer):
+
+```c
+gtcaca_tree_model_t m = {
+  .child_count  = my_child_count,   /* long (m, node)            children of node (NULL = root) */
+  .child        = my_child,         /* void*(m, node, i)         i-th child handle               */
+  .label        = my_label,         /* void (m, node, buf, len)  row text                         */
+  .has_children = my_has_children,  /* int  (m, node)            draws the ▸/▾ marker            */
+  .userdata     = ctx,
+  .draw_row     = NULL,             /* optional cell renderer — see below */
+};
+```
+
+**Cell renderer (widgets inside a row, à la GTK `CellRenderer` / Qt item
+delegate).** Set `model.draw_row` to paint a row's content yourself instead of
+the plain `label()`. The tree paints the row background, indent and expand
+marker, then calls you with the content rectangle to the right of the marker;
+draw text columns there, or position and draw real widgets (a progressbar, a
+gauge, …) within `[x, x+width)`. `selected` flags the highlighted row; the row
+colour is already set, so plain `caca_put_str` inherits it, while a widget's own
+`_draw` manages its colours.
+
+```c
+void draw_row(gtcaca_tree_model_t *m, void *node, int x, int y, int width, int selected) {
+  caca_put_str(gmo.cv, x, y, name_of(node));          /* left: text            */
+  bar->x = x + 20; bar->y = y; bar->width = width-20; /* right: a real widget  */
+  gtcaca_progressbar_set_value(bar, pct_of(node));
+  gtcaca_progressbar_draw(bar);
+}
+```
 
 ### Table (lazy model/view)
 A grid backed by a model (row/column/cell callbacks); also scales to huge
 datasets. Arrows move the current cell.
 ![table](images/table.png)
 `gtcaca_table_new(…)` · `gtcaca_table_set_model(t, &model)` · `gtcaca_table_set_current()`
+
+### Hex view (packet/byte pane)
+A read-only hex+ASCII dump of a borrowed byte buffer (cf. Wireshark's bytes
+pane), with reverse-highlighting of a byte range and Up/Down/PageUp/Down/Home/
+End scrolling. The buffer is not copied — keep it alive while shown.
+`gtcaca_hexview_new(…)` · `gtcaca_hexview_set_data(h, buf, len)` · `gtcaca_hexview_set_highlight(h, off, len)`
 
 ### Map (geoview)
 An equirectangular world map with a built-in low-res outline and a gazetteer of
