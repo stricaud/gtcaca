@@ -99,6 +99,16 @@ void gtcaca_image_draw(gtcaca_image_widget_t *img)
   );
   if (!dither) return;
 
+  /* Render with half/quarter-block glyphs rather than libcaca's default ASCII
+     charset: each cell then carries colour subpixels instead of a letter, which
+     (with the truecolour presenter) looks like an actual photo instead of noise.
+     Fall back to shaded glyphs where the font can't do fine blocks. Floyd–
+     Steinberg + prefilter antialiasing smooth the down-sample. */
+  caca_set_dither_charset(dither, gtcaca_terminal_supports_blocks() ? "blocks" : "shades");
+  caca_set_dither_color(dither, "full16");
+  caca_set_dither_antialias(dither, "prefilter");
+  caca_set_dither_algorithm(dither, "fstein");
+
   caca_dither_bitmap(gmo.cv,
     img->x, img->y, img->width, img->height,
     dither, img->pixels);
