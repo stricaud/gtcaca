@@ -506,10 +506,16 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
 
   stack[0] = -1; style_stack[0] = GTCACA_EDITOR_STYLE_DEFAULT; end_stack[0] = NULL;  /* root */
 
+  /* Walk lines incrementally. gtcaca_editor_position_from_line() /
+     get_line_end_position() each rescan the whole buffer from the start, so
+     calling them per line made colourising O(n²) — seconds on an 800-line file.
+     Tracking the line start as we go makes it O(n). */
   line_count = gtcaca_editor_get_line_count(w);
+  {
+  int ls = 0;
   for (line = 0; line < line_count; line++) {
-    int ls = gtcaca_editor_position_from_line(w, line);
-    int le = gtcaca_editor_get_line_end_position(w, line);
+    int le = ls;
+    while (le < len && t[le] != '\n') le++;
     int pos = ls;
     int prev_pos = -1, stall = 0;   /* break any zero-width match loop */
 
@@ -619,6 +625,8 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
       if (cut >= 1)
         while (sp >= cut) { if (end_stack[sp]) { onig_free(end_stack[sp]); end_stack[sp] = NULL; } sp--; }
     }
+    ls = le + 1;   /* next line starts just past this line's newline */
+  }
   }
   while (sp > 0) { if (end_stack[sp]) onig_free(end_stack[sp]); sp--; }   /* free open contexts' end regexes */
   onig_region_free(region, 1);

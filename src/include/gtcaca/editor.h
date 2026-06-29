@@ -238,6 +238,8 @@ struct _gtcaca_editor_widget_t {
   int                   lines_meta_cap;
   int                   lines_meta_len;
   int                   fold_dirty;           /* line visibility needs recompute */
+  int                   line_count_cache;     /* cached newline count + 1 … */
+  int                   line_count_valid;     /* … valid until the next text edit */
 };
 
 /* ── Construction ──────────────────────────────────────────────────────────── */

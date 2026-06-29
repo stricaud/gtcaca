@@ -34,6 +34,7 @@ static void _raw_insert(gtcaca_editor_widget_t *w, int pos, const char *s, int l
   w->length += len;
   w->colorize_dirty = 1;
   w->fold_dirty = 1;
+  w->line_count_valid = 0;
 }
 
 static void _raw_delete(gtcaca_editor_widget_t *w, int pos, int len)
@@ -45,6 +46,7 @@ static void _raw_delete(gtcaca_editor_widget_t *w, int pos, int len)
   w->length -= len;
   w->colorize_dirty = 1;
   w->fold_dirty = 1;
+  w->line_count_valid = 0;
 }
 
 /* ── undo / redo stacks ────────────────────────────────────────────────────── */
@@ -144,8 +146,15 @@ void gtcaca_editor_delete_range(gtcaca_editor_widget_t *w, int pos, int len)
 
 int gtcaca_editor_get_line_count(gtcaca_editor_widget_t *w)
 {
-  int i, n = 1;
+  int i, n;
+  /* Cache the count: this is called from get_line_visible()/ensure_meta() which
+     run per line inside the O(n²) scroll-to-caret loop — without the cache a
+     single M-> on a large file is O(n³) (≈10 s). Invalidated on every edit. */
+  if (w->line_count_valid) return w->line_count_cache;
+  n = 1;
   for (i = 0; i < w->length; i++) if (w->text[i] == '\n') n++;
+  w->line_count_cache = n;
+  w->line_count_valid = 1;
   return n;
 }
 
@@ -487,6 +496,7 @@ void gtcaca_editor_set_text(gtcaca_editor_widget_t *w, const char *text)
   w->goal_col = -1;
   w->modified = 0;
   w->colorize_dirty = 1;
+  w->line_count_valid = 0;
   gtcaca_editor_autoc_cancel(w);
   gtcaca_editor_annotation_clear_all(w);
   w->lines_meta_len = 0;   /* metadata is rebuilt for the new document */
@@ -796,15 +806,6 @@ static int _cell_pos(gtcaca_editor_widget_t *w, int vc, int row,
   return 1;
 }
 
-static int _count_rows(gtcaca_editor_widget_t *w, int from, int to, int text_w)
-{
-  int line, rows = 0;
-  for (line = from; line < to; line++) {
-    if (!gtcaca_editor_get_line_visible(w, line)) continue;
-    rows += _line_rows(w, line, text_w) + gtcaca_editor_annotation_get_lines(w, line);
-  }
-  return rows;
-}
 
 /* Map a screen cell (sx,sy) to the document position under it, accounting for
    the box border, line-number/fold margins, vertical scroll, soft wrap and
@@ -928,14 +929,26 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
   while (w->first_visible_line > 0 && !gtcaca_editor_get_line_visible(w, w->first_visible_line))
     w->first_visible_line--;
   {
-    /* the caret's own continuation row must fit too (wrap mode) */
+    /* Scroll DOWN just enough to reveal the caret's line at the bottom. Walk
+       BACKWARD from the caret accumulating screen rows until the view height is
+       full — O(view height) — instead of advancing first_visible_line one line at
+       a time and re-counting every row above it each step. The old loop was O(n²)
+       per draw, and O(n³) with soft-wrap (each row count rescans line offsets),
+       which is why M-> on a large wrapped file took ~18 s. */
     int caret_sub = w->wrap ? _visual_col(w, w->current_pos) / text_w : 0;
-    while (_count_rows(w, w->first_visible_line, caret_line, text_w) + caret_sub >= text_h) {
-      int nl = w->first_visible_line + 1;
-      while (nl < line_count && !gtcaca_editor_get_line_visible(w, nl)) nl++;
-      if (nl >= line_count || nl > caret_line) break;
-      w->first_visible_line = nl;
+    int budget = text_h - caret_sub;   /* rows available above the caret's own row */
+    int top = caret_line;
+    int acc = 0;                        /* screen rows of the lines ABOVE the caret */
+    if (budget < 1) budget = 1;
+    while (top > w->first_visible_line) {
+      int prev = top - 1, r;
+      while (prev > w->first_visible_line && !gtcaca_editor_get_line_visible(w, prev)) prev--;
+      r = _line_rows(w, prev, text_w) + gtcaca_editor_annotation_get_lines(w, prev);
+      if (acc + r >= budget) break;      /* including `prev` would push the caret off-screen */
+      acc += r;
+      top = prev;
     }
+    if (top > w->first_visible_line) w->first_visible_line = top;
   }
   if (w->wrap) {
     w->x_offset = 0;                     /* no horizontal scroll when wrapping */
