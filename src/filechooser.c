@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
@@ -34,6 +35,40 @@ static int cmp_entry(const void *a, const void *b)
   return strcasecmp(x->name, y->name);
 }
 
+/* case-insensitive substring test */
+static int ci_sub(const char *hay, const char *needle)
+{
+  size_t i;
+  if (!needle[0]) return 1;
+  for (i = 0; hay[i]; i++) {
+    size_t j = 0;
+    while (needle[j] && hay[i + j] &&
+           tolower((unsigned char)hay[i + j]) == tolower((unsigned char)needle[j])) j++;
+    if (!needle[j]) return 1;
+  }
+  return 0;
+}
+
+/* Rebuild filt[] = indices of entries matching the search ("" → all). sel/top
+   index into filt[]. ".." stays visible while searching so you can still go up. */
+static void rebuild_filter(gtcaca_filechooser_widget_t *fc)
+{
+  int i;
+  if (fc->filt_cap < fc->nentries) {
+    fc->filt_cap = fc->nentries + 8;
+    fc->filt = realloc(fc->filt, (size_t)fc->filt_cap * sizeof *fc->filt);
+  }
+  fc->nfilt = 0;
+  for (i = 0; i < fc->nentries; i++) {
+    if (!fc->searching || !fc->search[0] ||
+        strcmp(fc->entries[i].name, "..") == 0 || ci_sub(fc->entries[i].name, fc->search))
+      fc->filt[fc->nfilt++] = i;
+  }
+  if (fc->sel >= fc->nfilt) fc->sel = fc->nfilt ? fc->nfilt - 1 : 0;
+  if (fc->sel < 0) fc->sel = 0;
+  if (fc->top > fc->sel) fc->top = fc->sel;
+}
+
 static void read_dir(gtcaca_filechooser_widget_t *fc)
 {
   DIR *dp = opendir(fc->curdir);
@@ -52,6 +87,8 @@ static void read_dir(gtcaca_filechooser_widget_t *fc)
   }
   qsort(fc->entries + 1, (size_t)(fc->nentries - 1), sizeof *fc->entries, cmp_entry);
   fc->sel = 0; fc->top = 0;
+  fc->searching = 0; fc->search[0] = '\0';
+  rebuild_filter(fc);
 }
 
 void gtcaca_filechooser_set_dir(gtcaca_filechooser_widget_t *fc, const char *dir)
@@ -106,13 +143,19 @@ void gtcaca_filechooser_draw(gtcaca_filechooser_widget_t *fc)
     caca_printf(gmo.cv, inner_x + 6, listy, "%-.*s", inner_w - 6, fc->name);
     listy++;
   }
-  listy++;   /* a blank separator row */
+  /* search prompt (type-to-filter) in place of the blank separator row */
+  if (fc->searching) {
+    caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_YELLOW);
+    caca_printf(gmo.cv, inner_x, listy, "/%-.*s", inner_w - 1, fc->search);
+    caca_set_color_ansi(gmo.cv, fg, bg);
+  }
+  listy++;   /* separator / search row */
 
   rows = inner_y + inner_h - listy;
   if (fc->sel < fc->top) fc->top = fc->sel;
   if (fc->sel >= fc->top + rows) fc->top = fc->sel - rows + 1;
-  for (i = 0; i < rows && fc->top + i < fc->nentries; i++) {
-    gtcaca_fc_entry_t *e = &fc->entries[fc->top + i];
+  for (i = 0; i < rows && fc->top + i < fc->nfilt; i++) {
+    gtcaca_fc_entry_t *e = &fc->entries[fc->filt[fc->top + i]];
     int sel = (fc->top + i == fc->sel);
     char buf[PATH_MAX];
     snprintf(buf, sizeof buf, "%s%s", e->name, e->isdir ? "/" : "");
@@ -134,15 +177,30 @@ int gtcaca_filechooser_key(gtcaca_filechooser_widget_t *fc, int key, void *userd
 {
   gtcaca_fc_entry_t *e;
   (void)userdata;
-  e = (fc->sel >= 0 && fc->sel < fc->nentries) ? &fc->entries[fc->sel] : NULL;
+  /* current entry resolves through the filter map */
+  e = (fc->sel >= 0 && fc->sel < fc->nfilt) ? &fc->entries[fc->filt[fc->sel]] : NULL;
+
+  /* '/' starts type-to-search in open mode (in save mode it's a path char). */
+  if (key == '/' && fc->mode != GTCACA_FILECHOOSER_SAVE && !fc->searching) {
+    fc->searching = 1; fc->search[0] = '\0';
+    rebuild_filter(fc);
+    return 1;
+  }
+
   switch (key) {
   case CACA_KEY_UP:   if (fc->sel > 0) fc->sel--; return 1;
-  case CACA_KEY_DOWN: if (fc->sel < fc->nentries - 1) fc->sel++; return 1;
+  case CACA_KEY_DOWN: if (fc->sel < fc->nfilt - 1) fc->sel++; return 1;
   case CACA_KEY_PAGEUP:   fc->sel -= 10; if (fc->sel < 0) fc->sel = 0; return 1;
-  case CACA_KEY_PAGEDOWN: fc->sel += 10; if (fc->sel > fc->nentries - 1) fc->sel = fc->nentries - 1; return 1;
-  case CACA_KEY_ESCAPE: fc->result = 0; return 1;
+  case CACA_KEY_PAGEDOWN: fc->sel += 10; if (fc->sel > fc->nfilt - 1) fc->sel = fc->nfilt - 1; return 1;
+  case CACA_KEY_ESCAPE:
+    if (fc->searching) {             /* first Esc exits search, not the dialog */
+      fc->searching = 0; fc->search[0] = '\0'; rebuild_filter(fc);
+    } else {
+      fc->result = 0;
+    }
+    return 1;
   case CACA_KEY_RETURN: case 10:
-    if (e && e->isdir) { enter_dir(fc, e->name); return 1; }
+    if (e && e->isdir) { enter_dir(fc, e->name); return 1; }   /* read_dir clears search */
     if (fc->mode == GTCACA_FILECHOOSER_SAVE) {
       if (fc->name[0]) { snprintf(fc->chosen, sizeof fc->chosen, "%s/%s", fc->curdir, fc->name); fc->result = 1; }
     } else if (e) {
@@ -150,14 +208,25 @@ int gtcaca_filechooser_key(gtcaca_filechooser_widget_t *fc, int key, void *userd
     }
     return 1;
   default:
+    if (fc->searching) {              /* edit the search query */
+      int n = (int)strlen(fc->search);
+      if ((key == CACA_KEY_BACKSPACE || key == CACA_KEY_DELETE)) {
+        if (n > 0) fc->search[--n] = '\0';
+        else { fc->searching = 0; }   /* backspace on empty query leaves search */
+        rebuild_filter(fc);
+        return 1;
+      }
+      if (key >= 32 && key < 127 && n < (int)sizeof fc->search - 1) {
+        fc->search[n] = (char)key; fc->search[n + 1] = '\0';
+        rebuild_filter(fc);
+        return 1;
+      }
+      return 1;
+    }
     if (fc->mode == GTCACA_FILECHOOSER_SAVE) {        /* edit the name field */
       int n = (int)strlen(fc->name);
       if ((key == CACA_KEY_BACKSPACE || key == CACA_KEY_DELETE) && n > 0) { fc->name[--n] = '\0'; return 1; }
       if (key >= 32 && key < 127 && n < (int)sizeof fc->name - 1) { fc->name[n] = (char)key; fc->name[n + 1] = '\0'; return 1; }
-    }
-    /* in open mode, highlight a file -> nothing to type; ignore */
-    if (e && !e->isdir && fc->mode == GTCACA_FILECHOOSER_SAVE) {
-      snprintf(fc->name, sizeof fc->name, "%s", e->name);
     }
     return 0;
   }
@@ -167,7 +236,7 @@ void gtcaca_filechooser_free(gtcaca_filechooser_widget_t *fc)
 {
   if (!fc) return;
   CDL_DELETE(gmo.widgets_list, GTCACA_WIDGET(fc));
-  clear_entries(fc); free(fc->entries); free(fc->title); free(fc);
+  clear_entries(fc); free(fc->entries); free(fc->filt); free(fc->title); free(fc);
 }
 
 int gtcaca_filechooser_run(const char *start_dir, char *out_path, int outlen, int save_mode)
@@ -191,8 +260,8 @@ int gtcaca_filechooser_run(const char *start_dir, char *out_path, int outlen, in
     /* auto-fill the save name when highlighting a file */
     if (save_mode && (k == CACA_KEY_UP || k == CACA_KEY_DOWN)) {
       gtcaca_filechooser_key(fc, k, NULL);
-      if (fc->sel < fc->nentries && !fc->entries[fc->sel].isdir)
-        snprintf(fc->name, sizeof fc->name, "%s", fc->entries[fc->sel].name);
+      if (fc->sel < fc->nfilt && !fc->entries[fc->filt[fc->sel]].isdir)
+        snprintf(fc->name, sizeof fc->name, "%s", fc->entries[fc->filt[fc->sel]].name);
       continue;
     }
     gtcaca_filechooser_key(fc, k, NULL);

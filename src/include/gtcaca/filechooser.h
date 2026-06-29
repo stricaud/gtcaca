@@ -49,6 +49,13 @@ struct _gtcaca_filechooser_widget_t {
   char  *title;
   int    result;               /* -100 ongoing, 1 chosen, 0 cancelled */
   char   chosen[PATH_MAX];
+
+  /* type-to-search ('/' to start): filters the list to matching names.
+     sel/top index into filt[] (the matching entries) when active. */
+  char   search[128];
+  int    searching;
+  int   *filt;
+  int    nfilt, filt_cap;
 };
 
 gtcaca_filechooser_widget_t *gtcaca_filechooser_new(gtcaca_widget_t *parent, int x, int y, int width, int height);
