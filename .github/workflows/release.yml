@@ -1,0 +1,111 @@
+name: Build & publish wheels
+
+# Wheels are built on every push/PR to catch breakage early, but only
+# *published* to PyPI when you push a version tag like `v0.1.0`.
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_wheels:
+    name: wheels · ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64,  runner: ubuntu-latest,    archs: x86_64 }
+          - { name: linux-aarch64, runner: ubuntu-24.04-arm, archs: aarch64 }
+          - { name: macos-arm64,   runner: macos-14,         archs: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # setuptools-scm needs full history/tags
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.3
+        env:
+          CIBW_ARCHS: ${{ matrix.archs }}
+        # All other config lives in [tool.cibuildwheel] in pyproject.toml.
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.name }}
+          path: ./wheelhouse/*.whl
+
+  # Windows x86_64 is experimental: libcaca has no MSVC build, so we cross-build
+  # it with MSYS2/mingw-w64 and link the MSVC extension against a generated
+  # import lib. continue-on-error keeps a broken Windows build from blocking the
+  # Linux/macOS release; its wheel still publishes when the job goes green.
+  build_wheels_windows:
+    name: wheels · win-amd64 (experimental)
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel autoconf automake libtool make tar
+            mingw-w64-x86_64-gcc mingw-w64-x86_64-ncurses
+            mingw-w64-x86_64-pkgconf mingw-w64-x86_64-tools-git
+
+      - name: Build libcaca (mingw) + MSVC import lib
+        shell: msys2 {0}
+        run: CACA_ROOT=C:/caca-dist bash scripts/ci/build-libcaca-win.sh
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.3
+        env:
+          CIBW_ARCHS: AMD64
+          CIBW_ENVIRONMENT_WINDOWS: CACA_ROOT=C:/caca-dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-win-amd64
+          path: ./wheelhouse/*.whl
+
+  build_sdist:
+    name: sdist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build sdist
+        run: pipx run build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: ./dist/*.tar.gz
+
+  publish:
+    name: publish to PyPI
+    needs: [build_wheels, build_wheels_windows, build_sdist]
+    runs-on: ubuntu-latest
+    # Only on a version tag.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/gtcaca
+    permissions:
+      id-token: write            # OIDC token for PyPI Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: "*"
+          merge-multiple: true   # collect all wheels + the sdist into dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

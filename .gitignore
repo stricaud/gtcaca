@@ -1,2 +1,10 @@
 *~
 build/*
+
+# Python packaging artifacts
+dist/
+wheelhouse/
+*.egg-info/
+__pycache__/
+*.so
+.DS_Store

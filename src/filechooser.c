@@ -2,7 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#ifdef _WIN32
+#include <gtcaca/win_compat.h>
+#else
 #include <dirent.h>
+#endif
 #include <sys/stat.h>
 
 #include <caca.h>

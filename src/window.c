@@ -1,7 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <gtcaca/win_compat.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <caca.h>
 

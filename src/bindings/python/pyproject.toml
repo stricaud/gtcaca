@@ -1,0 +1,20 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "gtcaca"
+version = "0.0.0"
+description = "Python bindings for GTCaca, a libcaca-based terminal UI toolkit"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "see project root" }
+authors = [{ name = "Seb Tricaud" }]
+keywords = ["tui", "libcaca", "terminal", "ui", "ncurses", "widgets"]
+
+[tool.scikit-build]
+# CMakeLists.txt lives in this directory.
+cmake.source-dir = "."
+wheel.packages = ["gtcaca"]
+# libcaca is found via pkg-config at build time.
+build-dir = "build/{wheel_tag}"

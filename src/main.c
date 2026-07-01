@@ -2,7 +2,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#include <gtcaca/win_compat.h>
+#else
 #include <unistd.h>
+#endif
 #include <fcntl.h>
 #include <errno.h>
 
@@ -59,6 +63,10 @@ void gtcaca_main_quit(void)
 int gtcaca_init(int *argc, char ***argv)
 {
   int retval;
+
+#ifdef _WIN32
+  gtcaca_win_enable_vt();   /* let SGR/alt-screen escapes render on Windows */
+#endif
 
   retval = gtcaca_theme_parse_ini(NULL);
   if (retval < 0) {

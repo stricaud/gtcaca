@@ -1,0 +1,98 @@
+# Root packaging config for publishing the `gtcaca` Python bindings to PyPI.
+#
+# The bindings (src/bindings/python) compile the libcaca C sources that live at
+# the repo root (src/*.c, src/include/gtcaca/*.h). Those sources are OUTSIDE the
+# bindings directory, so the build — and the PyPI sdist — must be rooted here at
+# the repo top, not in src/bindings/python. This file is the canonical build for
+# releases; the src/bindings/python/pyproject.toml remains for local dev only.
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12", "setuptools-scm>=8"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "gtcaca"
+dynamic = ["version"]                       # derived from git tags (setuptools-scm)
+description = "Python bindings for GTCaca, a libcaca-based terminal UI toolkit"
+readme = "src/bindings/python/README.md"
+requires-python = ">=3.9"
+license = { text = "Public Domain" }
+authors = [{ name = "Seb Tricaud", email = "sebastien.tricaud@proton.me" }]
+keywords = ["tui", "libcaca", "terminal", "ui", "ncurses", "widgets"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console :: Curses",
+  "License :: Public Domain",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: MacOS :: MacOS X",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: C",
+  "Topic :: Software Development :: User Interfaces",
+]
+
+[project.urls]
+Homepage = "https://github.com/stricaud/gtcaca"
+Repository = "https://github.com/stricaud/gtcaca"
+
+# --- scikit-build-core: drive the existing CMake build in the bindings dir ---
+[tool.scikit-build]
+cmake.source-dir = "src/bindings/python"
+wheel.packages = ["src/bindings/python/gtcaca"]
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+
+[tool.scikit-build.sdist]
+# Force the exact files the extension needs into the sdist (specific paths, so
+# no build trees sneak in — sdist.include overrides sdist.exclude). This makes
+# `pip install gtcaca` from an sdist build even before these are committed.
+include = [
+  "src/*.c",
+  "src/include/gtcaca/*.h",
+  "src/bindings/python/CMakeLists.txt",
+  "src/bindings/python/gtcaca_module.cpp",
+  "src/bindings/python/README.md",
+  "src/bindings/python/gtcaca/*.py",
+  "scripts/ci/build-libcaca.sh",
+  "scripts/ci/build-libcaca-win.sh",
+]
+# Trim non-essential tracked dirs + any local junk from the sdist.
+exclude = [
+  ".claude/**",
+  "**/build/**",
+  "apps/**",
+  "demo/**",
+  "docs/**",
+  "**/__pycache__/**",
+  "**/*.so",
+  "**/*.pkg",
+  "**/.DS_Store",
+]
+
+[tool.setuptools_scm]
+# Version comes from the latest `v*` git tag. Requires fetch-depth: 0 in CI.
+
+# --- cibuildwheel: how each wheel is built in CI ----------------------------
+[tool.cibuildwheel]
+build-frontend = "build"
+build-verbosity = 1
+# PyPy has no stable ABI match here; musllinux + 32-bit are out of scope.
+# Windows: x86_64 only (win32 + ARM skipped).
+skip = ["pp*", "*-musllinux*", "*_i686", "*-win32", "*-win_arm64"]
+# Smoke test: import must succeed (loads the bundled libcaca; no display needed).
+test-command = "python -c \"import gtcaca; assert gtcaca.window_new\""
+
+[tool.cibuildwheel.linux]
+before-all = "bash {project}/scripts/ci/build-libcaca.sh"
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+# libcaca lands in /usr/local; expose it to pkg-config + the linker/repair step.
+environment = { PKG_CONFIG_PATH = "/usr/local/lib/pkgconfig:/usr/local/lib64/pkgconfig", LD_LIBRARY_PATH = "/usr/local/lib:/usr/local/lib64" }
+
+[tool.cibuildwheel.macos]
+before-all = "bash {project}/scripts/ci/build-libcaca.sh"
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0", PKG_CONFIG_PATH = "/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig" }
+
+[tool.cibuildwheel.windows]
+# libcaca is built by the release workflow's MSYS2 step (build-libcaca-win.sh)
+# into ./caca-dist and exposed to CMake via the CACA_ROOT env var (set by the
+# workflow). Here we just bundle the DLLs with delvewheel.
+before-build = "pip install delvewheel"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/caca-dist/bin"
