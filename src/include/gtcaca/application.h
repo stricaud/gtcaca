@@ -38,7 +38,7 @@ struct _gtcaca_application_widget_t {
   char *application_title;
 };
 
-gtcaca_application_widget_t *gtcaca_application_new(char *application_title);
+gtcaca_application_widget_t *gtcaca_application_new(const char *application_title);
 void gtcaca_application_draw(gtcaca_application_widget_t *application);
 
 #endif // _GTCACA_APPLICATION_H_

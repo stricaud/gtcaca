@@ -43,9 +43,9 @@ struct _gtcaca_window_widget_t {
 };
 typedef struct _gtcaca_window_widget_t gtcaca_window_widget_t;
 
-gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_title, int x, int y, int width, int height);
+gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, const char *window_title, int x, int y, int width, int height);
 /* Like gtcaca_window_new, but centred on the canvas (a pop-up / dialog). */
-gtcaca_window_widget_t *gtcaca_window_new_centered(gtcaca_widget_t *parent, char *window_title, int width, int height);
+gtcaca_window_widget_t *gtcaca_window_new_centered(gtcaca_widget_t *parent, const char *window_title, int width, int height);
 void gtcaca_window_draw(gtcaca_window_widget_t *win);
 void gtcaca_window_set_focus(gtcaca_window_widget_t *win);
 gtcaca_window_widget_t *gtcaca_window_get_current_focus(void);

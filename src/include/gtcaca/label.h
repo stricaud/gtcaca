@@ -29,7 +29,7 @@ struct _gtcaca_label_widget_t {
 };
 typedef struct _gtcaca_label_widget_t gtcaca_label_widget_t;
 
-gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int x, int y);
+gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, const char *text, int x, int y);
 void gtcaca_label_draw(gtcaca_label_widget_t *label);
 
 #endif // _GTCACA_LABEL_H_

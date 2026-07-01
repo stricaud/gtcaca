@@ -7,7 +7,7 @@
 #include <gtcaca/label.h>
 #include <gtcaca/main.h>
 
-gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int x, int y)
+gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, const char *text, int x, int y)
 {
   gtcaca_label_widget_t *label;
 
@@ -20,10 +20,10 @@ gtcaca_label_widget_t *gtcaca_label_new(gtcaca_widget_t *parent, char *text, int
   label->id = gtcaca_get_newid();
   label->has_focus = 0;
   label->is_visible = 1;
-  label->label = text;
+  label->label = text ? strdup(text) : NULL;
   label->x = parent ? parent->x + x : x;
   label->y = parent ? parent->y + y : y;
-  label->width = strlen(text);
+  label->width = label->label ? (int)strlen(label->label) : 0;
   label->height = 1;
   label->color_focus_fg = gmo.theme.textfocus.fg;
   label->color_focus_bg = gmo.theme.textfocus.bg;

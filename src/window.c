@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <caca.h>
@@ -33,7 +34,7 @@ static int _gtcaca_widget_is_focusable(gtcaca_widget_t *widget)
   }
 }
 
-gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_title, int x, int y, int width, int height)
+gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, const char *window_title, int x, int y, int width, int height)
 {
   gtcaca_window_widget_t *win;
 
@@ -46,7 +47,7 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
   win->id = gtcaca_get_newid();
   win->has_focus = 1;
   win->is_visible = 1;
-  win->window_title = window_title;
+  win->window_title = window_title ? strdup(window_title) : NULL;
   win->x = x;
   win->y = y;
   win->width = width;
@@ -73,7 +74,7 @@ gtcaca_window_widget_t *gtcaca_window_new(gtcaca_widget_t *parent, char *window_
   return win;
 }
 
-gtcaca_window_widget_t *gtcaca_window_new_centered(gtcaca_widget_t *parent, char *window_title, int width, int height)
+gtcaca_window_widget_t *gtcaca_window_new_centered(gtcaca_widget_t *parent, const char *window_title, int width, int height)
 {
   int cw = caca_get_canvas_width(gmo.cv);
   int ch = caca_get_canvas_height(gmo.cv);

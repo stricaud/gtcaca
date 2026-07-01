@@ -17,7 +17,7 @@ static int _gtcaca_button_private_key_press(gtcaca_button_widget_t *button, int 
   return 0;
 }
 
-gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_label, int x, int y)
+gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, const char *button_label, int x, int y)
 {
   gtcaca_button_widget_t *button;
   int i;
@@ -31,11 +31,11 @@ gtcaca_button_widget_t *gtcaca_button_new(gtcaca_widget_t *parent, char *button_
   button->id = gtcaca_get_newid();
   button->has_focus = 1;
   button->is_visible = 1;
-  button->button_label = button_label;
+  button->button_label = button_label ? strdup(button_label) : NULL;
 
   gtcaca_widget_position_size_parent(parent, (gtcaca_widget_t *)button, x, y);
   /* this widget does not fit the whole parent size */
-  button->width = strlen(button_label) + 2;
+  button->width = (button->button_label ? (int)strlen(button->button_label) : 0) + 2;
   button->height = 3;
 
   button->type = GTCACA_WIDGET_BUTTON;

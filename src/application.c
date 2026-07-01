@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <caca.h>
 
@@ -62,7 +63,7 @@ int gtcaca_application_exists(void)
   return exists;
 }
 
-gtcaca_application_widget_t *gtcaca_application_new(char *application_title)
+gtcaca_application_widget_t *gtcaca_application_new(const char *application_title)
 {
   gtcaca_application_widget_t *application;
   int i;
@@ -77,7 +78,7 @@ gtcaca_application_widget_t *gtcaca_application_new(char *application_title)
   application->id = gtcaca_get_newid();
   application->has_focus = 1;
   application->is_visible = 1;
-  application->application_title = application_title;
+  application->application_title = application_title ? strdup(application_title) : NULL;
   application->x = 0;
   application->y = 0;
   application->width = caca_get_canvas_width(gmo.cv);
