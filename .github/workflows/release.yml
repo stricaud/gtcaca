@@ -59,7 +59,7 @@ jobs:
           update: true
           install: >-
             base-devel autoconf automake libtool make tar
-            mingw-w64-x86_64-gcc mingw-w64-x86_64-ncurses
+            mingw-w64-x86_64-gcc
             mingw-w64-x86_64-pkgconf mingw-w64-x86_64-tools-git
 
       - name: Build libcaca (mingw) + MSVC import lib

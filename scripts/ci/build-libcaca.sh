@@ -57,6 +57,8 @@ cd libcaca
 
 # Minimal shared build: keep the ncurses terminal driver, drop everything a
 # TUI wheel doesn't need (GUI drivers, bindings, docs, tools).
+# -fpermissive downgrades GCC 14's new hard errors (implicit-function-decl,
+# int-conversion) back to warnings, which the aging libcaca 0.99.beta20 needs.
 ./configure \
   --prefix=/usr/local \
   --enable-shared --disable-static \
@@ -64,10 +66,16 @@ cd libcaca
   --disable-slang --disable-x11 --disable-gl --disable-imlib2 \
   --disable-doc --disable-cxx --disable-python --disable-ruby \
   --disable-java --disable-csharp --disable-network \
-  --disable-cocoa
+  --disable-cocoa \
+  CFLAGS="-O2 -fpermissive"
 
-make -j"$(nproc)"
-make install
+# Build/install ONLY the library (caca/). libcaca's bundled tools (cacaview's
+# common-image.c) don't compile with GCC 14 — and the wheel doesn't need them.
+make -j"$(nproc)" -C caca
+make -C caca install
+# caca.pc is a top-level install target, so install it by hand for pkg-config.
+install -Dm644 caca.pc /usr/local/lib/pkgconfig/caca.pc 2>/dev/null \
+  || { mkdir -p /usr/local/lib/pkgconfig && cp caca.pc /usr/local/lib/pkgconfig/; }
 ldconfig 2>/dev/null || true
 
-echo "libcaca ${CACA_VERSION} installed to /usr/local"
+echo "libcaca ${CACA_VERSION} library installed to /usr/local"

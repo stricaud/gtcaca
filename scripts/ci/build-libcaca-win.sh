@@ -30,13 +30,22 @@ mkdir srcdir && tar xzf c.tar.gz -C srcdir --strip-components=1
 cd srcdir
 
 # Native mingw build (in MINGW64 the compiler IS x86_64-w64-mingw32-gcc).
+# Disable the ncurses + slang drivers: their code uses POSIX-only bits
+# (SIGWINCH, struct winsize) that don't exist on Windows. libcaca falls back to
+# its built-in win32/conio/null/raw drivers. -fpermissive relaxes GCC 14's new
+# hard errors for the aging libcaca sources.
 ./configure --prefix="$DIST" \
   --enable-shared --disable-static \
+  --disable-ncurses --disable-slang \
   --disable-imlib2 --disable-java --disable-doc --disable-cxx \
   --disable-python --disable-ruby --disable-csharp \
-  --disable-gl --disable-x11 --disable-network
-make -j"$(nproc)"
-make install
+  --disable-gl --disable-x11 --disable-network \
+  CFLAGS="-O2 -fpermissive"
+
+# Build/install ONLY the library (caca/) — the bundled tools don't compile with
+# modern GCC and the wheel doesn't need them.
+make -j"$(nproc)" -C caca
+make -C caca install
 
 # Locate the installed DLL (libtool/mingw may name it libcaca-0.dll).
 dll="$(ls "$DIST"/bin/*caca*.dll 2>/dev/null | head -n1)"
