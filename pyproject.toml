@@ -88,7 +88,9 @@ environment = { PKG_CONFIG_PATH = "/usr/local/lib/pkgconfig:/usr/local/lib64/pkg
 
 [tool.cibuildwheel.macos]
 before-all = "bash {project}/scripts/ci/build-libcaca.sh"
-environment = { MACOSX_DEPLOYMENT_TARGET = "11.0", PKG_CONFIG_PATH = "/opt/homebrew/lib/pkgconfig:/usr/local/lib/pkgconfig" }
+# libcaca is built from source into /usr/local pinned to this deployment target
+# (see build-libcaca.sh) so delocate's bundled dylib matches the wheel's floor.
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0", PKG_CONFIG_PATH = "/usr/local/lib/pkgconfig" }
 
 [tool.cibuildwheel.windows]
 # libcaca is built by the release workflow's MSYS2 step (build-libcaca-win.sh)

@@ -45,12 +45,12 @@ if(WIN32)
 else()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(LIBCACA REQUIRED caca)
-
-  # Oniguruma is optional and only enables TextMate-grammar colourization in the
-  # editor widget, which these bindings don't expose. Keep it off by default for
-  # a leaner, more portable build. (pkg-config only; skipped on Windows.)
-  pkg_check_modules(ONIG oniguruma)
 endif()
+
+# NOTE: oniguruma is deliberately NOT used here. It only enables TextMate-grammar
+# colourization in the editor widget (not exposed by these bindings). Linking it
+# would add a needless runtime dependency to the wheel — and on macOS a Homebrew
+# libonig targets a newer OS than the wheel, breaking delocate.
 
 # --- gtcaca C sources ------------------------------------------------------
 # Compile the library sources straight into the extension so the wheel is
@@ -108,13 +108,6 @@ endif()
 # Default data dir for themes (no trailing colourization issues without onig).
 target_compile_definitions(_gtcaca PRIVATE
   GTCACA_DATA_DIR="${CMAKE_INSTALL_PREFIX}/share/gtcaca/")
-
-if(ONIG_FOUND)
-  target_include_directories(_gtcaca PRIVATE ${ONIG_INCLUDE_DIRS})
-  target_link_libraries(_gtcaca PRIVATE ${ONIG_LIBRARIES})
-  target_link_directories(_gtcaca PRIVATE ${ONIG_LIBRARY_DIRS})
-  target_compile_definitions(_gtcaca PRIVATE GTCACA_HAVE_ONIG=1)
-endif()
 
 # The C sources are C99. MSVC doesn't understand -std=c99 (it selects the C
 # standard with /std:c11|c17 and defaults to a modern C mode), so only pass the
