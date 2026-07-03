@@ -9,15 +9,25 @@
  *
  * Covered:
  *   main.c / window.c : isatty, write, usleep, ssize_t
- *   filechooser.c     : opendir/readdir/closedir (d_name only), PATH_MAX,
+ *   iniparse.c        : asprintf
+ *   filechooser.c     : opendir/readdir/closedir (d_name only), realpath,
  *                       S_ISDIR, strcasecmp
  */
 #ifdef _WIN32
 
+/* Keep <windows.h> lean + drop the min/max macros so this header is safe to
+   include broadly (e.g. into iniparse.c) without clobbering other code. */
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <io.h>        /* _isatty, _write */
-#include <stdio.h>     /* snprintf */
-#include <stdlib.h>    /* malloc, free */
+#include <stdio.h>     /* snprintf, _vscprintf, vsnprintf */
+#include <stdlib.h>    /* malloc, free, _fullpath, _MAX_PATH */
+#include <stdarg.h>    /* va_list (asprintf) */
 #include <string.h>    /* _stricmp, strncpy */
 #include <sys/stat.h>  /* _S_IFDIR, struct stat, stat() */
 #include <basetsd.h>   /* SSIZE_T */
@@ -37,15 +47,37 @@ static __inline void usleep(unsigned long usec) { Sleep((DWORD)(usec / 1000UL));
 #define strcasecmp(a, b) _stricmp((a), (b))
 #endif
 
-/* --- limits (filechooser.c) --- */
-#ifndef PATH_MAX
-#define PATH_MAX MAX_PATH
-#endif
+/* Deliberately do NOT define PATH_MAX here: filechooser.h defines it (4096) and
+   we must not shadow it with a smaller MAX_PATH, or the curdir[PATH_MAX] struct
+   field would differ across translation units. realpath() below uses _MAX_PATH. */
 
 /* --- <sys/stat.h> POSIX macro (filechooser.c) --- */
 #ifndef S_ISDIR
 #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
 #endif
+
+/* --- allocate-and-format printf (GNU/BSD; used by iniparse.c) --- */
+static __inline int asprintf(char **strp, const char *fmt, ...) {
+  va_list ap;
+  int len;
+  va_start(ap, fmt);
+  len = _vscprintf(fmt, ap);
+  va_end(ap);
+  if (len < 0) { *strp = NULL; return -1; }
+  *strp = (char *)malloc((size_t)len + 1);
+  if (!*strp) return -1;
+  va_start(ap, fmt);
+  len = vsnprintf(*strp, (size_t)len + 1, fmt, ap);
+  va_end(ap);
+  return len;
+}
+
+/* --- canonicalize a path (POSIX realpath; used by filechooser.c) ---
+   _fullpath canonicalizes lexically (doesn't require the path to exist, which
+   is fine here). With resolved==NULL it mallocs, matching POSIX.1-2008. */
+static __inline char *realpath(const char *path, char *resolved) {
+  return _fullpath(resolved, path, _MAX_PATH);
+}
 
 /* --- minimal <dirent.h> — filechooser.c only reads de->d_name --- */
 struct dirent { char d_name[MAX_PATH]; };
