@@ -109,12 +109,14 @@ endif()
 target_compile_definitions(_gtcaca PRIVATE
   GTCACA_DATA_DIR="${CMAKE_INSTALL_PREFIX}/share/gtcaca/")
 
-# The C sources are C99. MSVC doesn't understand -std=c99 (it selects the C
-# standard with /std:c11|c17 and defaults to a modern C mode), so only pass the
-# GCC/Clang flag on those compilers.
+# The C sources are C99 but use POSIX APIs (strdup, usleep). Use gnu99, NOT
+# strict c99: strict -std=c99 defines __STRICT_ANSI__, which makes glibc hide
+# those POSIX functions, and GCC 14 then turns the implicit declarations into
+# hard errors. (macOS libc exposes them regardless, which is why c99 built
+# locally.) MSVC selects its C standard differently (/std:c11 above).
 if(NOT MSVC)
   set_source_files_properties(${GTCACA_C_SOURCES} PROPERTIES
-    COMPILE_FLAGS "-std=c99")
+    COMPILE_FLAGS "-std=gnu99")
 endif()
 
 # Place the built module next to the Python package sources when building

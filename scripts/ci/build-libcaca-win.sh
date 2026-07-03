@@ -47,6 +47,13 @@ cd srcdir
 make -j"$(nproc)" -C caca
 make -C caca install
 
+# libcaca's caca_types.h wrongly does `typedef int ssize_t;` for MSVC/Win64 —
+# a 32-bit int, which clashes with CPython's `typedef __int64 ssize_t` (C2371)
+# when the MSVC-built extension includes both caca.h and Python.h. Patch it to
+# the correct 64-bit type so all definitions agree.
+hdr="$DIST/include/caca_types.h"
+[ -f "$hdr" ] && sed -i 's/typedef int ssize_t;/typedef __int64 ssize_t;/g' "$hdr"
+
 # Locate the installed DLL (libtool/mingw may name it libcaca-0.dll).
 dll="$(ls "$DIST"/bin/*caca*.dll 2>/dev/null | head -n1)"
 [ -n "$dll" ] || { echo "ERROR: no libcaca DLL produced"; ls -R "$DIST"; exit 1; }
