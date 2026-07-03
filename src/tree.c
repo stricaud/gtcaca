@@ -57,7 +57,7 @@ static tnode *_make_root(gtcaca_tree_widget_t *t)
 }
 
 /* expand child `ci` of P (P must be an open node); returns the new tnode */
-static tnode *_expand(gtcaca_tree_widget_t *t, tnode *P, long ci)
+static tnode *tree_expand(gtcaca_tree_widget_t *t, tnode *P, long ci)
 {
   tnode *C;
   int pos, k;
@@ -259,7 +259,7 @@ int gtcaca_tree_key(gtcaca_tree_widget_t *t, int key, void *userdata)
   case CACA_KEY_END:   t->sel = vis - 1; break;
   case CACA_KEY_RIGHT:
     if (_resolve(t, t->sel, &ri)) {
-      if (ri.has_kids && !ri.self) _expand(t, ri.parent, ri.index);
+      if (ri.has_kids && !ri.self) tree_expand(t, ri.parent, ri.index);
       else if (ri.self && t->sel < vis - 1) t->sel++;     /* into first child */
     }
     break;
@@ -274,7 +274,7 @@ int gtcaca_tree_key(gtcaca_tree_widget_t *t, int key, void *userdata)
   case ' ':
     if (_resolve(t, t->sel, &ri) && ri.has_kids) {
       if (ri.self) _collapse(ri.parent, ri.self);
-      else _expand(t, ri.parent, ri.index);
+      else tree_expand(t, ri.parent, ri.index);
     }
     break;
   default:

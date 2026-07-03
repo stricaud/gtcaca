@@ -443,7 +443,7 @@ void gtcaca_editor_grammar_free(gtcaca_editor_grammar_t *g)
 
 /* Resolve a context's pattern list to concrete matchable rule indices,
    expanding includes ($self / #name). Bounded by `out_cap`. */
-static void _expand(gtcaca_editor_grammar_t *g, int *list, int n, int *out, int *nout, int out_cap, int depth)
+static void tm_expand(gtcaca_editor_grammar_t *g, int *list, int n, int *out, int *nout, int out_cap, int depth)
 {
   int i;
   if (depth > 8) return;
@@ -451,17 +451,17 @@ static void _expand(gtcaca_editor_grammar_t *g, int *list, int n, int *out, int 
     tm_rule *r = &g->rules[list[i]];
     if (r->kind == RULE_INCLUDE) {
       if (r->include && r->include[0] == '$') {                 /* $self */
-        _expand(g, g->root, g->nroot, out, nout, out_cap, depth + 1);
+        tm_expand(g, g->root, g->nroot, out, nout, out_cap, depth + 1);
       } else if (r->include && r->include[0] == '#') {          /* #repository */
         int k;
         for (k = 0; k < g->nrepo; k++)
           if (!strcmp(g->repo_names[k], r->include + 1)) {
-            _expand(g, g->repo_lists[k], g->repo_counts[k], out, nout, out_cap, depth + 1);
+            tm_expand(g, g->repo_lists[k], g->repo_counts[k], out, nout, out_cap, depth + 1);
             break;
           }
       }
     } else if (r->kind == RULE_BEGINEND && !r->re_match && r->patterns) {
-      _expand(g, r->patterns, r->npatterns, out, nout, out_cap, depth + 1);  /* grouping */
+      tm_expand(g, r->patterns, r->npatterns, out, nout, out_cap, depth + 1);  /* grouping */
     } else {
       out[(*nout)++] = list[i];
     }
@@ -528,9 +528,9 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
 
       /* candidate child patterns of the active context */
       if (stack[sp] == -1)
-        _expand(g, g->root, g->nroot, cand, &ncand, 128, 0);
+        tm_expand(g, g->root, g->nroot, cand, &ncand, 128, 0);
       else
-        _expand(g, g->rules[stack[sp]].patterns, g->rules[stack[sp]].npatterns, cand, &ncand, 128, 0);
+        tm_expand(g, g->rules[stack[sp]].patterns, g->rules[stack[sp]].npatterns, cand, &ncand, 128, 0);
 
       /* search each candidate; keep the leftmost match */
       for (ci = 0; ci < ncand; ci++) {
