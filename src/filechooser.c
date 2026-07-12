@@ -325,9 +325,10 @@ void gtcaca_filechooser_free(gtcaca_filechooser_widget_t *fc)
   clear_entries(fc); free(fc->entries); free(fc->filt); free(fc->title); free(fc);
 }
 
-int gtcaca_filechooser_run_opts(const char *start_dir, char *out_path, int outlen,
-                                int save_mode, const gtcaca_fc_option_t *opts,
-                                int nopts, int *states_out)
+/* Common modal driver behind all the run() variants. */
+static int fc_run(const char *start_dir, char *out_path, int outlen, int save_mode,
+                  const gtcaca_fc_option_t *opts, int nopts, int *states_out,
+                  const char *default_name)
 {
   int cw = caca_get_canvas_width(gmo.cv), chh = caca_get_canvas_height(gmo.cv);
   int w = cw * 3 / 4, h = chh * 3 / 4, res, i;
@@ -339,6 +340,7 @@ int gtcaca_filechooser_run_opts(const char *start_dir, char *out_path, int outle
   if (!fc) return 0;
   fc->mode = save_mode ? GTCACA_FILECHOOSER_SAVE : GTCACA_FILECHOOSER_OPEN;
   if (save_mode && opts && nopts > 0) gtcaca_filechooser_set_options(fc, opts, nopts);
+  if (save_mode && default_name) snprintf(fc->name, sizeof fc->name, "%s", default_name);
   /* start focus on the name field when saving so the cursor is ready to type */
   fc->focus = save_mode ? GTCACA_FC_FOCUS_NAME : GTCACA_FC_FOCUS_LIST;
   gtcaca_filechooser_set_dir(fc, start_dir);
@@ -359,7 +361,20 @@ int gtcaca_filechooser_run_opts(const char *start_dir, char *out_path, int outle
   return res;
 }
 
+int gtcaca_filechooser_run_opts(const char *start_dir, char *out_path, int outlen,
+                                int save_mode, const gtcaca_fc_option_t *opts,
+                                int nopts, int *states_out)
+{
+  return fc_run(start_dir, out_path, outlen, save_mode, opts, nopts, states_out, NULL);
+}
+
+int gtcaca_filechooser_run_named(const char *start_dir, const char *default_name,
+                                 char *out_path, int outlen)
+{
+  return fc_run(start_dir, out_path, outlen, 1, NULL, 0, NULL, default_name);
+}
+
 int gtcaca_filechooser_run(const char *start_dir, char *out_path, int outlen, int save_mode)
 {
-  return gtcaca_filechooser_run_opts(start_dir, out_path, outlen, save_mode, NULL, 0, NULL);
+  return fc_run(start_dir, out_path, outlen, save_mode, NULL, 0, NULL, NULL);
 }

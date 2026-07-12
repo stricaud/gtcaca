@@ -95,4 +95,8 @@ int  gtcaca_filechooser_run_opts(const char *start_dir, char *out_path, int outl
                                  int save_mode, const gtcaca_fc_option_t *opts,
                                  int nopts, int *states_out);
 
+/* Save dialog with the name field pre-filled to `default_name`. */
+int  gtcaca_filechooser_run_named(const char *start_dir, const char *default_name,
+                                  char *out_path, int outlen);
+
 #endif /* _GTCACA_FILECHOOSER_H_ */
