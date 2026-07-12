@@ -20,6 +20,7 @@ typedef struct gtcaca_mm_node {
   char    *text;
   uint8_t  colour;
   int      folded;
+  void    *userdata;         /* caller-owned association (e.g. a flow handle) */
   struct gtcaca_mm_node  *parent;
   struct gtcaca_mm_node **kids;
   int      nkids, capkids;
