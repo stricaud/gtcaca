@@ -64,12 +64,18 @@ struct _gtcaca_filechooser_widget_t {
   int   *filt;
   int    nfilt, filt_cap;
 
-  /* optional save-dialog checkboxes; opt_sel = -1 focuses the file area, or
-     0..nopt-1 focuses a checkbox (Tab cycles, Space toggles). */
+  /* optional save-dialog checkboxes (Tab cycles focus, Space toggles). */
   struct { char label[80]; int state; } opt[GTCACA_FC_MAX_OPTS];
   int    nopt;
-  int    opt_sel;
+
+  /* Which control has keyboard focus. Tab cycles through them:
+       0            = file list   (arrows navigate, Enter descends/picks)
+       1            = name field  (save mode; type to edit, Enter saves)
+       2 .. 2+nopt-1= checkbox    (index = focus - 2; Space toggles)          */
+  int    focus;
 };
+
+enum { GTCACA_FC_FOCUS_LIST = 0, GTCACA_FC_FOCUS_NAME = 1, GTCACA_FC_FOCUS_OPT = 2 };
 
 gtcaca_filechooser_widget_t *gtcaca_filechooser_new(gtcaca_widget_t *parent, int x, int y, int width, int height);
 void gtcaca_filechooser_set_dir(gtcaca_filechooser_widget_t *fc, const char *dir);
