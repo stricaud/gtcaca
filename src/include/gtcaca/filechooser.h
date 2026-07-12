@@ -19,7 +19,14 @@
 
 enum { GTCACA_FILECHOOSER_OPEN = 0, GTCACA_FILECHOOSER_SAVE = 1 };
 
+#define GTCACA_FC_MAX_OPTS 6
+
 typedef struct { char *name; int isdir; } gtcaca_fc_entry_t;
+
+/* An optional labelled checkbox shown in the save dialog (e.g. "Only save
+   displayed packets"). `initial` is the starting state; after the dialog runs,
+   the chosen states are reported back through gtcaca_filechooser_run_opts(). */
+typedef struct { const char *label; int initial; } gtcaca_fc_option_t;
 
 typedef struct _gtcaca_filechooser_widget_t gtcaca_filechooser_widget_t;
 struct _gtcaca_filechooser_widget_t {
@@ -56,6 +63,12 @@ struct _gtcaca_filechooser_widget_t {
   int    searching;
   int   *filt;
   int    nfilt, filt_cap;
+
+  /* optional save-dialog checkboxes; opt_sel = -1 focuses the file area, or
+     0..nopt-1 focuses a checkbox (Tab cycles, Space toggles). */
+  struct { char label[80]; int state; } opt[GTCACA_FC_MAX_OPTS];
+  int    nopt;
+  int    opt_sel;
 };
 
 gtcaca_filechooser_widget_t *gtcaca_filechooser_new(gtcaca_widget_t *parent, int x, int y, int width, int height);
@@ -64,7 +77,16 @@ void gtcaca_filechooser_draw(gtcaca_filechooser_widget_t *fc);
 int  gtcaca_filechooser_key(gtcaca_filechooser_widget_t *fc, int key, void *userdata);
 void gtcaca_filechooser_free(gtcaca_filechooser_widget_t *fc);
 
+void gtcaca_filechooser_set_options(gtcaca_filechooser_widget_t *fc,
+                                    const gtcaca_fc_option_t *opts, int nopts);
+
 /* blocking: returns 1 and fills out_path if a file was chosen, 0 if cancelled */
 int  gtcaca_filechooser_run(const char *start_dir, char *out_path, int outlen, int save_mode);
+
+/* Like gtcaca_filechooser_run() but shows `nopts` checkboxes (save mode). On a
+   successful choice, states_out[i] (if non-NULL) receives each checkbox state. */
+int  gtcaca_filechooser_run_opts(const char *start_dir, char *out_path, int outlen,
+                                 int save_mode, const gtcaca_fc_option_t *opts,
+                                 int nopts, int *states_out);
 
 #endif /* _GTCACA_FILECHOOSER_H_ */
