@@ -97,14 +97,18 @@ void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item)
 
 void gtcaca_textlist_selection_up(gtcaca_textlist_widget_t *textlist)
 {
-  if (textlist->selected_item <= 0) { return; }
-  textlist->selected_item--;
+  unsigned int n = utarray_len(textlist->list);
+  if (n == 0) return;
+  if (textlist->selected_item == 0) textlist->selected_item = n - 1;  /* wrap to last */
+  else textlist->selected_item--;
 }
 
 void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist)
 {
-  if (textlist->selected_item == utarray_len(textlist->list) - 1) { return; }
-  textlist->selected_item++;
+  unsigned int n = utarray_len(textlist->list);
+  if (n == 0) return;
+  if (textlist->selected_item >= n - 1) textlist->selected_item = 0;   /* wrap to first */
+  else textlist->selected_item++;
 }
 
 char *gtcaca_textlist_get_text_selected(gtcaca_textlist_widget_t *textlist)

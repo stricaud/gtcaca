@@ -105,6 +105,16 @@ void gtcaca_table_draw(gtcaca_table_widget_t *t)
   caca_set_color_ansi(gmo.cv, fg, bg);
   for (c = 0; c < inner_w; c++) caca_put_char(gmo.cv, inner_x + c, inner_y + header_h, 0x2500); /* ─ */
 
+  /* keep the selected row on-screen (so programmatic set_current — e.g. a live
+     capture following new packets — scrolls the window, like the tree does) */
+  {
+    int data_rows = inner_h - header_h - 1;
+    if (data_rows < 1) data_rows = 1;
+    if (t->sel < t->top)                    t->top = t->sel;
+    else if (t->sel >= t->top + data_rows)  t->top = t->sel - data_rows + 1;
+    if (t->top < 0) t->top = 0;
+  }
+
   /* visible data rows (windowed: only on-screen rows are fetched) */
   for (i = 0; i + header_h + 1 < inner_h + 0 && i < inner_h - header_h - 1; i++) {
     long row = t->top + i;
