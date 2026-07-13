@@ -119,14 +119,20 @@ void gtcaca_table_draw(gtcaca_table_widget_t *t)
   for (i = 0; i + header_h + 1 < inner_h + 0 && i < inner_h - header_h - 1; i++) {
     long row = t->top + i;
     int y = inner_y + header_h + 1 + i, cx = 0, selected, is_sel;
-    uint8_t rbg;
+    uint8_t rbg, rfg = fg;
     if (row >= rows) break;
     is_sel   = (row == t->sel);
     selected = is_sel && t->has_focus;         /* active selection drives cell cursor */
     /* The selected row stays visible even when the table isn't focused, drawn
        with a muted background so the active pane is still distinguishable. */
     rbg = is_sel ? (t->has_focus ? t->sel_bg : CACA_DARKGRAY) : bg;
-    caca_set_color_ansi(gmo.cv, is_sel ? CACA_WHITE : fg, rbg); caca_set_attr(gmo.cv, 0);
+    /* A coloring rule paints unselected rows; the selection color always wins so
+       the cursor never disappears into a colored row. */
+    if (!is_sel && t->model->row_color) {
+      uint8_t cfg = fg, cbg = bg;
+      if (t->model->row_color(t->model, row, &cfg, &cbg)) { rfg = cfg; rbg = cbg; }
+    }
+    caca_set_color_ansi(gmo.cv, is_sel ? CACA_WHITE : rfg, rbg); caca_set_attr(gmo.cv, 0);
     { int col; for (col = 0; col < inner_w; col++) caca_put_char(gmo.cv, inner_x + col, y, ' '); }
     for (c = 0; c < ncol; c++) {
       int w = _colwidth(t, c, ncol, inner_w);
@@ -136,7 +142,7 @@ void gtcaca_table_draw(gtcaca_table_widget_t *t)
         caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_CYAN); caca_set_attr(gmo.cv, 0);
         for (k = 0; k < w && cx + k < inner_w; k++) caca_put_char(gmo.cv, inner_x + cx + k, y, ' ');
       } else {
-        caca_set_color_ansi(gmo.cv, is_sel ? CACA_WHITE : fg, rbg); caca_set_attr(gmo.cv, 0);
+        caca_set_color_ansi(gmo.cv, is_sel ? CACA_WHITE : rfg, rbg); caca_set_attr(gmo.cv, 0);
       }
       t->model->cell(t->model, row, c, buf, sizeof buf);
       caca_printf(gmo.cv, inner_x + cx, y, "%-.*s", w - 1 < avail ? w - 1 : avail, buf);

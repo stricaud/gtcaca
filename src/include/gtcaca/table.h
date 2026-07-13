@@ -19,6 +19,12 @@ struct gtcaca_table_model {
   void (*header)(gtcaca_table_model_t *m, int col, char *buf, int buflen);
   void (*cell)(gtcaca_table_model_t *m, long row, int col, char *buf, int buflen);
   void *userdata;
+
+  /* Optional per-row colors (Wireshark-style coloring rules). Return non-zero
+     and set *fg/*bg to paint the row; return 0 for the theme default. Called
+     only for rows actually on screen, so it may dissect lazily. The selected
+     row keeps the selection color regardless, so the cursor stays visible. */
+  int  (*row_color)(gtcaca_table_model_t *m, long row, uint8_t *fg, uint8_t *bg);
 };
 
 typedef struct _gtcaca_table_widget_t gtcaca_table_widget_t;
