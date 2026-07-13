@@ -2,10 +2,24 @@
 #define _GTCACA_WIN_COMPAT_H_
 
 /*
- * Windows (MSVC) compatibility shims for the handful of POSIX APIs the gtcaca C
- * sources use. Included only on _WIN32 (the three files that need it pull it in
+ * Windows compatibility shims for the handful of POSIX APIs the gtcaca C
+ * sources use. Included only on _WIN32 (the files that need it pull it in
  * behind #ifdef _WIN32; POSIX builds use the real <unistd.h>/<dirent.h>). This
  * keeps the Windows port contained to this one header + a few include guards.
+ *
+ * Two very different Windows toolchains reach this header:
+ *
+ *   MinGW-w64 (MSYS2, how the release binaries are built) ships real POSIX
+ *   headers: usleep, isatty, write, ssize_t, asprintf, strcasecmp and the whole
+ *   dirent API are already declared. Substituting our own there is not merely
+ *   redundant, it FAILS TO COMPILE — "static declaration of 'asprintf' follows
+ *   non-static declaration" — and <caca.h> transitively includes <unistd.h>, so
+ *   we cannot avoid the collision by not including it ourselves. Use the
+ *   toolchain's.
+ *
+ *   MSVC has none of them, and needs every shim below.
+ *
+ * realpath is the exception: absent from BOTH, so it is defined unconditionally.
  *
  * Covered:
  *   main.c / window.c : isatty, write, usleep, ssize_t
@@ -24,13 +38,21 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include <io.h>        /* _isatty, _write */
-#include <stdio.h>     /* snprintf, _vscprintf, vsnprintf */
+#include <io.h>        /* MinGW: isatty, write. MSVC: _isatty, _write */
+#include <stdio.h>     /* snprintf, _vscprintf, vsnprintf. MinGW: asprintf */
 #include <stdlib.h>    /* malloc, free, _fullpath, _MAX_PATH */
 #include <stdarg.h>    /* va_list (asprintf) */
-#include <string.h>    /* _stricmp, strncpy */
+#include <string.h>    /* _stricmp, strncpy. MinGW: strcasecmp */
 #include <sys/stat.h>  /* _S_IFDIR, struct stat, stat() */
 #include <basetsd.h>   /* SSIZE_T */
+
+#if defined(__MINGW32__)   /* also defined for mingw-w64 / x86_64 */
+
+/* MinGW-w64: take the toolchain's declarations for everything it has. */
+#include <unistd.h>    /* usleep, ssize_t (and isatty/write via io.h) */
+#include <dirent.h>    /* DIR, struct dirent, opendir/readdir/closedir */
+
+#else /* MSVC */
 
 #ifndef _SSIZE_T_DEFINED
 typedef SSIZE_T ssize_t;
@@ -55,29 +77,6 @@ static __inline void usleep(unsigned long usec) { Sleep((DWORD)(usec / 1000UL));
 #ifndef S_ISDIR
 #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
 #endif
-
-/* --- allocate-and-format printf (GNU/BSD; used by iniparse.c) --- */
-static __inline int asprintf(char **strp, const char *fmt, ...) {
-  va_list ap;
-  int len;
-  va_start(ap, fmt);
-  len = _vscprintf(fmt, ap);
-  va_end(ap);
-  if (len < 0) { *strp = NULL; return -1; }
-  *strp = (char *)malloc((size_t)len + 1);
-  if (!*strp) return -1;
-  va_start(ap, fmt);
-  len = vsnprintf(*strp, (size_t)len + 1, fmt, ap);
-  va_end(ap);
-  return len;
-}
-
-/* --- canonicalize a path (POSIX realpath; used by filechooser.c) ---
-   _fullpath canonicalizes lexically (doesn't require the path to exist, which
-   is fine here). With resolved==NULL it mallocs, matching POSIX.1-2008. */
-static __inline char *realpath(const char *path, char *resolved) {
-  return _fullpath(resolved, path, _MAX_PATH);
-}
 
 /* --- minimal <dirent.h> — filechooser.c only reads de->d_name --- */
 struct dirent { char d_name[MAX_PATH]; };
@@ -115,6 +114,43 @@ static __inline int closedir(DIR *d) {
     free(d);
   }
   return 0;
+}
+
+#endif /* MSVC */
+
+/* --- allocate-and-format printf (GNU/BSD; used by iniparse.c) ---
+   MinGW-w64's <stdio.h> declares asprintf, but only behind
+   `__USE_MINGW_ANSI_STDIO && _GNU_SOURCE` — exactly the configuration the MSYS2
+   build uses, which is why defining our own there collided with it. Mirror that
+   condition so we supply asprintf if and only if the toolchain does not.
+   (An undefined __USE_MINGW_ANSI_STDIO evaluates to 0 in #if, as intended.) */
+#if defined(__MINGW32__) && defined(_GNU_SOURCE) && __USE_MINGW_ANSI_STDIO
+#  define GTCACA_HAVE_ASPRINTF 1
+#endif
+
+#ifndef GTCACA_HAVE_ASPRINTF
+static __inline int asprintf(char **strp, const char *fmt, ...) {
+  va_list ap;
+  int len;
+  va_start(ap, fmt);
+  len = _vscprintf(fmt, ap);
+  va_end(ap);
+  if (len < 0) { *strp = NULL; return -1; }
+  *strp = (char *)malloc((size_t)len + 1);
+  if (!*strp) return -1;
+  va_start(ap, fmt);
+  len = vsnprintf(*strp, (size_t)len + 1, fmt, ap);
+  va_end(ap);
+  return len;
+}
+#endif
+
+/* --- canonicalize a path (POSIX realpath; used by filechooser.c) ---
+   Neither MSVC nor MinGW-w64 provides realpath, so this one is unconditional.
+   _fullpath canonicalizes lexically (doesn't require the path to exist, which
+   is fine here). With resolved==NULL it mallocs, matching POSIX.1-2008. */
+static __inline char *realpath(const char *path, char *resolved) {
+  return _fullpath(resolved, path, _MAX_PATH);
 }
 
 /* Turn on ANSI/VT escape processing so gtcaca's SGR + alt-screen output renders
