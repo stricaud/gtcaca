@@ -1,0 +1,114 @@
+name: windows library
+
+# Publishes gtcaca as a consumable Windows C library — the DLL, the MinGW import
+# library and the headers — attached to the GitHub release. (The wheels in
+# release.yml are the Python story; this is the C one.)
+#
+# libcaca renders through its native win32 console driver here, so the DLL is
+# usable from any MinGW-w64 program, not just carcal.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  windows-library:
+    name: windows-x86_64
+    runs-on: windows-latest
+    permissions:
+      contents: write          # to attach assets to the release
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          # libcaca and oniguruma are both prebuilt for MinGW.
+          pacboy: toolchain:p cmake:p ninja:p libcaca:p oniguruma:p
+          install: zip
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target gtcaca -j "$(nproc)"
+
+      - name: Package
+        id: pkg
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF" in refs/tags/*) ;; *) VERSION="dev" ;; esac
+          NAME="gtcaca-$VERSION-windows-x86_64"
+          OUT="dist/$NAME"
+          mkdir -p "$OUT/bin" "$OUT/lib" "$OUT/include"
+
+          cp build/src/libgtcaca.dll   "$OUT/bin/"
+          cp build/src/libgtcaca.dll.a "$OUT/lib/"
+          cp -R src/include/gtcaca     "$OUT/include/"
+
+          # Ship the DLLs gtcaca links against (libcaca, oniguruma, the MinGW
+          # runtime) so the zip works without an MSYS2 install. /c/Windows is the OS.
+          ldd "$OUT/bin/libgtcaca.dll" | awk '/=>/ {print $3}' | while read -r dll; do
+            [ -f "$dll" ] || continue
+            case "$(printf '%s' "$dll" | tr 'A-Z' 'a-z')" in /c/windows/*) continue ;; esac
+            cp -f "$dll" "$OUT/bin/"
+          done
+
+          cat > "$OUT/README.txt" <<'TXT'
+          gtcaca — Windows (MinGW-w64 / UCRT64) C library
+
+            include/   headers — add to your include path
+            lib/       libgtcaca.dll.a (import library)
+            bin/       libgtcaca.dll + libcaca, oniguruma and the MinGW runtime DLLs
+
+          Link with -lgtcaca -lcaca.
+
+          Built with MinGW-w64/UCRT64. The import library is ELF-style .dll.a for
+          GCC/Clang; MSVC users must generate a .lib from the DLL themselves.
+
+          Rendering uses libcaca's native win32 console driver. Windows Terminal
+          is recommended.
+          TXT
+
+          ( cd dist && zip -qr "$NAME.zip" "$NAME" )
+          echo "zip=dist/$NAME.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke-test the import library
+        run: |
+          # A Windows DLL exports nothing without WINDOWS_EXPORT_ALL_SYMBOLS, so
+          # actually linking a consumer is what proves the zip is usable.
+          NAME="$(basename "${{ steps.pkg.outputs.zip }}" .zip)"
+          cat > /tmp/consumer.c <<'C'
+          #include <gtcaca/main.h>
+          #include <stdio.h>
+          int main(void) {
+              /* Reference the symbol so the linker must resolve the import — an
+                 empty main() would link fine even against a DLL exporting
+                 nothing, which is exactly the failure we're guarding against.
+                 Take its address rather than calling it: gtcaca_init would try
+                 to open a display, and CI has no console to draw on. */
+              printf("gtcaca_init=%p\n", (void *)&gtcaca_init);
+              return 0;
+          }
+          C
+          gcc /tmp/consumer.c -o /tmp/consumer.exe \
+            -I"dist/$NAME/include" $(pkg-config --cflags caca) \
+            -L"dist/$NAME/lib" -lgtcaca $(pkg-config --libs caca)
+          cp dist/$NAME/bin/*.dll /tmp/
+          /tmp/consumer.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gtcaca-windows-x86_64
+          path: ${{ steps.pkg.outputs.zip }}
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pkg.outputs.zip }}
