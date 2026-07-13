@@ -115,5 +115,12 @@ add_library(gtcaca SHARED ${GTCACA_LIB_SRC})
 set_target_properties(gtcaca PROPERTIES SOVERSION 1)
 target_link_libraries(gtcaca ${GTCACA_LINK_LIBRARIES})
 
+if(WIN32)
+  # A Windows DLL exports nothing unless told to: without this the whole public
+  # API would be invisible and consumers would fail to link. Saves annotating
+  # every function with __declspec(dllexport).
+  set_target_properties(gtcaca PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
+
 install(TARGETS gtcaca DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT Libraries)
 install(FILES ${GTCACA_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gtcaca COMPONENT Headers)
