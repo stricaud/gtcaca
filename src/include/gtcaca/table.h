@@ -21,9 +21,10 @@ struct gtcaca_table_model {
   void *userdata;
 
   /* Optional per-row colors (Wireshark-style coloring rules). Return non-zero
-     and set *fg/*bg to paint the row; return 0 for the theme default. Called
-     only for rows actually on screen, so it may dissect lazily. The selected
-     row keeps the selection color regardless, so the cursor stays visible. */
+     and fill in the fg and bg arguments to paint the row; return 0 for the theme
+     default. Called only for rows actually on screen, so it may compute lazily.
+     The selected row keeps the selection color regardless, so the cursor stays
+     visible on top of a colored row. NULL = no coloring. */
   int  (*row_color)(gtcaca_table_model_t *m, long row, uint8_t *fg, uint8_t *bg);
 };
 
