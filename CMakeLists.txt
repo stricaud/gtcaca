@@ -68,6 +68,18 @@ if (NOT WIN32)
 	add_definitions(-std=gnu99 -fPIC)
 endif()
 
+# That truncation shipped as a segfault on Linux because it was only a warning:
+# an implicitly declared function defaults to returning int, so any missing
+# prototype for a pointer-returning libc call silently corrupts the pointer on
+# any 64-bit target. Make both halves of that hard errors — they are never
+# benign in this codebase, and the compiler catches them for free.
+# (GCC 14+ and Clang 15+ already error by default; this keeps older toolchains
+# from reintroducing it.)
+add_compile_options(
+	-Werror=implicit-function-declaration
+	-Werror=int-conversion
+)
+
 include(CTest)
 
 include(CheckIncludeFiles)
