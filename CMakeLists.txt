@@ -60,7 +60,12 @@ else()
         endif()
 endif()
 if (NOT WIN32)
-	add_definitions(-std=c99 -fPIC)
+	# gnu99, not c99: strict ISO C99 makes glibc hide the POSIX functions this
+	# library actually uses (strdup, usleep, strcasecmp). GCC then implicitly
+	# declares strdup as returning int, which TRUNCATES THE POINTER TO 32 BITS on
+	# x86-64 — "makes pointer from integer without a cast" — corrupting every
+	# strdup'd string. gnu99 exposes the POSIX declarations, so they return char*.
+	add_definitions(-std=gnu99 -fPIC)
 endif()
 
 include(CTest)
