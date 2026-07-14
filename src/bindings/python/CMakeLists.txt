@@ -66,7 +66,8 @@ set(GTCACA_C_SOURCES
   editor.c editor_lang.c editor_autoc.c editor_view.c editor_json.c
   editor_tm.c editor_search.c editor_ops.c
   json.c sparkline.c gauge.c barchart.c tree.c table.c map.c tabs.c mindmap.c
-  segdisplay.c linechart.c hexview.c calendar.c dialog.c filechooser.c)
+  segdisplay.c linechart.c hexview.c calendar.c dialog.c filechooser.c
+  custom.c)
 list(TRANSFORM GTCACA_C_SOURCES PREPEND "${GTCACA_SRC_DIR}/")
 
 pybind11_add_module(_gtcaca MODULE

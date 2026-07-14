@@ -40,6 +40,7 @@ extern "C" {
 #include <gtcaca/statusbar.h>
 #include <gtcaca/menu.h>
 #include <gtcaca/widget.h>
+#include <gtcaca/custom.h>
 }
 
 namespace py = pybind11;
@@ -63,6 +64,9 @@ namespace py = pybind11;
 static std::unordered_map<const void *, py::function> &g_key_cbs =
     *new std::unordered_map<const void *, py::function>();
 static std::deque<py::function> &g_menu_cbs = *new std::deque<py::function>();
+// Draw callbacks for custom widgets, keyed by widget pointer.
+static std::unordered_map<const void *, py::function> &g_draw_cbs =
+    *new std::unordered_map<const void *, py::function>();
 
 // Convert a Python parent argument (a widget instance or None) to the common
 // gtcaca_widget_t*.  Every concrete widget exposes as_widget(); None -> NULL.
@@ -91,7 +95,21 @@ static gtcaca_widget_t *to_parent(py::object o) {
     return 0;                                                                  \
   }
 
+GTCACA_KEY_TRAMPOLINE(tramp_custom_key, gtcaca_custom_widget_t)
 GTCACA_KEY_TRAMPOLINE(tramp_button, gtcaca_button_widget_t)
+
+// Draw trampoline for custom widgets: no args, no return value.
+static void tramp_custom_draw(gtcaca_custom_widget_t *w, void * /*ud*/) {
+  py::gil_scoped_acquire gil;
+  auto it = g_draw_cbs.find(static_cast<const void *>(w));
+  if (it == g_draw_cbs.end())
+    return;
+  try {
+    it->second();
+  } catch (py::error_already_set &e) {
+    e.discard_as_unraisable("gtcaca_custom_draw");
+  }
+}
 GTCACA_KEY_TRAMPOLINE(tramp_entry, gtcaca_entry_widget_t)
 GTCACA_KEY_TRAMPOLINE(tramp_checkbox, gtcaca_checkbox_widget_t)
 GTCACA_KEY_TRAMPOLINE(tramp_radiobutton, gtcaca_radiobutton_widget_t)
@@ -173,6 +191,62 @@ PYBIND11_MODULE(_gtcaca, m) {
   m.def("canvas_height",
         []() { return caca_get_canvas_height(gmo.cv); },
         "Current canvas height in cells.");
+
+  // -- low-level canvas drawing (the "escape hatch") -----------------------
+  // These operate directly on the global libcaca canvas.  They are intended to
+  // be called from a Custom widget's on_draw callback, letting Python paint
+  // arbitrary content (hex grids, trees, gauges) with full per-cell control.
+  m.def(
+      "set_color",
+      [](int fg, int bg) { caca_set_color_ansi(gmo.cv, fg, bg); },
+      py::arg("fg"), py::arg("bg"),
+      "Set the current pen to ANSI colours (use the CACA_* / colour constants).");
+  m.def(
+      "set_color_rgb",
+      [](int fg12, int bg12) {
+        // 12-bit 0xRGB per channel-nibble; add an opaque alpha nibble so the
+        // truecolour presenter renders the exact colour.
+        caca_set_color_argb(gmo.cv, (uint16_t)(0xF000u | (fg12 & 0x0FFFu)),
+                            (uint16_t)(0xF000u | (bg12 & 0x0FFFu)));
+      },
+      py::arg("fg"), py::arg("bg"),
+      "Set the pen to 12-bit RGB colours (each argument is 0xRGB, nibble per channel).");
+  m.def(
+      "put_str",
+      [](int x, int y, const std::string &s) {
+        return caca_put_str(gmo.cv, x, y, s.c_str());
+      },
+      py::arg("x"), py::arg("y"), py::arg("text"),
+      "Draw a UTF-8 string at (x, y) with the current pen.");
+  m.def(
+      "put_char",
+      [](int x, int y, int ch) { return caca_put_char(gmo.cv, x, y, (uint32_t)ch); },
+      py::arg("x"), py::arg("y"), py::arg("ch"),
+      "Draw a single character (unicode code point) at (x, y).");
+  m.def(
+      "fill_box",
+      [](int x, int y, int w, int h, int ch) {
+        caca_fill_box(gmo.cv, x, y, w, h, (uint32_t)ch);
+      },
+      py::arg("x"), py::arg("y"), py::arg("width"), py::arg("height"),
+      py::arg("ch") = (int)' ', "Fill a rectangle with a character in the current pen.");
+  m.def(
+      "draw_box",
+      [](int x, int y, int w, int h) { caca_draw_cp437_box(gmo.cv, x, y, w, h); },
+      py::arg("x"), py::arg("y"), py::arg("width"), py::arg("height"),
+      "Draw a CP437 line-drawing box border.");
+  m.def(
+      "draw_thin_box",
+      [](int x, int y, int w, int h) { caca_draw_thin_box(gmo.cv, x, y, w, h); },
+      py::arg("x"), py::arg("y"), py::arg("width"), py::arg("height"),
+      "Draw a thin ASCII box border.");
+  m.def(
+      "draw_line",
+      [](int x1, int y1, int x2, int y2, int ch) {
+        caca_draw_line(gmo.cv, x1, y1, x2, y2, (uint32_t)ch);
+      },
+      py::arg("x1"), py::arg("y1"), py::arg("x2"), py::arg("y2"), py::arg("ch"),
+      "Draw a line of a character between two points.");
 
   // -- generic widget base (used for parent passing) -----------------------
   py::class_<gtcaca_widget_t>(m, "Widget")
@@ -518,6 +592,63 @@ PYBIND11_MODULE(_gtcaca, m) {
   }
   m.def("menu_new", &gtcaca_menu_new, py::return_value_policy::reference);
 
+  // -- custom widget (canvas escape hatch) ---------------------------------
+  {
+    py::class_<gtcaca_custom_widget_t> c(m, "Custom");
+    bind_common(c);
+    c.def("draw", &gtcaca_custom_draw);
+    c.def(
+        "on_draw",
+        [](gtcaca_custom_widget_t *w, py::function f) {
+          g_draw_cbs[w] = std::move(f);
+          gtcaca_custom_set_draw_cb(w, tramp_custom_draw, nullptr);
+        },
+        py::arg("callback"),
+        "Register a callback() invoked to paint the widget each frame.");
+    c.def(
+        "on_key",
+        [](gtcaca_custom_widget_t *w, py::function f) {
+          g_key_cbs[w] = std::move(f);
+          gtcaca_custom_set_key_cb(w, tramp_custom_key, nullptr);
+        },
+        py::arg("callback"),
+        "Register a callback(key)->int invoked on key events when focused.");
+    c.def(
+        "set_focusable",
+        [](gtcaca_custom_widget_t *w, bool v) {
+          gtcaca_custom_set_focusable(w, v ? 1 : 0);
+        },
+        py::arg("focusable"));
+    c.def("set_focus",
+          [](gtcaca_custom_widget_t *w) { w->has_focus = 1; });
+  }
+  m.def(
+      "custom_new",
+      [](py::object parent, int x, int y, int width, int height) {
+        return gtcaca_custom_new(to_parent(parent), x, y, width, height);
+      },
+      py::arg("parent"), py::arg("x"), py::arg("y"), py::arg("width"),
+      py::arg("height"), py::return_value_policy::reference,
+      "Create a custom widget: a rectangle you paint via on_draw / handle via on_key.");
+
+  // -- colour constants (ANSI 16) ------------------------------------------
+  m.attr("BLACK") = (int)CACA_BLACK;
+  m.attr("BLUE") = (int)CACA_BLUE;
+  m.attr("GREEN") = (int)CACA_GREEN;
+  m.attr("CYAN") = (int)CACA_CYAN;
+  m.attr("RED") = (int)CACA_RED;
+  m.attr("MAGENTA") = (int)CACA_MAGENTA;
+  m.attr("BROWN") = (int)CACA_BROWN;
+  m.attr("LIGHTGRAY") = (int)CACA_LIGHTGRAY;
+  m.attr("DARKGRAY") = (int)CACA_DARKGRAY;
+  m.attr("LIGHTBLUE") = (int)CACA_LIGHTBLUE;
+  m.attr("LIGHTGREEN") = (int)CACA_LIGHTGREEN;
+  m.attr("LIGHTCYAN") = (int)CACA_LIGHTCYAN;
+  m.attr("LIGHTRED") = (int)CACA_LIGHTRED;
+  m.attr("LIGHTMAGENTA") = (int)CACA_LIGHTMAGENTA;
+  m.attr("YELLOW") = (int)CACA_YELLOW;
+  m.attr("WHITE") = (int)CACA_WHITE;
+
   // -- key constants -------------------------------------------------------
   m.attr("KEY_RETURN") = (int)CACA_KEY_RETURN;
   m.attr("KEY_ESCAPE") = (int)CACA_KEY_ESCAPE;
@@ -533,5 +664,13 @@ PYBIND11_MODULE(_gtcaca, m) {
   m.attr("KEY_PAGEUP") = (int)CACA_KEY_PAGEUP;
   m.attr("KEY_PAGEDOWN") = (int)CACA_KEY_PAGEDOWN;
   m.attr("KEY_F1") = (int)CACA_KEY_F1;
+  m.attr("KEY_F2") = (int)CACA_KEY_F2;
+  m.attr("KEY_F3") = (int)CACA_KEY_F3;
+  m.attr("KEY_F4") = (int)CACA_KEY_F4;
+  m.attr("KEY_F5") = (int)CACA_KEY_F5;
+  m.attr("KEY_F6") = (int)CACA_KEY_F6;
+  m.attr("KEY_F7") = (int)CACA_KEY_F7;
+  m.attr("KEY_F8") = (int)CACA_KEY_F8;
+  m.attr("KEY_F9") = (int)CACA_KEY_F9;
   m.attr("KEY_F10") = (int)CACA_KEY_F10;
 }

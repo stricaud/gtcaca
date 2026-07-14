@@ -3,6 +3,7 @@
 #include <gtcaca/log.h>
 #include <gtcaca/widget.h>
 #include <gtcaca/window.h>
+#include <gtcaca/custom.h>
 
 char *gtcaca_widget_type_to_string(gtcaca_widget_type_t type)
 {
@@ -116,6 +117,8 @@ int gtcaca_widget_is_focusable(gtcaca_widget_t *widget)
   case GTCACA_WIDGET_TEXTVIEW:
   case GTCACA_WIDGET_EDITOR:
     return 1;
+  case GTCACA_WIDGET_CUSTOM:
+    return ((gtcaca_custom_widget_t *)widget)->focusable;
   default:
     return 0;
   }

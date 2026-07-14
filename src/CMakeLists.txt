@@ -56,6 +56,7 @@ set(GTCACA_LIB_SRC
   calendar.c
   dialog.c
   filechooser.c
+  custom.c
 )
 
 set(GTCACA_HEADERS
@@ -104,6 +105,7 @@ set(GTCACA_HEADERS
   include/gtcaca/calendar.h
   include/gtcaca/dialog.h
   include/gtcaca/filechooser.h
+  include/gtcaca/custom.h
 )
 
 set(GTCACA_LINK_LIBRARIES
