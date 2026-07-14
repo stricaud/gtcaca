@@ -592,6 +592,7 @@ int gtcaca_widgets_handle_key_press(int key)
                       type != GTCACA_WIDGET_TABLE &&
                       type != GTCACA_WIDGET_MAP &&
                       type != GTCACA_WIDGET_MINDMAP &&
+                      type != GTCACA_WIDGET_CUSTOM &&
                       type != GTCACA_WIDGET_CALENDAR);
         } else {
           /* Left/Right: Entry, Scale, SpinButton use these internally; the Tree
@@ -605,6 +606,7 @@ int gtcaca_widgets_handle_key_press(int key)
                       type != GTCACA_WIDGET_MAP &&
                       type != GTCACA_WIDGET_TABS &&
                       type != GTCACA_WIDGET_MINDMAP &&
+                      type != GTCACA_WIDGET_CUSTOM &&
                       type != GTCACA_WIDGET_CALENDAR);
         }
         if (navigate) {
