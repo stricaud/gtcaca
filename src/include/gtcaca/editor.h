@@ -325,6 +325,7 @@ void gtcaca_editor_page_down_extend(gtcaca_editor_widget_t *w);
 
 /* ── Editing key commands ─────────────────────────────────────────────────── */
 void gtcaca_editor_add_char(gtcaca_editor_widget_t *w, char c); /* replace sel, insert, advance */
+void gtcaca_editor_add_char_utf32(gtcaca_editor_widget_t *w, uint32_t cp); /* self-insert a Unicode codepoint (UTF-8 encoded) */
 void gtcaca_editor_new_line(gtcaca_editor_widget_t *w);
 void gtcaca_editor_delete_back(gtcaca_editor_widget_t *w);
 void gtcaca_editor_clear(gtcaca_editor_widget_t *w);  /* delete forward, or the selection */

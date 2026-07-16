@@ -25,6 +25,15 @@ typedef struct _gmo_t gmo_t;
 
 extern gmo_t gmo;
 
+/* Key-event tag: a printable non-ASCII Unicode codepoint is delivered to key
+   callbacks as (codepoint | GTCACA_KEY_UNICODE). The flag keeps codepoints in
+   the Latin-Extended range (U+0111 'đ', U+0119 'ę', …) from being mistaken for
+   the CACA_KEY_* special keys they collide with numerically (CACA_KEY_UP=0x111).
+   Bit 30 sits far above both Unicode (max U+10FFFF) and every CACA_KEY_* value. */
+#define GTCACA_KEY_UNICODE 0x40000000
+#define GTCACA_KEY_IS_UNICODE(k) (((k) & GTCACA_KEY_UNICODE) != 0)
+#define GTCACA_KEY_CODEPOINT(k)  ((uint32_t)((k) & ~GTCACA_KEY_UNICODE))
+
 int gtcaca_init(int *argc, char ***argv);
 void gtcaca_main(void);
 void gtcaca_main_quit(void);

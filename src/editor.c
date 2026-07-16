@@ -11,6 +11,99 @@
 
 static int _clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+/* ── UTF-8 / character-width helpers ───────────────────────────────────────────
+   The buffer stays a byte array (w->text); these let the rest of the widget
+   step, delete, measure and draw whole UTF-8 characters instead of bytes.     */
+
+/* Byte length of the UTF-8 sequence whose lead byte is `b` (1 for ASCII and for
+   any malformed lead, so we always make forward progress). */
+static int _utf8_seq_len(unsigned char b)
+{
+  if (b < 0x80) return 1;
+  if ((b & 0xE0) == 0xC0) return 2;
+  if ((b & 0xF0) == 0xE0) return 3;
+  if ((b & 0xF8) == 0xF0) return 4;
+  return 1;                                  /* stray continuation / invalid */
+}
+
+static int _is_utf8_cont(unsigned char b) { return (b & 0xC0) == 0x80; }
+
+/* Byte length of the character *starting* at byte `pos`, clamped to the buffer
+   (a truncated trailing sequence counts only the bytes that are present). */
+static int _char_len_at(gtcaca_editor_widget_t *w, int pos)
+{
+  int n, i;
+  if (pos < 0 || pos >= w->length) return 1;
+  n = _utf8_seq_len((unsigned char)w->text[pos]);
+  for (i = 1; i < n; i++)
+    if (pos + i >= w->length || !_is_utf8_cont((unsigned char)w->text[pos + i]))
+      return i;                              /* short/broken sequence */
+  return n;
+}
+
+/* Start byte of the character immediately before byte `pos`: walk back over
+   continuation bytes to the lead byte. Returns 0 if already at the start. */
+static int _prev_char_start(gtcaca_editor_widget_t *w, int pos)
+{
+  if (pos <= 0) return 0;
+  pos--;
+  while (pos > 0 && _is_utf8_cont((unsigned char)w->text[pos])) pos--;
+  return pos;
+}
+
+/* Decode the character at byte `pos` into a codepoint; *len gets its byte
+   length. Returns the raw byte for malformed/short sequences. */
+static uint32_t _cp_at(gtcaca_editor_widget_t *w, int pos, int *len)
+{
+  int n = _char_len_at(w, pos);
+  size_t consumed = 0;
+  uint32_t cp;
+  if (len) *len = n;
+  if (n == 1) return (unsigned char)w->text[pos];   /* fast path, incl. broken */
+  cp = caca_utf8_to_utf32(w->text + pos, &consumed);
+  return consumed ? cp : (unsigned char)w->text[pos];
+}
+
+/* Display columns for a codepoint: 0 for combining marks / zero-width, 2 for
+   East-Asian wide & fullwidth ranges, 1 otherwise. A compact table — enough for
+   accents (1), CJK/Hangul/Kana (2) and combining diacritics (0). */
+static int _cp_width(uint32_t cp)
+{
+  if (cp == 0) return 0;
+  if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return 1;   /* control: caller maps to space */
+  /* zero-width: combining marks and format/joiner codepoints */
+  if ((cp >= 0x0300 && cp <= 0x036F) ||   /* combining diacritical marks */
+      (cp >= 0x1AB0 && cp <= 0x1AFF) ||
+      (cp >= 0x1DC0 && cp <= 0x1DFF) ||
+      (cp >= 0x20D0 && cp <= 0x20FF) ||
+      (cp >= 0xFE20 && cp <= 0xFE2F) ||
+      cp == 0x200B || cp == 0x200C || cp == 0x200D || cp == 0xFEFF)
+    return 0;
+  /* wide (East-Asian W/F) */
+  if ((cp >= 0x1100 && cp <= 0x115F) ||   /* Hangul Jamo */
+      (cp >= 0x2E80 && cp <= 0x303E) ||   /* CJK radicals … */
+      (cp >= 0x3041 && cp <= 0x33FF) ||   /* Kana, CJK symbols */
+      (cp >= 0x3400 && cp <= 0x4DBF) ||   /* CJK Ext A */
+      (cp >= 0x4E00 && cp <= 0x9FFF) ||   /* CJK Unified */
+      (cp >= 0xA000 && cp <= 0xA4CF) ||   /* Yi */
+      (cp >= 0xAC00 && cp <= 0xD7A3) ||   /* Hangul syllables */
+      (cp >= 0xF900 && cp <= 0xFAFF) ||   /* CJK compat */
+      (cp >= 0xFE30 && cp <= 0xFE4F) ||   /* CJK compat forms */
+      (cp >= 0xFF00 && cp <= 0xFF60) ||   /* fullwidth forms */
+      (cp >= 0xFFE0 && cp <= 0xFFE6) ||
+      (cp >= 0x1F300 && cp <= 0x1FAFF) || /* emoji & symbols */
+      (cp >= 0x20000 && cp <= 0x3FFFD))   /* CJK Ext B+ */
+    return 2;
+  return 1;
+}
+
+/* Display width of the character starting at byte `pos`. */
+static int _char_width_at(gtcaca_editor_widget_t *w, int pos)
+{
+  int len;
+  return _cp_width(_cp_at(w, pos, &len));
+}
+
 static void _ensure_cap(gtcaca_editor_widget_t *w, int needed)
 {
   if (needed <= w->cap) return;
@@ -190,10 +283,10 @@ static int _visual_col(gtcaca_editor_widget_t *w, int pos)
 {
   int start = gtcaca_editor_position_from_line(
                 w, gtcaca_editor_line_from_position(w, pos));
-  int i, col = 0;
-  for (i = start; i < pos; i++) {
-    if (w->text[i] == '\t') col += w->tab_width - (col % w->tab_width);
-    else col++;
+  int i = start, col = 0;
+  while (i < pos) {
+    if (w->text[i] == '\t') { col += w->tab_width - (col % w->tab_width); i++; }
+    else { col += _char_width_at(w, i); i += _char_len_at(w, i); }
   }
   return col;
 }
@@ -205,9 +298,8 @@ static int _pos_from_visual_col(gtcaca_editor_widget_t *w, int line, int vcol)
   int end   = gtcaca_editor_get_line_end_position(w, line);
   int i = start, col = 0;
   while (i < end && col < vcol) {
-    if (w->text[i] == '\t') col += w->tab_width - (col % w->tab_width);
-    else col++;
-    i++;
+    if (w->text[i] == '\t') { col += w->tab_width - (col % w->tab_width); i++; }
+    else { col += _char_width_at(w, i); i += _char_len_at(w, i); }
   }
   return i;
 }
@@ -364,8 +456,8 @@ static void _move_vertical(gtcaca_editor_widget_t *w, int delta, int extend)
   void gtcaca_editor_##name##_extend(gtcaca_editor_widget_t *w)       \
   { w->goal_col = -1; _set_caret(w, (newpos_expr), 1); }
 
-_MOVE_H(char_left,  w->current_pos > 0 ? w->current_pos - 1 : 0)
-_MOVE_H(char_right, w->current_pos < w->length ? w->current_pos + 1 : w->length)
+_MOVE_H(char_left,  _prev_char_start(w, w->current_pos))
+_MOVE_H(char_right, w->current_pos < w->length ? w->current_pos + _char_len_at(w, w->current_pos) : w->length)
 _MOVE_H(home, gtcaca_editor_position_from_line(w, gtcaca_editor_get_current_line(w)))
 _MOVE_H(line_end, gtcaca_editor_get_line_end_position(w, gtcaca_editor_get_current_line(w)))
 _MOVE_H(document_start, 0)
@@ -398,8 +490,24 @@ void gtcaca_editor_add_char(gtcaca_editor_widget_t *w, char c)
   char s[2]; s[0] = c; s[1] = '\0';
   if (!_delete_selection(w) && w->overtype &&
       w->current_pos < w->length && w->text[w->current_pos] != '\n')
-    gtcaca_editor_delete_range(w, w->current_pos, 1);   /* overwrite the char */
+    gtcaca_editor_delete_range(w, w->current_pos, _char_len_at(w, w->current_pos)); /* overwrite the char */
   _insert_len(w, w->current_pos, s, 1);  /* caret auto-advances past it */
+}
+
+/* Self-insert a Unicode codepoint: encode to UTF-8 and insert as bytes. In
+   overtype mode it replaces the whole character under the caret, not one byte. */
+void gtcaca_editor_add_char_utf32(gtcaca_editor_widget_t *w, uint32_t cp)
+{
+  char s[8];
+  size_t n;
+  if (cp < 0x80) { gtcaca_editor_add_char(w, (char)cp); return; }
+  n = caca_utf32_to_utf8(s, cp);
+  if (!n) return;
+  s[n] = '\0';
+  if (!_delete_selection(w) && w->overtype &&
+      w->current_pos < w->length && w->text[w->current_pos] != '\n')
+    gtcaca_editor_delete_range(w, w->current_pos, _char_len_at(w, w->current_pos));
+  _insert_len(w, w->current_pos, s, (int)n);  /* caret auto-advances past it */
 }
 
 void gtcaca_editor_new_line(gtcaca_editor_widget_t *w)
@@ -411,8 +519,10 @@ void gtcaca_editor_new_line(gtcaca_editor_widget_t *w)
 void gtcaca_editor_delete_back(gtcaca_editor_widget_t *w)
 {
   if (_delete_selection(w)) return;
-  if (w->current_pos > 0)
-    gtcaca_editor_delete_range(w, w->current_pos - 1, 1);
+  if (w->current_pos > 0) {
+    int start = _prev_char_start(w, w->current_pos);
+    gtcaca_editor_delete_range(w, start, w->current_pos - start);
+  }
 }
 
 void gtcaca_editor_clear(gtcaca_editor_widget_t *w)
@@ -566,7 +676,8 @@ static int _editor_private_key(gtcaca_editor_widget_t *w, int key, void *userdat
   case CACA_KEY_DELETE:    gtcaca_editor_delete_back(w); break;  /* 0x7f (mac backspace) */
   case CACA_KEY_TAB:       gtcaca_editor_add_char(w, '\t'); break;
   default:
-    if (key >= 32 && key <= 126) gtcaca_editor_add_char(w, (char)key);
+    if (GTCACA_KEY_IS_UNICODE(key))   gtcaca_editor_add_char_utf32(w, GTCACA_KEY_CODEPOINT(key));
+    else if (key >= 32 && key <= 126) gtcaca_editor_add_char(w, (char)key);
     break;
   }
   return 0;
@@ -1003,13 +1114,23 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
         for (cx = 0; cx < text_w; cx++) caca_put_char(gmo.cv, origin_x + cx, inner_y + row + rr, ' ');
     }
 
-    /* line text, expanding tabs; cells map to wrapped rows (or scroll if !wrap) */
+    /* line text, expanding tabs; cells map to wrapped rows (or scroll if !wrap).
+       Iterate whole UTF-8 characters: a char advances vcol by its display width
+       (2 for CJK/fullwidth, 0 for combining marks) and pos by its byte length. */
     vcol = 0;
-    for (pos = line_start; pos < line_end; pos++) {
-      char c = w->text[pos];
-      int cells = (c == '\t') ? (w->tab_width - (vcol % w->tab_width)) : 1;
-      int k;
-      for (k = 0; k < cells; k++) {
+    pos = line_start;
+    while (pos < line_end) {
+      unsigned char b = (unsigned char)w->text[pos];
+      int is_tab = (b == '\t');
+      int clen, cwid, draw_cells, k;
+      uint32_t cp;
+      if (is_tab) { clen = 1; cwid = w->tab_width - (vcol % w->tab_width); cp = ' '; }
+      else        { cp = _cp_at(w, pos, &clen); cwid = _cp_width(cp); }
+      /* tab paints `cwid` blank cells; a glyph paints one canvas cell (libcaca
+         claims the trailing cell of a wide char itself); combining marks (width
+         0) paint nothing and let the base glyph stand. */
+      draw_cells = is_tab ? cwid : (cwid == 0 ? 0 : 1);
+      for (k = 0; k < draw_cells; k++) {
         int vc = vcol + k;
         if (_cell_pos(w, vc, row, text_w, text_h, origin_x, inner_y, &sx, &sy)) {
           int in_sel   = w->rect_select
@@ -1018,7 +1139,7 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
           int is_caret = (w->has_focus && pos == w->current_pos && k == 0);
           int is_brace = (pos == w->brace_hl1 || pos == w->brace_hl2);
           int is_bad   = (pos == w->brace_bad);
-          uint32_t outc = (c == '\t') ? ' ' : (uint32_t)(unsigned char)c;
+          uint32_t outc = is_tab ? ' ' : cp;
           if (is_caret) {
             caca_set_color_ansi(gmo.cv, nb, nf); caca_set_attr(gmo.cv, 0);
           } else if (in_sel) {
@@ -1028,9 +1149,9 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
             caca_set_color_ansi(gmo.cv, CACA_WHITE, CACA_RED);   caca_set_attr(gmo.cv, CACA_BOLD);
           } else if (is_brace) {
             caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_GREEN); caca_set_attr(gmo.cv, CACA_BOLD);
-          } else if (w->view_ws && (c == ' ' || c == '\t')) {
+          } else if (w->view_ws && (b == ' ' || b == '\t')) {
             caca_set_color_ansi(gmo.cv, CACA_DARKGRAY, rowbg); caca_set_attr(gmo.cv, 0);
-            outc = (c == '\t') ? (k == 0 ? 0xBB : (uint32_t)' ') : 0xB7;  /* » and · */
+            outc = is_tab ? (k == 0 ? 0xBB : (uint32_t)' ') : 0xB7;  /* » and · */
           } else if ((w->colorize_enabled || w->json_mode || w->grammar) && w->styles && pos < w->length) {
             gtcaca_editor_style_t *st = &w->style_table[w->styles[pos]];
             _ed_color(st->fore, st->fore12, st->fore12_set,
@@ -1044,7 +1165,8 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
           caca_put_char(gmo.cv, sx, sy, outc);
         }
       }
-      vcol += cells;
+      vcol += cwid;
+      pos  += clen;
     }
 
     /* rectangular selection over virtual space: highlight box columns that lie

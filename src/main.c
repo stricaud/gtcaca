@@ -297,7 +297,11 @@ static void gtcaca_present(void)
       uint32_t at = caca_get_attr(gmo.cv, x, y);
       int f  = (int)(uint16_t)caca_attr_to_rgb12_fg(at);
       int bg = (int)(uint16_t)caca_attr_to_rgb12_bg(at);
-      if (ch < 0x20 || ch == 0x000fffffu) ch = ' ';      /* control / fullwidth-magic */
+      /* Trailing cell of a fullwidth glyph: the terminal already advanced two
+         columns for the wide char in the previous cell, so emit nothing here —
+         emitting a space would shove the rest of the row one column right. */
+      if (ch == 0x000fffffu) continue;
+      if (ch < 0x20) ch = ' ';                           /* control -> space */
       if (f  != cfg) { n += (size_t)_emit_col(g_ob+n, f,  1); cfg = f; }
       if (bg != cbg) { n += (size_t)_emit_col(g_ob+n, bg, 0); cbg = bg; }
       n += (size_t)_utf8(g_ob+n, ch);
@@ -1054,7 +1058,13 @@ void gtcaca_main(void)
         continue;
       }
 
-      key = caca_get_event_key_ch(&ev);
+      /* A printable non-ASCII keystroke carries a real Unicode codepoint in the
+         event's utf32 field (0 for special/function keys); tag it so callbacks
+         can tell 'đ' (U+0111) from CACA_KEY_UP (0x111). ASCII, control and
+         special keys keep flowing through .ch unchanged. */
+      { uint32_t u = caca_get_event_key_utf32(&ev);
+        key = (u >= 0x80) ? (int)(u | GTCACA_KEY_UNICODE)
+                          : caca_get_event_key_ch(&ev); }
 
       /* An ESC may be a real Esc/Meta or the start of an SGR mouse report. */
       if (key == CACA_KEY_ESCAPE) { _esc_or_sgr_mouse(&quit); gtcaca_redraw(); continue; }
