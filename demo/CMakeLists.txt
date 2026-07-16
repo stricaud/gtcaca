@@ -84,3 +84,6 @@ target_link_libraries(demo_dash ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS} m)
 
 add_executable(demo_gallery demo_gallery.c)
 target_link_libraries(demo_gallery ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS} m)
+
+add_executable(demo_dialogs demo_dialogs.c)
+target_link_libraries(demo_dialogs ${GTCACA_LINK_LIBRARIES} ${CMAKE_DL_LIBS})

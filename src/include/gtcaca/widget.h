@@ -42,6 +42,7 @@ enum _gtcaca_widget_type_t {
   GTCACA_WIDGET_SEGDISPLAY,
   GTCACA_WIDGET_LINECHART,
   GTCACA_WIDGET_HEXVIEW,
+  GTCACA_WIDGET_COLORDIALOG,
   GTCACA_WIDGET_CUSTOM,
 };
 typedef enum _gtcaca_widget_type_t gtcaca_widget_type_t;

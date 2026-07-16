@@ -50,6 +50,7 @@
 #include <gtcaca/calendar.h>
 #include <gtcaca/dialog.h>
 #include <gtcaca/filechooser.h>
+#include <gtcaca/colordialog.h>
 #include <gtcaca/custom.h>
 
 gmo_t gmo;
@@ -203,6 +204,9 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
     break;
   case GTCACA_WIDGET_HEXVIEW:
     gtcaca_hexview_draw((gtcaca_hexview_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_COLORDIALOG:
+    gtcaca_colordialog_draw((gtcaca_colordialog_widget_t *)widget);
     break;
   case GTCACA_WIDGET_CUSTOM:
     gtcaca_custom_draw((gtcaca_custom_widget_t *)widget);
