@@ -1,0 +1,20 @@
+# Workspace for the GTCaca Rust bindings.
+#
+# Two crates, mirroring the split every good -sys binding uses:
+#   * gtcaca-sys  — raw FFI (bindgen) + builds/links the C library
+#   * gtcaca      — safe, idiomatic wrappers on top of gtcaca-sys
+#
+# The C sources live at the repo root (../../../src). For local dev the build
+# compiles them straight from there; for a published crate they are vendored
+# into gtcaca-sys/vendor by scripts/sync-sources.sh (see that crate's build.rs).
+[workspace]
+resolver = "2"
+members = ["gtcaca-sys", "gtcaca"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "Unlicense"                     # Public Domain, SPDX-compatible
+repository = "https://github.com/stricaud/gtcaca"
+authors = ["Seb Tricaud <sebastien.tricaud@proton.me>"]
+rust-version = "1.74"

@@ -1,0 +1,18 @@
+[package]
+name = "gtcaca"
+description = "Safe, idiomatic Rust bindings for GTCaca, a libcaca-based terminal UI toolkit"
+keywords = ["tui", "libcaca", "terminal", "ui", "widgets"]
+categories = ["command-line-interface", "gui"]
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gtcaca-sys = { version = "0.0.1", path = "../gtcaca-sys" }
+
+[[example]]
+name = "hello"

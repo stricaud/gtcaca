@@ -1,0 +1,30 @@
+[package]
+name = "gtcaca-sys"
+description = "Raw FFI bindings to GTCaca, a libcaca-based terminal UI toolkit"
+keywords = ["tui", "libcaca", "terminal", "ffi", "bindings"]
+categories = ["external-ffi-bindings", "command-line-interface"]
+readme = "README.md"
+links = "gtcaca"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+# Ship the C sources needed to build the crate from crates.io. `vendor/` is
+# populated by ../scripts/sync-sources.sh before `cargo publish` (build.rs
+# prefers it, and falls back to the in-repo ../../../src for local dev).
+include = [
+    "src/**/*.rs",
+    "build.rs",
+    "wrapper.h",
+    "README.md",
+    "vendor/**/*.c",
+    "vendor/**/*.h",
+]
+
+[build-dependencies]
+bindgen = "0.70"
+cc = "1.1"
+pkg-config = "0.3"
