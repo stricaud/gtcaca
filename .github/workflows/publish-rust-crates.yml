@@ -34,13 +34,30 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         working-directory: src/bindings/rust
-        run: cargo publish -p gtcaca-sys --allow-dirty
-
-      - name: Wait for crates.io to index gtcaca-sys
-        run: sleep 30
+        # Idempotent: skip if this exact version is already on crates.io, so a
+        # re-run of a tag (or a bump where only one crate changed) doesn't fail.
+        run: |
+          set -e
+          VER=$(cargo metadata --no-deps --format-version 1 \
+                | python3 -c "import sys,json;print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='gtcaca-sys'))")
+          if curl -sf "https://crates.io/api/v1/crates/gtcaca-sys/$VER" >/dev/null; then
+            echo "gtcaca-sys $VER already published — skipping."
+          else
+            cargo publish -p gtcaca-sys --allow-dirty
+            echo "Waiting for crates.io to index gtcaca-sys $VER…"
+            sleep 30
+          fi
 
       - name: Publish gtcaca
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         working-directory: src/bindings/rust
-        run: cargo publish -p gtcaca --allow-dirty
+        run: |
+          set -e
+          VER=$(cargo metadata --no-deps --format-version 1 \
+                | python3 -c "import sys,json;print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='gtcaca'))")
+          if curl -sf "https://crates.io/api/v1/crates/gtcaca/$VER" >/dev/null; then
+            echo "gtcaca $VER already published — skipping."
+          else
+            cargo publish -p gtcaca --allow-dirty
+          fi
