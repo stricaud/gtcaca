@@ -45,26 +45,35 @@ lint: ## Clippy (warnings as-is)
 vendor: ## Copy the C sources into gtcaca-sys/vendor (needed for publishing)
 	bash $(SYNC)
 
-crate-package: vendor ## Build the -sys tarball in isolation (no upload)
-	cargo package -p gtcaca-sys --allow-dirty
-	@$(MAKE) --no-print-directory _unvendor
+# These targets vendor the C sources, run cargo, then ALWAYS remove vendor/ via
+# a shell trap (so a failure can't leave a stale copy behind that would shadow
+# the live src/ tree). Kept as single shell recipes because macOS make (3.81)
+# has no .ONESHELL. --allow-dirty: vendor/ is generated at publish time and is
+# gitignored, so it always reads as uncommitted; the tarball is pinned by the
+# `include` list in Cargo.toml regardless of tree state.
 
-crate-publish-dry: ## Dry-run publish of both crates (no upload)
-	@$(MAKE) --no-print-directory vendor
-	cargo publish -p gtcaca-sys --dry-run --allow-dirty
-	cargo publish -p gtcaca     --dry-run --allow-dirty
-	@$(MAKE) --no-print-directory _unvendor
+crate-package: ## Build the -sys tarball in isolation (no upload)
+	@trap 'rm -rf gtcaca-sys/vendor' EXIT; \
+	 bash $(SYNC) >/dev/null && \
+	 cargo package -p gtcaca-sys --allow-dirty
+
+crate-publish-dry: ## Dry-run publish of gtcaca-sys (gtcaca can't be dry-run until sys is on crates.io)
+	@trap 'rm -rf gtcaca-sys/vendor' EXIT; \
+	 bash $(SYNC) >/dev/null && \
+	 cargo publish -p gtcaca-sys --dry-run --allow-dirty; \
+	 echo ">> note: 'gtcaca' has no dry-run here — it resolves gtcaca-sys from"; \
+	 echo ">>       the crates.io index, which only exists after a real publish."
 
 crate-publish: ## Publish BOTH crates to crates.io (needs `cargo login` first — see top of file)
 	@command -v cargo >/dev/null || { echo "cargo not found"; exit 1; }
-	@echo ">> vendoring C sources into gtcaca-sys/vendor ..."
-	@$(MAKE) --no-print-directory vendor
-	@echo ">> publishing gtcaca-sys (the -sys crate must go first) ..."
-	cargo publish -p gtcaca-sys
-	@echo ">> publishing gtcaca (cargo waits for -sys to appear in the index) ..."
-	cargo publish -p gtcaca
-	@$(MAKE) --no-print-directory _unvendor
-	@echo ">> done. Published gtcaca-sys and gtcaca."
+	@trap 'rm -rf gtcaca-sys/vendor' EXIT; \
+	 echo ">> vendoring C sources into gtcaca-sys/vendor ..."; \
+	 bash $(SYNC) >/dev/null && \
+	 echo ">> publishing gtcaca-sys (the -sys crate must go first) ..." && \
+	 cargo publish -p gtcaca-sys --allow-dirty && \
+	 echo ">> publishing gtcaca (cargo waits for -sys to appear in the index) ..." && \
+	 cargo publish -p gtcaca --allow-dirty && \
+	 echo ">> done. Published gtcaca-sys and gtcaca."
 
 crate-check-names: ## Check whether the crate names are already taken on crates.io
 	@for c in gtcaca-sys gtcaca; do \
