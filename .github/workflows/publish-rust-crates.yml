@@ -1,0 +1,46 @@
+name: Publish Rust crates to crates.io
+
+# Trigger: push a tag like `rust-v0.0.1`
+#
+# One-time crates.io setup:
+#   cargo login                              # on your machine
+#   cargo publish -p gtcaca-sys --dry-run    # (from src/bindings/rust/, after sync-sources.sh)
+#   Add CARGO_REGISTRY_TOKEN to repo secrets → Settings → Secrets → Actions
+
+on:
+  push:
+    tags: ["rust-v*"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish gtcaca-sys + gtcaca
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libclang (bindgen) and libcaca (the one C dependency)
+        run: sudo apt-get update && sudo apt-get install -y libclang-dev libcaca-dev
+
+      - name: Vendor C sources
+        run: bash src/bindings/rust/scripts/sync-sources.sh
+
+      - name: Publish gtcaca-sys
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        working-directory: src/bindings/rust
+        run: cargo publish -p gtcaca-sys --allow-dirty
+
+      - name: Wait for crates.io to index gtcaca-sys
+        run: sleep 30
+
+      - name: Publish gtcaca
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        working-directory: src/bindings/rust
+        run: cargo publish -p gtcaca --allow-dirty

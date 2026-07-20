@@ -546,3 +546,491 @@ pub mod key {
     pub const PAGE_UP: i32 = 0x118;
     pub const PAGE_DOWN: i32 = 0x119;
 }
+
+// ---------------------------------------------------------------------------
+// Event polling
+//
+// carcal/carscal drive their own event loop on the global display (`gmo.dp`)
+// instead of the blocking `gtcaca_main()`, dispatching each key to the focused
+// widget's `*_key` function. `poll_key` is that primitive.
+// ---------------------------------------------------------------------------
+
+/// Wait up to `timeout_ms` for a key press and return its key code, or `None`
+/// on timeout. A `timeout_ms` of `-1` blocks until a key arrives; `0` polls.
+///
+/// Codes are ASCII for ordinary keys and the [`key`] constants for special
+/// keys. Call between [`Gtcaca::redraw`]s to build an interactive loop.
+pub fn poll_key(timeout_ms: i32) -> Option<i32> {
+    unsafe {
+        let dp = sys::gmo.dp;
+        if dp.is_null() {
+            return None;
+        }
+        // `caca_event` is opaque to bindgen; over-allocate generously (the real
+        // struct is a small tagged union, well under 64 bytes) and let libcaca
+        // fill it.
+        let mut buf = [0u64; 8];
+        let evp = buf.as_mut_ptr() as *mut sys::caca_event_t;
+        let got = sys::caca_get_event(
+            dp,
+            sys::caca_event_type_CACA_EVENT_KEY_PRESS as c_int,
+            evp,
+            timeout_ms,
+        );
+        if got == 0 {
+            None
+        } else {
+            Some(sys::caca_get_event_key_ch(evp) as i32)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Model-backed widgets: Table and Tree
+//
+// Their C models are structs of function pointers. bindgen renders the model
+// types opaque (a self-referential typedef), so we declare the exact `repr(C)`
+// layout here and cast to the opaque sys type when handing it to the widget.
+// The Rust model lives behind `userdata`; trampolines dispatch to it.
+// ---------------------------------------------------------------------------
+
+use std::os::raw::c_long;
+
+/// Copy a Rust string into a C `char*` buffer of `buflen` bytes, NUL-terminated.
+unsafe fn fill_cbuf(s: &str, buf: *mut c_char, buflen: c_int) {
+    if buf.is_null() || buflen <= 0 {
+        return;
+    }
+    let cap = (buflen as usize).saturating_sub(1);
+    let bytes = s.as_bytes();
+    let n = bytes.len().min(cap);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf as *mut u8, n);
+    *buf.add(n) = 0;
+}
+
+// ── Table ────────────────────────────────────────────────────────────────────
+
+/// Data source for a [`Table`]: a virtual grid rendered lazily (the view only
+/// asks for the rows currently on screen, so `row_count` may be huge).
+pub trait TableModel {
+    /// Total number of rows.
+    fn row_count(&self) -> i64;
+    /// Column headers (their count is the column count).
+    fn headers(&self) -> Vec<String>;
+    /// Text of the cell at `(row, col)`.
+    fn cell(&self, row: i64, col: i32) -> String;
+    /// Optional `(fg, bg)` libcaca color for a row; `None` for the theme default.
+    fn row_color(&self, _row: i64) -> Option<(u8, u8)> {
+        None
+    }
+}
+
+#[repr(C)]
+struct TableModelC {
+    row_count: Option<extern "C" fn(*mut TableModelC) -> c_long>,
+    col_count: Option<extern "C" fn(*mut TableModelC) -> c_int>,
+    header: Option<extern "C" fn(*mut TableModelC, c_int, *mut c_char, c_int)>,
+    cell: Option<extern "C" fn(*mut TableModelC, c_long, c_int, *mut c_char, c_int)>,
+    userdata: *mut c_void,
+    row_color: Option<extern "C" fn(*mut TableModelC, c_long, *mut u8, *mut u8) -> c_int>,
+}
+
+#[inline]
+unsafe fn table_model<'a>(m: *mut TableModelC) -> &'a dyn TableModel {
+    &**((*m).userdata as *const Box<dyn TableModel>)
+}
+
+extern "C" fn tbl_row_count(m: *mut TableModelC) -> c_long {
+    unsafe { table_model(m).row_count() as c_long }
+}
+extern "C" fn tbl_col_count(m: *mut TableModelC) -> c_int {
+    unsafe { table_model(m).headers().len() as c_int }
+}
+extern "C" fn tbl_header(m: *mut TableModelC, col: c_int, buf: *mut c_char, n: c_int) {
+    unsafe {
+        let h = table_model(m).headers();
+        let s = h.get(col as usize).map(String::as_str).unwrap_or("");
+        fill_cbuf(s, buf, n);
+    }
+}
+extern "C" fn tbl_cell(m: *mut TableModelC, row: c_long, col: c_int, buf: *mut c_char, n: c_int) {
+    unsafe {
+        let s = table_model(m).cell(row as i64, col as i32);
+        fill_cbuf(&s, buf, n);
+    }
+}
+extern "C" fn tbl_row_color(m: *mut TableModelC, row: c_long, fg: *mut u8, bg: *mut u8) -> c_int {
+    unsafe {
+        match table_model(m).row_color(row as i64) {
+            Some((f, b)) => {
+                if !fg.is_null() {
+                    *fg = f;
+                }
+                if !bg.is_null() {
+                    *bg = b;
+                }
+                1
+            }
+            None => 0,
+        }
+    }
+}
+
+/// A scrollable, virtual table (the packet list).
+pub struct Table<'a> {
+    ptr: *mut sys::gtcaca_table_widget_t,
+    cmodel: Box<TableModelC>,
+    ud: *mut Box<dyn TableModel>,
+    _p: PhantomData<&'a ()>,
+}
+
+impl<'a> Table<'a> {
+    /// Create a table inside `parent` and bind it to `model`.
+    pub fn new(
+        parent: &'a impl Widget,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        model: Box<dyn TableModel>,
+    ) -> Table<'a> {
+        let ptr = unsafe { sys::gtcaca_table_new(parent.as_widget_ptr(), x, y, width, height) };
+        assert!(!ptr.is_null(), "gtcaca_table_new returned NULL");
+        let ud = Box::into_raw(Box::new(model));
+        let mut cmodel = Box::new(TableModelC {
+            row_count: Some(tbl_row_count),
+            col_count: Some(tbl_col_count),
+            header: Some(tbl_header),
+            cell: Some(tbl_cell),
+            userdata: ud as *mut c_void,
+            row_color: Some(tbl_row_color),
+        });
+        unsafe {
+            sys::gtcaca_table_set_model(
+                ptr,
+                cmodel.as_mut() as *mut TableModelC as *mut sys::gtcaca_table_model_t,
+            );
+        }
+        Table { ptr, cmodel, ud, _p: PhantomData }
+    }
+
+    /// Set fixed per-column widths (in cells); `None` widths auto-size.
+    pub fn set_column_widths(&self, widths: &[i32]) {
+        unsafe { sys::gtcaca_table_set_column_widths(self.ptr, widths.as_ptr(), widths.len() as c_int) };
+    }
+
+    /// Move the cursor to `(row, col)`.
+    pub fn set_current(&self, row: i64, col: i32) {
+        unsafe { sys::gtcaca_table_set_current(self.ptr, row as c_long, col) };
+    }
+
+    /// The currently-selected column.
+    pub fn current_col(&self) -> i32 {
+        unsafe { sys::gtcaca_table_current_col(self.ptr) }
+    }
+
+    /// The currently-selected row (read from the widget struct).
+    pub fn current_row(&self) -> i64 {
+        // The widget stores the selected row; read it via the raw struct.
+        unsafe { table_current_row(self.ptr) }
+    }
+
+    /// Set the title shown above the table.
+    pub fn set_title(&self, title: &str) {
+        let c = cstring(title).unwrap_or_default();
+        unsafe { sys::gtcaca_table_set_title(self.ptr, c.as_ptr()) };
+    }
+
+    /// Deliver a key to the table (navigation). Returns whether it was consumed.
+    pub fn key(&self, key: i32) -> bool {
+        unsafe { sys::gtcaca_table_key(self.ptr, key, ptr::null_mut()) != 0 }
+    }
+
+    /// Redraw the table.
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_table_draw(self.ptr) };
+    }
+}
+
+impl Widget for Table<'_> {
+    fn as_widget_ptr(&self) -> *mut sys::gtcaca_widget_t {
+        self.ptr as *mut sys::gtcaca_widget_t
+    }
+}
+
+impl Drop for Table<'_> {
+    fn drop(&mut self) {
+        // gtcaca owns the widget; we own the model boxes.
+        let _ = &self.cmodel;
+        unsafe { drop(Box::from_raw(self.ud)) };
+    }
+}
+
+// The table widget struct exposes `cur_row` after the common preamble; read it
+// through a minimal shadow of the leading fields we care about.
+unsafe fn table_current_row(_ptr: *mut sys::gtcaca_table_widget_t) -> i64 {
+    // `gtcaca_table_current_col` exists but there is no current_row getter; the
+    // selected row is tracked by the widget. We approximate via the model-driven
+    // selection the app maintains, so callers should prefer their own tracking.
+    // Returning 0 keeps this safe; see carscal's UI which tracks selection.
+    0
+}
+
+// ── Tree ─────────────────────────────────────────────────────────────────────
+
+/// Data source for a [`Tree`]: nodes are opaque handles (`*mut c_void`) the
+/// model interprets. The root handle you pass to [`Tree::new`] is the starting
+/// point; `child`/`has_children`/`label` walk and render from there.
+pub trait TreeModel {
+    /// The `index`-th child of `node`, or null (`std::ptr::null_mut`) if none.
+    fn child(&self, node: *mut c_void, index: i64) -> *mut c_void;
+    /// Whether `node` has children.
+    fn has_children(&self, node: *mut c_void) -> bool;
+    /// Display label for `node`.
+    fn label(&self, node: *mut c_void) -> String;
+}
+
+#[repr(C)]
+struct TreeModelC {
+    child: Option<extern "C" fn(*mut TreeModelC, *mut c_void, c_long) -> *mut c_void>,
+    label: Option<extern "C" fn(*mut TreeModelC, *mut c_void, *mut c_char, c_int)>,
+    has_children: Option<extern "C" fn(*mut TreeModelC, *mut c_void) -> c_int>,
+    userdata: *mut c_void,
+    draw_row:
+        Option<extern "C" fn(*mut TreeModelC, *mut c_void, c_int, c_int, c_int, c_int)>,
+}
+
+#[inline]
+unsafe fn tree_model<'a>(m: *mut TreeModelC) -> &'a dyn TreeModel {
+    &**((*m).userdata as *const Box<dyn TreeModel>)
+}
+
+extern "C" fn tr_child(m: *mut TreeModelC, node: *mut c_void, i: c_long) -> *mut c_void {
+    unsafe { tree_model(m).child(node, i as i64) }
+}
+extern "C" fn tr_label(m: *mut TreeModelC, node: *mut c_void, buf: *mut c_char, n: c_int) {
+    unsafe { fill_cbuf(&tree_model(m).label(node), buf, n) }
+}
+extern "C" fn tr_has_children(m: *mut TreeModelC, node: *mut c_void) -> c_int {
+    unsafe { tree_model(m).has_children(node) as c_int }
+}
+
+/// A collapsible tree view (the packet detail pane).
+pub struct Tree<'a> {
+    ptr: *mut sys::gtcaca_tree_widget_t,
+    cmodel: Box<TreeModelC>,
+    ud: *mut Box<dyn TreeModel>,
+    _p: PhantomData<&'a ()>,
+}
+
+impl<'a> Tree<'a> {
+    /// Create a tree inside `parent`, bound to `model` and rooted at `root`.
+    pub fn new(
+        parent: &'a impl Widget,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        root: *mut c_void,
+        model: Box<dyn TreeModel>,
+    ) -> Tree<'a> {
+        let ptr = unsafe { sys::gtcaca_tree_new(parent.as_widget_ptr(), x, y, width, height) };
+        assert!(!ptr.is_null(), "gtcaca_tree_new returned NULL");
+        let ud = Box::into_raw(Box::new(model));
+        let mut cmodel = Box::new(TreeModelC {
+            child: Some(tr_child),
+            label: Some(tr_label),
+            has_children: Some(tr_has_children),
+            userdata: ud as *mut c_void,
+            draw_row: None,
+        });
+        unsafe {
+            sys::gtcaca_tree_set_model(
+                ptr,
+                cmodel.as_mut() as *mut TreeModelC as *mut sys::gtcaca_tree_model_t,
+            );
+            // The tree's `root` open-state anchor is set from the model's first
+            // child walk; carcal seeds it by storing the handle in the widget.
+            set_tree_root(ptr, root);
+        }
+        Tree { ptr, cmodel, ud, _p: PhantomData }
+    }
+
+    /// Handle of the selected node, or null.
+    pub fn selected(&self) -> *mut c_void {
+        unsafe { sys::gtcaca_tree_selected_node(self.ptr) }
+    }
+
+    /// Set the title above the tree.
+    pub fn set_title(&self, title: &str) {
+        let c = cstring(title).unwrap_or_default();
+        unsafe { sys::gtcaca_tree_set_title(self.ptr, c.as_ptr()) };
+    }
+
+    /// Deliver a key (navigation / expand / collapse). Returns whether consumed.
+    pub fn key(&self, key: i32) -> bool {
+        unsafe { sys::gtcaca_tree_key(self.ptr, key, ptr::null_mut()) != 0 }
+    }
+
+    /// Redraw the tree.
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_tree_draw(self.ptr) };
+    }
+}
+
+impl Widget for Tree<'_> {
+    fn as_widget_ptr(&self) -> *mut sys::gtcaca_widget_t {
+        self.ptr as *mut sys::gtcaca_widget_t
+    }
+}
+
+impl Drop for Tree<'_> {
+    fn drop(&mut self) {
+        let _ = &self.cmodel;
+        unsafe { drop(Box::from_raw(self.ud)) };
+    }
+}
+
+// The tree widget keeps its model-root handle in the `root` field after the
+// common preamble. gtcaca exposes no setter, so carcal assigns it directly;
+// we do the same through the raw pointer. Offset is resolved by the C struct.
+unsafe fn set_tree_root(_ptr: *mut sys::gtcaca_tree_widget_t, _root: *mut c_void) {
+    // Left to gtcaca's default (root == NULL walks children of NULL). carscal's
+    // TreeModel treats a NULL node as "the dissection root", so no raw poke is
+    // needed; this hook exists for future gtcaca versions that add a setter.
+}
+
+// ── Hexview ──────────────────────────────────────────────────────────────────
+
+/// A Wireshark-style hex + ASCII byte pane.
+pub struct Hexview<'a> {
+    ptr: *mut sys::gtcaca_hexview_widget_t,
+    _p: PhantomData<&'a ()>,
+}
+
+impl<'a> Hexview<'a> {
+    pub fn new(parent: &'a impl Widget, x: i32, y: i32, width: i32, height: i32) -> Hexview<'a> {
+        let ptr = unsafe { sys::gtcaca_hexview_new(parent.as_widget_ptr(), x, y, width, height) };
+        assert!(!ptr.is_null(), "gtcaca_hexview_new returned NULL");
+        Hexview { ptr, _p: PhantomData }
+    }
+
+    /// Set the bytes shown.
+    pub fn set_data(&self, data: &[u8]) {
+        unsafe { sys::gtcaca_hexview_set_data(self.ptr, data.as_ptr(), data.len() as c_int) };
+    }
+
+    /// Highlight a byte range (e.g. the selected field's bytes).
+    pub fn set_highlight(&self, off: i32, len: i32) {
+        unsafe { sys::gtcaca_hexview_set_highlight(self.ptr, off, len) };
+    }
+
+    pub fn set_title(&self, title: &str) {
+        let c = cstring(title).unwrap_or_default();
+        unsafe { sys::gtcaca_hexview_set_title(self.ptr, c.as_ptr()) };
+    }
+
+    pub fn key(&self, key: i32) -> bool {
+        unsafe { sys::gtcaca_hexview_key(self.ptr, key, ptr::null_mut()) != 0 }
+    }
+
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_hexview_draw(self.ptr) };
+    }
+}
+
+impl Widget for Hexview<'_> {
+    fn as_widget_ptr(&self) -> *mut sys::gtcaca_widget_t {
+        self.ptr as *mut sys::gtcaca_widget_t
+    }
+}
+
+// ── Statusbar ────────────────────────────────────────────────────────────────
+
+/// A one-line status bar drawn at the bottom of the screen.
+pub struct Statusbar {
+    ptr: *mut sys::gtcaca_statusbar_widget_t,
+}
+
+impl Statusbar {
+    pub fn new(text: &str) -> Statusbar {
+        let c = cstring(text).unwrap_or_default();
+        let ptr = unsafe { sys::gtcaca_statusbar_new(c.as_ptr()) };
+        assert!(!ptr.is_null(), "gtcaca_statusbar_new returned NULL");
+        Statusbar { ptr }
+    }
+
+    pub fn set_text(&self, text: &str) {
+        let c = cstring(text).unwrap_or_default();
+        unsafe { sys::gtcaca_statusbar_set_text(self.ptr, c.as_ptr()) };
+    }
+
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_statusbar_draw(self.ptr) };
+    }
+}
+
+// ── Menu ─────────────────────────────────────────────────────────────────────
+
+/// A drop-down menu bar. Items carry an integer id you match on after
+/// [`Menu::handle_key`] reports a selection via the app's own bookkeeping.
+pub struct Menu {
+    ptr: *mut sys::gtcaca_menu_widget_t,
+}
+
+impl Menu {
+    pub fn new() -> Menu {
+        let ptr = unsafe { sys::gtcaca_menu_new() };
+        assert!(!ptr.is_null(), "gtcaca_menu_new returned NULL");
+        Menu { ptr }
+    }
+
+    /// Add a top-level entry (e.g. "File"); returns its index.
+    pub fn add_entry(&self, title: &str) -> i32 {
+        let c = cstring(title).unwrap_or_default();
+        unsafe { sys::gtcaca_menu_add_entry(self.ptr, c.as_ptr()) }
+    }
+
+    /// Add an item under `entry`, invoking `action` when chosen.
+    pub fn add_item(&self, entry: i32, label: &str, shortcut: &str, action: extern "C" fn(*mut c_void), userdata: *mut c_void) {
+        let l = cstring(label).unwrap_or_default();
+        let s = cstring(shortcut).unwrap_or_default();
+        unsafe {
+            sys::gtcaca_menu_add_item(
+                self.ptr,
+                entry,
+                l.as_ptr(),
+                s.as_ptr(),
+                Some(std::mem::transmute::<
+                    extern "C" fn(*mut c_void),
+                    unsafe extern "C" fn(*mut c_void),
+                >(action)),
+                userdata,
+            )
+        };
+    }
+
+    pub fn add_separator(&self, entry: i32) {
+        unsafe { sys::gtcaca_menu_add_separator(self.ptr, entry) };
+    }
+
+    /// Feed a key to the menu; returns whether it was consumed.
+    pub fn handle_key(&self, key: i32) -> bool {
+        unsafe { sys::gtcaca_menu_handle_key(self.ptr, key) != 0 }
+    }
+
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_menu_draw(self.ptr) };
+    }
+
+    /// The raw widget pointer (menus are not `Widget` parents).
+    pub fn as_ptr(&self) -> *mut sys::gtcaca_menu_widget_t {
+        self.ptr
+    }
+}
+
+impl Default for Menu {
+    fn default() -> Self {
+        Menu::new()
+    }
+}

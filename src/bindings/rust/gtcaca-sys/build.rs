@@ -100,8 +100,13 @@ fn main() {
         // Emit only GTCaca's own API (+ the caca types its signatures need,
         // which bindgen pulls in transitively) and the CACA_KEY_* constants.
         .allowlist_function("gtcaca_.*")
+        // libcaca event polling: carcal/carscal drive their own event loop on
+        // the global display (gmo.dp) rather than gtcaca_main(), so expose the
+        // handful of caca_get_event* entry points and the event type they need.
+        .allowlist_function("caca_get_event.*")
         .allowlist_type("gtcaca_.*")
         .allowlist_type("_?g(mo|tcaca)_.*")
+        .allowlist_type("caca_event.*")
         .allowlist_var("GTCACA_.*")
         .allowlist_var("CACA_.*")
         .allowlist_var("gmo")
