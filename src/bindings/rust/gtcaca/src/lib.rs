@@ -1019,6 +1019,18 @@ impl Menu {
         unsafe { sys::gtcaca_menu_handle_key(self.ptr, key) != 0 }
     }
 
+    /// Give or remove keyboard focus (e.g. from an F9/F10 handler). While
+    /// focused, [`handle_key`](Menu::handle_key) navigates and opens the menu;
+    /// removing focus also closes any open dropdown.
+    pub fn set_focus(&self, on: bool) {
+        unsafe { sys::gtcaca_menu_set_focus(self.ptr, on as c_int) };
+    }
+
+    /// Whether the menu bar currently has focus.
+    pub fn is_focused(&self) -> bool {
+        unsafe { sys::gtcaca_menu_is_focused(self.ptr) != 0 }
+    }
+
     pub fn draw(&self) {
         unsafe { sys::gtcaca_menu_draw(self.ptr) };
     }

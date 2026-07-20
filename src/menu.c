@@ -251,3 +251,20 @@ int gtcaca_menu_handle_key(gtcaca_menu_widget_t *menu, int key)
 {
   return _gtcaca_menu_private_key_press(menu, key, NULL);
 }
+
+void gtcaca_menu_set_focus(gtcaca_menu_widget_t *menu, int on)
+{
+  if (!menu) return;
+  menu->has_focus = on ? 1 : 0;
+  if (on) {
+    if (menu->active_entry < 0 || menu->active_entry >= menu->n_entries)
+      menu->active_entry = 0;
+  } else {
+    menu->is_open = 0;
+  }
+}
+
+int gtcaca_menu_is_focused(gtcaca_menu_widget_t *menu)
+{
+  return (menu && menu->has_focus) ? 1 : 0;
+}

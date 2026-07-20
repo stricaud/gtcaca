@@ -61,4 +61,11 @@ int gtcaca_menu_add_item(gtcaca_menu_widget_t *menu, int entry_idx, const char *
 int gtcaca_menu_add_separator(gtcaca_menu_widget_t *menu, int entry_idx);
 int gtcaca_menu_handle_key(gtcaca_menu_widget_t *menu, int key);
 
+/* Give (or remove) keyboard focus to the menu bar. While focused, the menu bar
+ * highlights its active entry and `gtcaca_menu_handle_key` navigates/opens it;
+ * removing focus also closes any open dropdown. This lets an application drive
+ * the menu (e.g. from an F9/F10 handler) without reaching into the struct. */
+void gtcaca_menu_set_focus(gtcaca_menu_widget_t *menu, int on);
+int  gtcaca_menu_is_focused(gtcaca_menu_widget_t *menu);
+
 #endif /* _GTCACA_MENU_H_ */
