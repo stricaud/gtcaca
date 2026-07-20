@@ -8,3 +8,4 @@ wheelhouse/
 __pycache__/
 *.so
 .DS_Store
+*.pkg
