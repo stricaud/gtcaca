@@ -1034,3 +1034,56 @@ impl Default for Menu {
         Menu::new()
     }
 }
+
+// ── Linechart ─────────────────────────────────────────────────────────────────
+
+/// A line chart (multiple series), e.g. a Wireshark-style IO graph.
+pub struct Linechart<'a> {
+    ptr: *mut sys::gtcaca_linechart_widget_t,
+    _p: PhantomData<&'a ()>,
+}
+
+impl<'a> Linechart<'a> {
+    pub fn new(parent: &'a impl Widget, x: i32, y: i32, width: i32, height: i32) -> Linechart<'a> {
+        let ptr = unsafe { sys::gtcaca_linechart_new(parent.as_widget_ptr(), x, y, width, height) };
+        assert!(!ptr.is_null(), "gtcaca_linechart_new returned NULL");
+        Linechart { ptr, _p: PhantomData }
+    }
+
+    /// Add a data series drawn in libcaca color `colour`. Returns the series
+    /// index, or a negative value if the chart is full.
+    pub fn add_series(&self, y: &[f64], colour: u8) -> i32 {
+        unsafe { sys::gtcaca_linechart_add_series(self.ptr, y.as_ptr(), y.len() as c_int, colour) }
+    }
+
+    /// Remove all series.
+    pub fn clear(&self) {
+        unsafe { sys::gtcaca_linechart_clear(self.ptr) };
+    }
+
+    /// Fix the Y range (default is auto-scaling).
+    pub fn set_range(&self, ymin: f64, ymax: f64) {
+        unsafe { sys::gtcaca_linechart_set_range(self.ptr, ymin, ymax) };
+    }
+
+    /// Label the X axis `0..xspan` with `unit`.
+    pub fn set_xspan(&self, xspan: f64, unit: &str) {
+        let c = cstring(unit).unwrap_or_default();
+        unsafe { sys::gtcaca_linechart_set_xspan(self.ptr, xspan, c.as_ptr()) };
+    }
+
+    pub fn set_title(&self, title: &str) {
+        let c = cstring(title).unwrap_or_default();
+        unsafe { sys::gtcaca_linechart_set_title(self.ptr, c.as_ptr()) };
+    }
+
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_linechart_draw(self.ptr) };
+    }
+}
+
+impl Widget for Linechart<'_> {
+    fn as_widget_ptr(&self) -> *mut sys::gtcaca_widget_t {
+        self.ptr as *mut sys::gtcaca_widget_t
+    }
+}
