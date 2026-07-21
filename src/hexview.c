@@ -33,6 +33,7 @@ gtcaca_hexview_widget_t *gtcaca_hexview_new(gtcaca_widget_t *parent, int x, int 
   h->top = 0;
   h->hl_off = -1;
   h->hl_len = 0;
+  h->cursor = 0;
   h->title = NULL;
 
   CDL_APPEND(gmo.widgets_list, GTCACA_WIDGET(h));
@@ -45,6 +46,7 @@ void gtcaca_hexview_set_data(gtcaca_hexview_widget_t *h, const uint8_t *data, in
   h->data = data;
   h->len = len < 0 ? 0 : len;
   if (h->top * 16 >= h->len) h->top = 0;
+  if (h->cursor >= h->len) h->cursor = 0;
 }
 
 void gtcaca_hexview_set_highlight(gtcaca_hexview_widget_t *h, int off, int len)
@@ -101,12 +103,14 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
     for (i = 0; i < 16; i++) {
       long idx = base + i;
       int hot = (h->hl_len > 0 && idx >= h->hl_off && idx < h->hl_off + h->hl_len);
+      int cur = (h->has_focus && idx == h->cursor);
       if (i == 8) { caca_set_color_ansi(gmo.cv, fg, bg); cx += 1; }
       if (cx + 2 >= h->x + h->width) break;
       if (idx < h->len) {
         snprintf(tmp, sizeof tmp, "%02x", h->data[idx]);
-        if (hot) caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_CYAN);
-        else     caca_set_color_ansi(gmo.cv, fg, bg);
+        if (cur)      caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_WHITE);
+        else if (hot) caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_CYAN);
+        else          caca_set_color_ansi(gmo.cv, fg, bg);
         caca_put_char(gmo.cv, cx, cy, tmp[0]);
         caca_put_char(gmo.cv, cx + 1, cy, tmp[1]);
       }
@@ -119,12 +123,14 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
     for (i = 0; i < 16; i++) {
       long idx = base + i;
       int hot = (h->hl_len > 0 && idx >= h->hl_off && idx < h->hl_off + h->hl_len);
+      int cur = (h->has_focus && idx == h->cursor);
       uint8_t b;
       if (idx >= h->len) break;
       if (cx >= h->x + h->width - 1) break;
       b = h->data[idx];
-      if (hot) caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_CYAN);
-      else     caca_set_color_ansi(gmo.cv, fg, bg);
+      if (cur)      caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_WHITE);
+      else if (hot) caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_CYAN);
+      else          caca_set_color_ansi(gmo.cv, fg, bg);
       caca_put_char(gmo.cv, cx, cy, (b >= 32 && b < 127) ? (char)b : '.');
       cx += 1;
     }
@@ -136,17 +142,40 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
 int gtcaca_hexview_key(gtcaca_hexview_widget_t *h, int key, void *userdata)
 {
   int rows = (h->height - 2) > 0 ? h->height - 2 : 1;
-  int total = (h->len + 15) / 16;
+  int c = h->cursor;
   (void)userdata;
+  if (h->len <= 0) return 0;
+
+  /* Arrow keys move a byte cursor (the view scrolls to keep it visible), so an
+     application can map the cursor to a field. */
   switch (key) {
-  case CACA_KEY_UP:       if (h->top > 0) h->top--; return 1;
-  case CACA_KEY_DOWN:     if (h->top < total - 1) h->top++; return 1;
-  case CACA_KEY_PAGEUP:   h->top -= rows; if (h->top < 0) h->top = 0; return 1;
-  case CACA_KEY_PAGEDOWN: h->top += rows; if (h->top > total - 1) h->top = total - 1; if (h->top < 0) h->top = 0; return 1;
-  case CACA_KEY_HOME:     h->top = 0; return 1;
-  case CACA_KEY_END:      h->top = total - rows; if (h->top < 0) h->top = 0; return 1;
+  case CACA_KEY_LEFT:     c -= 1; break;
+  case CACA_KEY_RIGHT:    c += 1; break;
+  case CACA_KEY_UP:       c -= 16; break;
+  case CACA_KEY_DOWN:     c += 16; break;
+  case CACA_KEY_PAGEUP:   c -= rows * 16; break;
+  case CACA_KEY_PAGEDOWN: c += rows * 16; break;
+  case CACA_KEY_HOME:     c = 0; break;
+  case CACA_KEY_END:      c = h->len - 1; break;
+  default: return 0;
   }
-  return 0;
+  if (c < 0) c = 0;
+  if (c >= h->len) c = h->len - 1;
+  h->cursor = c;
+
+  /* keep the cursor row on screen */
+  {
+    int row = c / 16;
+    if (row < h->top) h->top = row;
+    else if (row >= h->top + rows) h->top = row - rows + 1;
+  }
+  return 1;
+}
+
+int gtcaca_hexview_cursor(gtcaca_hexview_widget_t *h)
+{
+  if (!h || !h->data || h->len <= 0) return -1;
+  return h->cursor;
 }
 
 void gtcaca_hexview_free(gtcaca_hexview_widget_t *h)

@@ -988,6 +988,17 @@ impl<'a> Hexview<'a> {
         unsafe { sys::gtcaca_hexview_set_highlight(self.ptr, off, len) };
     }
 
+    /// The current byte-cursor offset (moved by the arrow keys), or `None` if
+    /// there is no data. Map this to a protocol field to drive selection.
+    pub fn cursor(&self) -> Option<usize> {
+        let c = unsafe { sys::gtcaca_hexview_cursor(self.ptr) };
+        if c < 0 {
+            None
+        } else {
+            Some(c as usize)
+        }
+    }
+
     pub fn set_title(&self, title: &str) {
         let c = cstring(title).unwrap_or_default();
         unsafe { sys::gtcaca_hexview_set_title(self.ptr, c.as_ptr()) };

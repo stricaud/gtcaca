@@ -35,12 +35,16 @@ struct _gtcaca_hexview_widget_t {
   int            top;    /* first visible row (16 bytes/row) */
   int            hl_off; /* highlight range start, -1 = none */
   int            hl_len;
+  int            cursor; /* byte cursor offset (arrow keys); -1 = none */
   char          *title;
 };
 
 gtcaca_hexview_widget_t *gtcaca_hexview_new(gtcaca_widget_t *parent, int x, int y, int width, int height);
 void gtcaca_hexview_set_data(gtcaca_hexview_widget_t *h, const uint8_t *data, int len);
 void gtcaca_hexview_set_highlight(gtcaca_hexview_widget_t *h, int off, int len);
+/* The current byte-cursor offset (moved by the arrow keys), or -1 if there is
+ * no data. Lets an application map the cursor to a protocol field. */
+int  gtcaca_hexview_cursor(gtcaca_hexview_widget_t *h);
 void gtcaca_hexview_set_title(gtcaca_hexview_widget_t *h, const char *title);
 void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h);
 /* Up/Down/PageUp/PageDown/Home/End scroll. Returns 1 if the key was consumed. */
