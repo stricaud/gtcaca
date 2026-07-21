@@ -20,6 +20,8 @@ include = [
     "build.rs",
     "wrapper.h",
     "README.md",
+    # Pre-generated FFI used on docs.rs (which has no libcaca); see build.rs.
+    "docsrs-bindings.rs",
     "vendor/**/*.c",
     "vendor/**/*.h",
 ]

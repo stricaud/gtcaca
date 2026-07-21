@@ -109,9 +109,23 @@ void gtcaca_image_draw(gtcaca_image_widget_t *img)
   caca_set_dither_antialias(dither, "prefilter");
   caca_set_dither_algorithm(dither, "fstein");
 
-  caca_dither_bitmap(gmo.cv,
-    img->x, img->y, img->width, img->height,
-    dither, img->pixels);
+  /* Fit the image inside the widget box preserving its aspect ratio (letterbox),
+     centred — so callers can hand a plain box without the photo coming out
+     stretched. Terminal cells are ~2:1 (tall), so a source aspect of iw/ih maps
+     to (iw/ih)*2 columns per row. */
+  {
+    int bw = img->width, bh = img->height;
+    int cols = bw, rows = bh, ox, oy;
+    if (img->img_height > 0 && img->img_width > 0) {
+      double cols_per_row = (double)img->img_width / (double)img->img_height * 2.0;
+      int need_cols = (int)(bh * cols_per_row + 0.5);
+      if (need_cols <= bw) { cols = need_cols < 1 ? 1 : need_cols; rows = bh; }
+      else { cols = bw; rows = (int)(bw / cols_per_row + 0.5); if (rows < 1) rows = 1; }
+    }
+    ox = img->x + (bw - cols) / 2;
+    oy = img->y + (bh - rows) / 2;
+    caca_dither_bitmap(gmo.cv, ox, oy, cols, rows, dither, img->pixels);
+  }
 
   caca_free_dither(dither);
 }
