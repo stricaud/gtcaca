@@ -81,6 +81,19 @@ pub(crate) fn cstring(s: &str) -> Result<CString, Error> {
 mod widgets;
 pub use widgets::*;
 
+/// Step-by-step guides to building complete apps, rendered on docs.rs. Each
+/// walks through a runnable file under the crate's `examples/`.
+pub mod tutorials {
+    //! Narrated walk-throughs. Read these to learn how the pieces fit together;
+    //! the matching `examples/*.rs` are the full, runnable source.
+
+    #[doc = include_str!("../doc/tutorial_spreadsheet.md")]
+    pub mod spreadsheet {}
+
+    #[doc = include_str!("../doc/tutorial_mindmap.md")]
+    pub mod mindmap {}
+}
+
 // ---------------------------------------------------------------------------
 // Callback registry
 //
@@ -257,6 +270,46 @@ pub trait Widget {
     /// [`Widget::send_key`] the natural sink for input).
     fn set_focus(&self, focused: bool) {
         unsafe { (*self.as_widget_ptr()).has_focus = focused as c_int };
+    }
+
+    /// Override this widget's width in character cells. Most widgets size
+    /// themselves at construction; use this to constrain one — e.g. a
+    /// [`Textlist`], whose background fill spans its `width`.
+    fn set_width(&self, width: i32) {
+        unsafe { (*self.as_widget_ptr()).width = width };
+    }
+
+    /// Override this widget's height in character cells (see [`Widget::set_width`]).
+    fn set_height(&self, height: i32) {
+        unsafe { (*self.as_widget_ptr()).height = height };
+    }
+
+    /// This widget's four theme colours: `(focus_fg, focus_bg, nonfocus_fg,
+    /// nonfocus_bg)`. Read, tweak one, and hand back to [`Widget::set_colors`].
+    fn colors(&self) -> (u8, u8, u8, u8) {
+        let w = self.as_widget_ptr();
+        unsafe {
+            (
+                (*w).color_focus_fg,
+                (*w).color_focus_bg,
+                (*w).color_nonfocus_fg,
+                (*w).color_nonfocus_bg,
+            )
+        }
+    }
+
+    /// Set this widget's four theme colours (see the [`color`] module): the
+    /// foreground/background used when focused and when not. Handy to recolour a
+    /// [`Window`]'s fill or, since a list draws its selection in the parent's
+    /// focus colours, to style that selection bar.
+    fn set_colors(&self, focus_fg: u8, focus_bg: u8, nonfocus_fg: u8, nonfocus_bg: u8) {
+        unsafe {
+            let w = self.as_widget_ptr();
+            (*w).color_focus_fg = focus_fg;
+            (*w).color_focus_bg = focus_bg;
+            (*w).color_nonfocus_fg = nonfocus_fg;
+            (*w).color_nonfocus_bg = nonfocus_bg;
+        }
     }
 
     /// Paint just this widget (dispatching to its type-specific draw). Use in a

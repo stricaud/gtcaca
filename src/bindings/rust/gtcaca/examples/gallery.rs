@@ -80,15 +80,25 @@ struct Page<'a> {
 fn main() -> Result<(), gtcaca::Error> {
     let ctx = Gtcaca::init()?;
     let app = Application::new(&ctx, "gtcaca gallery");
-    let win = Window::fullscreen(&app, None);
+    let win = Window::fullscreen(&app, Some("gtcaca gallery"));
 
-    // Layout: a menu column on the left, the live widget on the right.
+    // Recolour the window to a black canvas with a bright selection bar. The
+    // window fills with its non-focus colour (so unfocus it), and a Textlist
+    // draws its selected row in the *parent's* focus colours — that's what makes
+    // the picked item a clear black-on-cyan bar.
+    Widget::set_focus(&win, false); // (Window has its own set_focus; use the trait's)
+    win.set_colors(color::BLACK, color::CYAN, color::LIGHTGRAY, color::BLACK);
+
+    // Layout: a menu column on the left, a divider, the live widget on the right.
     let g = win.geometry();
     let list_w = 20;
     let (rx, ry) = (list_w + 2, 2);
     let rw = (g.width - rx - 2).max(10);
     let rh = (g.height - ry - 2).max(6);
     let clamp = |w: i32, h: i32| (w.min(rw), h.min(rh));
+
+    // A vertical rule separating the two panes (cf. the C demo's divider).
+    let divider = Separator::new(&win, list_w, 1, g.height - 2, true);
 
     // Keep any borrowed buffers alive for the whole run (the hex view borrows).
     let hexbuf: Vec<u8> = (0u16..=255).map(|b| b as u8).collect();
@@ -295,6 +305,9 @@ fn main() -> Result<(), gtcaca::Error> {
     // The menu list on the left. Its built-in `/` search filters it as you type.
     let menu = Textlist::new(&win, 1, ry);
     menu.set_view_size(rh as u32);
+    // Bound the list to the left column: a Textlist's background fill spans its
+    // `width`, which defaults to the parent's, so cap it short of the divider.
+    menu.set_width(list_w - 1);
     for p in &pages {
         menu.append(p.name);
     }
@@ -323,6 +336,9 @@ fn main() -> Result<(), gtcaca::Error> {
         win.paint();
         menu.paint();
         page.widget.paint();
+        // Paint the divider last so nothing (e.g. the list's background fill or
+        // a wide widget) can paint over it.
+        divider.paint();
         status.set_text(&format!(
             " {}  —  {}     [{}]",
             page.name,

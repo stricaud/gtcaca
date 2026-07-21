@@ -1119,8 +1119,11 @@ void gtcaca_main(void)
   fputs("\033[?1002l\033[?1006l", stdout);   /* restore: disable SGR mouse reporting */
   fflush(stdout);
   gtcaca_present_shutdown();                  /* restore cursor if we took over output */
-  caca_set_mouse(gmo.dp, 0);
-  caca_free_display(gmo.dp);
+  if (gmo.dp) {
+    caca_set_mouse(gmo.dp, 0);
+    caca_free_display(gmo.dp);
+    gmo.dp = NULL;   /* so a later gtcaca_shutdown() (e.g. the Rust Drop) doesn't double-free */
+  }
 }
 
 unsigned int gtcaca_get_newid(void)

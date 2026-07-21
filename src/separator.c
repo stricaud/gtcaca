@@ -27,10 +27,12 @@ gtcaca_separator_widget_t *gtcaca_separator_new(gtcaca_widget_t *parent, int x, 
   sep->width  = vertical ? 1 : length;
   sep->height = vertical ? length : 1;
 
-  sep->color_focus_fg   = CACA_DEFAULT;
-  sep->color_focus_bg   = CACA_DEFAULT;
-  sep->color_nonfocus_fg = CACA_DEFAULT;
-  sep->color_nonfocus_bg = CACA_DEFAULT;
+  /* Visible by default: CACA_DEFAULT renders invisibly under the truecolour
+     presenter. Override the color fields for a different rule colour. */
+  sep->color_focus_fg   = CACA_LIGHTGRAY;
+  sep->color_focus_bg   = gmo.theme.textview.bg;
+  sep->color_nonfocus_fg = CACA_LIGHTGRAY;
+  sep->color_nonfocus_bg = gmo.theme.textview.bg;
 
   sep->vertical = vertical;
 
@@ -41,15 +43,18 @@ gtcaca_separator_widget_t *gtcaca_separator_new(gtcaca_widget_t *parent, int x, 
 
 void gtcaca_separator_draw(gtcaca_separator_widget_t *sep)
 {
+  uint8_t fg = sep->has_focus ? sep->color_focus_fg : sep->color_nonfocus_fg;
+  uint8_t bg = sep->has_focus ? sep->color_focus_bg : sep->color_nonfocus_bg;
   int i;
 
-  caca_set_color_ansi(gmo.cv, CACA_DEFAULT, CACA_DEFAULT);
+  caca_set_color_ansi(gmo.cv, fg, bg);
 
+  /* Box-drawing rules (│ / ─) for a clean line, like the C gallery's divider. */
   if (sep->vertical) {
     for (i = 0; i < sep->height; i++)
-      caca_put_char(gmo.cv, sep->x, sep->y + i, '|');
+      caca_put_char(gmo.cv, sep->x, sep->y + i, 0x2502);
   } else {
     for (i = 0; i < sep->width; i++)
-      caca_put_char(gmo.cv, sep->x + i, sep->y, '-');
+      caca_put_char(gmo.cv, sep->x + i, sep->y, 0x2500);
   }
 }

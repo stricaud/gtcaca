@@ -10,6 +10,20 @@ trait that makes every widget paintable and focusable the same way. The whole
 toolkit is single-threaded (one global context, one event loop), so the context
 and every widget are `!Send`/`!Sync`.
 
+## See it
+
+The `gallery` example — browse and drive every widget (`/` filters the list):
+
+![widget gallery](https://raw.githubusercontent.com/stricaud/gtcaca/main/src/bindings/rust/gtcaca/doc/gallery.png)
+
+The `spreadsheet` tutorial — a table with a live histogram and pie chart:
+
+![spreadsheet analytics](https://raw.githubusercontent.com/stricaud/gtcaca/main/src/bindings/rust/gtcaca/doc/spreadsheet.png)
+
+The `mindmap` tutorial — a FreeMind viewer/editor:
+
+![mind map](https://raw.githubusercontent.com/stricaud/gtcaca/main/src/bindings/rust/gtcaca/doc/mindmap.png)
+
 ## Requirements
 
 libcaca development files, found at build time via `pkg-config`:
