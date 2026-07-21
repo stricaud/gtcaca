@@ -909,6 +909,16 @@ impl<'a> Tree<'a> {
         Tree { ptr, cmodel, ud, _p: PhantomData }
     }
 
+    /// Rebuild the tree from its model — call this after the underlying data
+    /// changes (e.g. a new packet selected) so the tree re-reads `child_count`
+    /// and the root structure. Resets the expansion state to collapsed.
+    pub fn reload(&self) {
+        // set_model stores the pointer and rebuilds the root; it does not mutate
+        // the model struct, so a shared borrow is sound.
+        let m = &*self.cmodel as *const TreeModelC as *mut sys::gtcaca_tree_model_t;
+        unsafe { sys::gtcaca_tree_set_model(self.ptr, m) };
+    }
+
     /// Handle of the selected node, or null.
     pub fn selected(&self) -> *mut c_void {
         unsafe { sys::gtcaca_tree_selected_node(self.ptr) }
