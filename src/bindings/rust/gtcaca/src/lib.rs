@@ -826,6 +826,8 @@ unsafe fn table_current_row(_ptr: *mut sys::gtcaca_table_widget_t) -> i64 {
 /// model interprets. The root handle you pass to [`Tree::new`] is the starting
 /// point; `child`/`has_children`/`label` walk and render from there.
 pub trait TreeModel {
+    /// Number of children of `node` (a null `node` is the root level).
+    fn child_count(&self, node: *mut c_void) -> i64;
     /// The `index`-th child of `node`, or null (`std::ptr::null_mut`) if none.
     fn child(&self, node: *mut c_void, index: i64) -> *mut c_void;
     /// Whether `node` has children.
@@ -834,8 +836,11 @@ pub trait TreeModel {
     fn label(&self, node: *mut c_void) -> String;
 }
 
+// Field order MUST match the C `gtcaca_tree_model` struct exactly:
+//   child_count, child, label, has_children, userdata, draw_row.
 #[repr(C)]
 struct TreeModelC {
+    child_count: Option<extern "C" fn(*mut TreeModelC, *mut c_void) -> c_long>,
     child: Option<extern "C" fn(*mut TreeModelC, *mut c_void, c_long) -> *mut c_void>,
     label: Option<extern "C" fn(*mut TreeModelC, *mut c_void, *mut c_char, c_int)>,
     has_children: Option<extern "C" fn(*mut TreeModelC, *mut c_void) -> c_int>,
@@ -849,6 +854,9 @@ unsafe fn tree_model<'a>(m: *mut TreeModelC) -> &'a dyn TreeModel {
     &**((*m).userdata as *const Box<dyn TreeModel>)
 }
 
+extern "C" fn tr_child_count(m: *mut TreeModelC, node: *mut c_void) -> c_long {
+    unsafe { tree_model(m).child_count(node) as c_long }
+}
 extern "C" fn tr_child(m: *mut TreeModelC, node: *mut c_void, i: c_long) -> *mut c_void {
     unsafe { tree_model(m).child(node, i as i64) }
 }
@@ -882,6 +890,7 @@ impl<'a> Tree<'a> {
         assert!(!ptr.is_null(), "gtcaca_tree_new returned NULL");
         let ud = Box::into_raw(Box::new(model));
         let mut cmodel = Box::new(TreeModelC {
+            child_count: Some(tr_child_count),
             child: Some(tr_child),
             label: Some(tr_label),
             has_children: Some(tr_has_children),
