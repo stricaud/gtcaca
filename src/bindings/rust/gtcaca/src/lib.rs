@@ -334,6 +334,30 @@ impl<'a> Window<'a> {
         Window::centered(parent, title, w, h)
     }
 
+    /// The content area inside this window's border/title, in coordinates
+    /// **relative to the window** — ready to pass straight to child widgets, so
+    /// callers never hand-compute offsets like `x + 2` / `width - 4`. `margin`
+    /// insets it further on every side.
+    ///
+    /// ```no_run
+    /// # use gtcaca::{Window, Textlist, Widget};
+    /// # fn f(win: &Window) {
+    /// let c = win.content(1);
+    /// let list = Textlist::new(win, c.x, c.y);
+    /// list.set_view_size(c.height as u32);
+    /// # }
+    /// ```
+    pub fn content(&self, margin: i32) -> Rect {
+        let g = self.geometry();
+        let m = margin.max(0);
+        Rect {
+            x: 1 + m,
+            y: 1 + m,
+            width: (g.width - 2 - 2 * m).max(1),
+            height: (g.height - 2 - 2 * m).max(1),
+        }
+    }
+
     /// Give this window keyboard focus.
     pub fn set_focus(&self) {
         unsafe { sys::gtcaca_window_set_focus(self.ptr) }
