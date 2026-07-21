@@ -32,6 +32,23 @@ const C_SOURCES: &[&str] = &[
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=build.rs");
+
+    // docs.rs builds have no libcaca (and can't install system packages), so the
+    // pkg-config probe + C compile would fail. rustdoc never links, so we skip
+    // the native build there and reuse a committed, target-independent copy of
+    // the generated bindings, letting the crate (and its docs) type-check.
+    // Regenerate it with `scripts/gen-docsrs-bindings.sh` when the API changes.
+    if env::var("DOCS_RS").is_ok() {
+        std::fs::copy(
+            manifest_dir.join("docsrs-bindings.rs"),
+            out_path.join("bindings.rs"),
+        )
+        .expect("copy docsrs-bindings.rs (regenerate it after an API change)");
+        return;
+    }
 
     // Prefer vendored sources (published crate); fall back to the repo tree.
     let vendor = manifest_dir.join("vendor");
@@ -111,19 +128,29 @@ fn main() {
         .allowlist_var("GTCACA_.*")
         .allowlist_var("CACA_.*")
         .allowlist_var("gmo")
+        // Don't emit libc's stdio types (pulled in transitively via caca.h but
+        // unused by the API). They embed platform-specific fields (e.g. macOS'
+        // __darwin_off_t) that wouldn't compile when the committed bindings are
+        // reused on another target — e.g. docs.rs. Keeps the output portable.
+        .blocklist_type("FILE")
+        .blocklist_type("__sFILE.*")
+        .blocklist_type("_IO_FILE.*")
+        .blocklist_type("fpos_t")
+        .blocklist_type("_G_fpos_t")
+        .blocklist_type("__darwin.*")
+        .blocklist_type("__int64_t")
+        // A `FILE *` (in the log struct) is the only reference; make it a plain
+        // opaque pointer so the bindings carry no platform-specific stdio types.
+        .raw_line("pub type FILE = ::std::os::raw::c_void;")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()));
     for inc in &caca.include_paths {
         bindgen_builder = bindgen_builder.clang_arg(format!("-I{}", inc.display()));
     }
     let bindings = bindgen_builder.generate().expect("bindgen failed");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("failed to write bindings.rs");
 
-    // Rebuild triggers.
-    println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:include={}", include_dir.display());
 }
