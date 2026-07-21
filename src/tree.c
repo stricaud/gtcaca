@@ -189,6 +189,58 @@ void *gtcaca_tree_selected_node(gtcaca_tree_widget_t *t)
   return NULL;
 }
 
+/* DFS the model for `target`, recording the child indices along the way. */
+static int _find_path(gtcaca_tree_widget_t *t, void *node, void *target,
+                      long *path, int depth, int max)
+{
+  long cnt, i;
+  if (depth >= max) return -1;
+  cnt = t->model->child_count(t->model, node);
+  for (i = 0; i < cnt; i++) {
+    void *c = t->model->child(t->model, node, i);
+    path[depth] = i;
+    if (c == target) return depth + 1;
+    if (t->model->has_children(t->model, c)) {
+      int r = _find_path(t, c, target, path, depth + 1, max);
+      if (r > 0) return r;
+    }
+  }
+  return -1;
+}
+
+void gtcaca_tree_select(gtcaca_tree_widget_t *t, void *target)
+{
+  long path[64];
+  int plen, d, inner_h;
+  tnode *P;
+  long base = 0, row = 0;
+  if (!t || !t->model || !target) return;
+  plen = _find_path(t, NULL, target, path, 0, (int)(sizeof path / sizeof path[0]));
+  if (plen <= 0) return;
+
+  /* Reset to collapsed, then unfold only the ancestors along the path. Because
+     nothing else is expanded, a child's flattened row is simply base + index. */
+  _free_tnode((tnode *)t->root);
+  t->root = _make_root(t);
+  P = (tnode *)t->root;
+  for (d = 0; d < plen; d++) {
+    long ci = path[d];
+    row = base + ci;
+    if (d < plen - 1) {
+      tnode *C = tree_expand(t, P, ci);
+      if (!C) break;
+      P = C;
+      base = row + 1;   /* this node's children begin on the next row */
+    }
+  }
+  t->sel = row;
+
+  inner_h = t->height - 2;
+  if (t->sel < t->top) t->top = t->sel;
+  if (inner_h > 0 && t->sel >= t->top + inner_h) t->top = t->sel - inner_h + 1;
+  if (t->top < 0) t->top = 0;
+}
+
 void gtcaca_tree_draw(gtcaca_tree_widget_t *t)
 {
   uint8_t fg = gmo.theme.textview.fg, bg = gmo.theme.textview.bg;
@@ -209,13 +261,18 @@ void gtcaca_tree_draw(gtcaca_tree_widget_t *t)
     long row = t->top + i;
     int y = inner_y + i, indent, col, selected;
     rowinfo ri;
-    uint8_t rbg;
+    uint8_t rbg, rfg;
     if (row >= vis || !_resolve(t, row, &ri)) break;
-    selected = (row == t->sel && t->has_focus);
-    rbg = selected ? t->sel_bg : bg;
+    /* Highlight the selected row even when the pane is unfocused (dimmed to
+       grey), so a selection driven from elsewhere — e.g. an app syncing the
+       tree to a hex byte cursor — stays visible. The focused pane uses the
+       brighter `sel_bg`, distinguishing which pane is active (cf. Wireshark). */
+    selected = (row == t->sel);
+    rbg = selected ? (t->has_focus ? t->sel_bg : CACA_DARKGRAY) : bg;
+    rfg = selected ? CACA_WHITE : fg;
 
     /* paint the row background */
-    caca_set_color_ansi(gmo.cv, selected ? CACA_WHITE : fg, rbg); caca_set_attr(gmo.cv, 0);
+    caca_set_color_ansi(gmo.cv, rfg, rbg); caca_set_attr(gmo.cv, 0);
     for (col = 0; col < inner_w; col++) caca_put_char(gmo.cv, inner_x + col, y, ' ');
 
     indent = ri.depth * 2;
@@ -223,7 +280,7 @@ void gtcaca_tree_draw(gtcaca_tree_widget_t *t)
        renders in every terminal font (same convention as the fold margin). */
     if (indent < inner_w) {
       uint32_t mk = ri.has_kids ? (ri.self ? '-' : '+') : ' ';
-      caca_set_color_ansi(gmo.cv, ri.has_kids ? CACA_YELLOW : fg, rbg);
+      caca_set_color_ansi(gmo.cv, ri.has_kids ? CACA_YELLOW : rfg, rbg);
       caca_put_char(gmo.cv, inner_x + indent, y, mk);
     }
     /* row content: a custom cell renderer if the model provides one, else the
@@ -231,7 +288,7 @@ void gtcaca_tree_draw(gtcaca_tree_widget_t *t)
     {
       int cx = inner_x + indent + 2;
       int cw = inner_w - indent - 2; if (cw < 0) cw = 0;
-      caca_set_color_ansi(gmo.cv, selected ? CACA_WHITE : fg, rbg); caca_set_attr(gmo.cv, 0);
+      caca_set_color_ansi(gmo.cv, rfg, rbg); caca_set_attr(gmo.cv, 0);
       if (t->model->draw_row) {
         t->model->draw_row(t->model, ri.node, cx, y, cw, selected);
       } else {

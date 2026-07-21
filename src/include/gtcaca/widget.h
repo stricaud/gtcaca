@@ -44,6 +44,8 @@ enum _gtcaca_widget_type_t {
   GTCACA_WIDGET_HEXVIEW,
   GTCACA_WIDGET_COLORDIALOG,
   GTCACA_WIDGET_CUSTOM,
+  GTCACA_WIDGET_PIECHART,
+  GTCACA_WIDGET_SCATTER,
 };
 typedef enum _gtcaca_widget_type_t gtcaca_widget_type_t;
 
@@ -76,6 +78,9 @@ void gtcaca_widget_printall(void);
 void gtcaca_widget_colorize_from_parent(gtcaca_widget_t *widget);
 void gtcaca_widget_colorize(gtcaca_widget_t *widget);
 int gtcaca_widget_is_focusable(gtcaca_widget_t *widget);
+/* Route a key press to `widget` (dispatching by its type), for apps that run
+ * their own event loop instead of gtcaca_main(). Returns 1 if consumed. */
+int gtcaca_widget_send_key(gtcaca_widget_t *widget, int key);
 void gtcaca_widget_show(gtcaca_widget_t *widget);
 void gtcaca_widget_hide(gtcaca_widget_t *widget);
 

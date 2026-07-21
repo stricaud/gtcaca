@@ -32,7 +32,9 @@
 #include <gtcaca/map.h>
 #include <gtcaca/menu.h>
 #include <gtcaca/mindmap.h>
+#include <gtcaca/piechart.h>
 #include <gtcaca/progressbar.h>
+#include <gtcaca/scatter.h>
 #include <gtcaca/radiobutton.h>
 #include <gtcaca/scale.h>
 #include <gtcaca/segdisplay.h>

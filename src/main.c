@@ -52,6 +52,8 @@
 #include <gtcaca/filechooser.h>
 #include <gtcaca/colordialog.h>
 #include <gtcaca/custom.h>
+#include <gtcaca/piechart.h>
+#include <gtcaca/scatter.h>
 
 gmo_t gmo;
 
@@ -211,6 +213,12 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
   case GTCACA_WIDGET_CUSTOM:
     gtcaca_custom_draw((gtcaca_custom_widget_t *)widget);
     break;
+  case GTCACA_WIDGET_PIECHART:
+    gtcaca_piechart_draw((gtcaca_piechart_widget_t *)widget);
+    break;
+  case GTCACA_WIDGET_SCATTER:
+    gtcaca_scatter_draw((gtcaca_scatter_widget_t *)widget);
+    break;
   }
 
 }
@@ -330,6 +338,17 @@ static void gtcaca_present(void)
   }
   n += (size_t)sprintf(g_ob+n, "\033[0m");
   _write_all(g_ob, n);
+}
+
+void gtcaca_refresh(void)
+{
+  caca_refresh_display(gmo.dp);
+  if (_present_enabled()) gtcaca_present();
+}
+
+void gtcaca_widget_draw(gtcaca_widget_t *widget)
+{
+  if (widget) _gtcaca_widget_redraw(widget);
 }
 
 void gtcaca_redraw(void)

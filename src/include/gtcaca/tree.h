@@ -75,6 +75,10 @@ void  gtcaca_tree_draw(gtcaca_tree_widget_t *t);
 int   gtcaca_tree_key(gtcaca_tree_widget_t *t, int key, void *userdata);
 long  gtcaca_tree_visible_count(gtcaca_tree_widget_t *t);   /* flattened rows now shown */
 void *gtcaca_tree_selected_node(gtcaca_tree_widget_t *t);   /* model handle of selected row */
+/* Select a node by its model handle, unfolding the path of ancestors so the
+ * node itself becomes the selected (highlighted) row and is scrolled into view.
+ * No-op if the handle is not found in the model. */
+void  gtcaca_tree_select(gtcaca_tree_widget_t *t, void *node);
 void  gtcaca_tree_set_title(gtcaca_tree_widget_t *t, const char *title);
 void  gtcaca_tree_free(gtcaca_tree_widget_t *t);
 

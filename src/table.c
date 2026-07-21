@@ -53,6 +53,7 @@ void gtcaca_table_free(gtcaca_table_widget_t *t)
 }
 
 long gtcaca_table_selected_row(gtcaca_table_widget_t *t) { return t->sel; }
+long gtcaca_table_current_row(gtcaca_table_widget_t *t) { return t->sel; } /* alias, pairs with current_col */
 int  gtcaca_table_current_col(gtcaca_table_widget_t *t) { return t->cur_col; }
 void gtcaca_table_set_current(gtcaca_table_widget_t *t, long row, int col)
 {

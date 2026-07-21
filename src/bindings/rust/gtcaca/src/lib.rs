@@ -72,9 +72,14 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-fn cstring(s: &str) -> Result<CString, Error> {
+pub(crate) fn cstring(s: &str) -> Result<CString, Error> {
     CString::new(s).map_err(|_| Error::InteriorNul)
 }
+
+// Additional widget wrappers (charts, inputs, mind map, …) live in a submodule
+// to keep this file navigable; they are re-exported so users see one flat API.
+mod widgets;
+pub use widgets::*;
 
 // ---------------------------------------------------------------------------
 // Callback registry
@@ -155,6 +160,19 @@ impl Gtcaca {
         unsafe { sys::gtcaca_redraw() }
     }
 
+    /// Clear the whole canvas. Use at the top of a frame in a custom render loop
+    /// that draws individual widgets itself (then calls [`Gtcaca::flush`]),
+    /// instead of [`Gtcaca::redraw`] which paints the entire widget list.
+    pub fn clear(&self) {
+        unsafe { sys::gtcaca_clear_screen() }
+    }
+
+    /// Flush the canvas to the terminal without redrawing every widget — the
+    /// companion to [`Gtcaca::clear`] and per-widget `draw` calls.
+    pub fn flush(&self) {
+        unsafe { sys::gtcaca_refresh() }
+    }
+
     /// Best-effort guess of whether the terminal can render fine Unicode block
     /// glyphs.
     pub fn terminal_supports_blocks(&self) -> bool {
@@ -219,6 +237,35 @@ pub trait Widget {
                 height: (*w).height,
             }
         }
+    }
+
+    /// Route a key press to this widget (dispatching by its type). Use this to
+    /// drive the focused widget from your own event loop instead of
+    /// [`Gtcaca::run`]. Returns whether the key was consumed.
+    ///
+    /// ```no_run
+    /// # use gtcaca::{Widget, Entry, Window};
+    /// # fn f(entry: &Entry) {
+    /// entry.send_key('h' as i32);   // types into the entry
+    /// # }
+    /// ```
+    fn send_key(&self, key: i32) -> bool {
+        unsafe { sys::gtcaca_widget_send_key(self.as_widget_ptr(), key) != 0 }
+    }
+
+    /// Set keyboard focus on this widget (draws its cursor/highlight and makes
+    /// [`Widget::send_key`] the natural sink for input).
+    fn set_focus(&self, focused: bool) {
+        unsafe { (*self.as_widget_ptr()).has_focus = focused as c_int };
+    }
+
+    /// Paint just this widget (dispatching to its type-specific draw). Use in a
+    /// custom render loop — [`Gtcaca::clear`], `paint` each widget you want,
+    /// [`Gtcaca::flush`] — when you don't want [`Gtcaca::redraw`] to paint the
+    /// whole widget list. Equivalent to the inherent `draw` on widgets that
+    /// have one, but uniform across every widget type.
+    fn paint(&self) {
+        unsafe { sys::gtcaca_widget_draw(self.as_widget_ptr()) };
     }
 }
 
@@ -368,6 +415,12 @@ impl<'a> Window<'a> {
     /// Close this window (optionally animated, see the raw API).
     pub fn close(&self) {
         unsafe { sys::gtcaca_window_close(self.ptr) }
+    }
+
+    /// Draw the window frame/title. Needed in a custom render loop (see
+    /// [`Gtcaca::clear`]); [`Gtcaca::redraw`] draws it for you.
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_window_draw(self.ptr) }
     }
 }
 
@@ -574,6 +627,34 @@ impl Widget for Checkbox<'_> {
 /// They are defined here rather than pulled from the -sys crate because the
 /// enum is not referenced by any GTCaca signature and so is not emitted by
 /// bindgen's allowlist.
+/// libcaca's 16 ANSI colour indices, for the widget APIs that take a colour
+/// (`u8`) — bar/pie/scatter series, gauges, sparklines, map markers, …
+///
+/// ```no_run
+/// # use gtcaca::{color, Barchart, Widget};
+/// # fn f(chart: &Barchart) {
+/// chart.set_color(color::CYAN);
+/// # }
+/// ```
+pub mod color {
+    pub const BLACK: u8 = 0;
+    pub const BLUE: u8 = 1;
+    pub const GREEN: u8 = 2;
+    pub const CYAN: u8 = 3;
+    pub const RED: u8 = 4;
+    pub const MAGENTA: u8 = 5;
+    pub const BROWN: u8 = 6;
+    pub const LIGHTGRAY: u8 = 7;
+    pub const DARKGRAY: u8 = 8;
+    pub const LIGHTBLUE: u8 = 9;
+    pub const LIGHTGREEN: u8 = 10;
+    pub const LIGHTCYAN: u8 = 11;
+    pub const LIGHTRED: u8 = 12;
+    pub const LIGHTMAGENTA: u8 = 13;
+    pub const YELLOW: u8 = 14;
+    pub const WHITE: u8 = 15;
+}
+
 pub mod key {
     pub const BACKSPACE: i32 = 0x08;
     pub const TAB: i32 = 0x09;
@@ -773,10 +854,9 @@ impl<'a> Table<'a> {
         unsafe { sys::gtcaca_table_current_col(self.ptr) }
     }
 
-    /// The currently-selected row (read from the widget struct).
+    /// The current cell's row (pairs with [`Table::current_col`]).
     pub fn current_row(&self) -> i64 {
-        // The widget stores the selected row; read it via the raw struct.
-        unsafe { table_current_row(self.ptr) }
+        unsafe { sys::gtcaca_table_current_row(self.ptr) as i64 }
     }
 
     /// Set the title shown above the table.
@@ -812,14 +892,6 @@ impl Drop for Table<'_> {
 
 // The table widget struct exposes `cur_row` after the common preamble; read it
 // through a minimal shadow of the leading fields we care about.
-unsafe fn table_current_row(_ptr: *mut sys::gtcaca_table_widget_t) -> i64 {
-    // `gtcaca_table_current_col` exists but there is no current_row getter; the
-    // selected row is tracked by the widget. We approximate via the model-driven
-    // selection the app maintains, so callers should prefer their own tracking.
-    // Returning 0 keeps this safe; see carscal's UI which tracks selection.
-    0
-}
-
 // ── Tree ─────────────────────────────────────────────────────────────────────
 
 /// Data source for a [`Tree`]: nodes are opaque handles (`*mut c_void`) the
@@ -922,6 +994,14 @@ impl<'a> Tree<'a> {
     /// Handle of the selected node, or null.
     pub fn selected(&self) -> *mut c_void {
         unsafe { sys::gtcaca_tree_selected_node(self.ptr) }
+    }
+
+    /// Select a node by its model handle, unfolding the path of ancestors so the
+    /// node becomes the highlighted row and is scrolled into view. Used to sync
+    /// the tree to a field picked elsewhere (e.g. the hex byte cursor). No-op if
+    /// the handle isn't found in the model.
+    pub fn select(&self, node: *mut c_void) {
+        unsafe { sys::gtcaca_tree_select(self.ptr, node) };
     }
 
     /// Set the title above the tree.
@@ -1249,6 +1329,18 @@ impl<'a> Textlist<'a> {
     }
     pub fn selection_down(&self) {
         unsafe { sys::gtcaca_textlist_selection_down(self.ptr) };
+    }
+
+    /// Enable or disable the built-in `/` incremental search (on by default).
+    /// When enabled, pressing `/` filters the list as you type; Up/Down move
+    /// among matches; Enter/Esc leave search mode.
+    pub fn set_search_enabled(&self, enabled: bool) {
+        unsafe { sys::gtcaca_textlist_set_search_enabled(self.ptr, enabled as c_int) };
+    }
+
+    /// Whether the list is currently in search-input mode.
+    pub fn is_searching(&self) -> bool {
+        unsafe { sys::gtcaca_textlist_is_searching(self.ptr) != 0 }
     }
 
     /// The currently-selected line, if any.

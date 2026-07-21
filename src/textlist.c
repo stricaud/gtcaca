@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 
 #include <caca.h>
 
@@ -9,10 +11,80 @@
 
 #include <gtcaca/utarray.h>
 
+static char *_item(gtcaca_textlist_widget_t *t, unsigned int i)
+{
+  char **p = (char **)utarray_eltptr(t->list, i);
+  return p ? *p : NULL;
+}
+
+/* Case-insensitive substring test. */
+static int _contains_ci(const char *hay, const char *needle)
+{
+  size_t nl = strlen(needle);
+  if (nl == 0) return 1;
+  for (; *hay; hay++) {
+    size_t k = 0;
+    while (k < nl && hay[k] && tolower((unsigned char)hay[k]) == tolower((unsigned char)needle[k])) k++;
+    if (k == nl) return 1;
+  }
+  return 0;
+}
+
+/* Does item `i` match the active search query? (Always yes when not searching
+   or the query is empty.) */
+static int _matches(gtcaca_textlist_widget_t *t, unsigned int i)
+{
+  char *s;
+  if (!t->searching || t->search_len == 0) return 1;
+  s = _item(t, i);
+  return s ? _contains_ci(s, t->search_query) : 0;
+}
+
+/* Move the selection to the first matching item at or after (dir>=0) / before
+   (dir<0) the current one, so the selection never rests on a filtered-out row. */
+static void _snap_to_match(gtcaca_textlist_widget_t *t)
+{
+  unsigned int n = utarray_len(t->list), i;
+  if (n == 0 || _matches(t, t->selected_item)) return;
+  for (i = 0; i < n; i++) if (_matches(t, i)) { t->selected_item = i; return; }
+}
+
 /* Private functions */
 static int _gtcaca_textlist_private_key_press(gtcaca_textlist_widget_t *widget, int key, void *userdata)
 {
+  (void)userdata;
+
+  if (widget->searching) {
+    switch (key) {
+    case CACA_KEY_RETURN: case 10:                 /* accept: keep the match, exit */
+    case CACA_KEY_ESCAPE:                          /* cancel: restore the full list */
+      if (key == CACA_KEY_ESCAPE) { widget->search_len = 0; widget->search_query[0] = '\0'; }
+      widget->searching = 0;
+      return 0;
+    case CACA_KEY_UP:   gtcaca_textlist_selection_up(widget);   return 0;
+    case CACA_KEY_DOWN: gtcaca_textlist_selection_down(widget); return 0;
+    case CACA_KEY_BACKSPACE: case CACA_KEY_DELETE:
+      if (widget->search_len > 0) widget->search_query[--widget->search_len] = '\0';
+      _snap_to_match(widget);
+      return 0;
+    default:
+      if (key >= 32 && key < 127 && widget->search_len < (int)sizeof widget->search_query - 1) {
+        widget->search_query[widget->search_len++] = (char)key;
+        widget->search_query[widget->search_len] = '\0';
+        _snap_to_match(widget);
+      }
+      return 0;
+    }
+  }
+
   switch(key) {
+  case '/':
+    if (widget->search_enabled) {
+      widget->searching = 1;
+      widget->search_len = 0;
+      widget->search_query[0] = '\0';
+    }
+    break;
   case CACA_KEY_UP:
     gtcaca_textlist_selection_up(widget);
     break;
@@ -21,6 +93,17 @@ static int _gtcaca_textlist_private_key_press(gtcaca_textlist_widget_t *widget, 
     break;
   }
   return 0;
+}
+
+void gtcaca_textlist_set_search_enabled(gtcaca_textlist_widget_t *textlist, int enabled)
+{
+  textlist->search_enabled = enabled ? 1 : 0;
+  if (!enabled) { textlist->searching = 0; textlist->search_len = 0; textlist->search_query[0] = '\0'; }
+}
+
+int gtcaca_textlist_is_searching(gtcaca_textlist_widget_t *textlist)
+{
+  return textlist->searching;
 }
 
 /* Public functions */
@@ -54,6 +137,10 @@ gtcaca_textlist_widget_t *gtcaca_textlist_new(gtcaca_widget_t *parent, int x, in
   textlist->private_key_cb = _gtcaca_textlist_private_key_press;
   textlist->key_cb = NULL;
   textlist->key_cb_userdata = NULL;
+  textlist->search_enabled = 1;
+  textlist->searching = 0;
+  textlist->search_len = 0;
+  textlist->search_query[0] = '\0';
   
   utarray_new(textlist->list, &ut_str_icd);
 
@@ -97,18 +184,23 @@ void gtcaca_textlist_append(gtcaca_textlist_widget_t *textlist, char *item)
 
 void gtcaca_textlist_selection_up(gtcaca_textlist_widget_t *textlist)
 {
-  unsigned int n = utarray_len(textlist->list);
+  unsigned int n = utarray_len(textlist->list), steps;
   if (n == 0) return;
-  if (textlist->selected_item == 0) textlist->selected_item = n - 1;  /* wrap to last */
-  else textlist->selected_item--;
+  /* Step to the previous item, skipping ones filtered out by the search. */
+  for (steps = 0; steps < n; steps++) {
+    textlist->selected_item = (textlist->selected_item == 0) ? n - 1 : textlist->selected_item - 1;
+    if (_matches(textlist, textlist->selected_item)) return;
+  }
 }
 
 void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist)
 {
-  unsigned int n = utarray_len(textlist->list);
+  unsigned int n = utarray_len(textlist->list), steps;
   if (n == 0) return;
-  if (textlist->selected_item >= n - 1) textlist->selected_item = 0;   /* wrap to first */
-  else textlist->selected_item++;
+  for (steps = 0; steps < n; steps++) {
+    textlist->selected_item = (textlist->selected_item >= n - 1) ? 0 : textlist->selected_item + 1;
+    if (_matches(textlist, textlist->selected_item)) return;
+  }
 }
 
 char *gtcaca_textlist_get_text_selected(gtcaca_textlist_widget_t *textlist)
@@ -154,25 +246,44 @@ void gtcaca_textlist_clear(gtcaca_textlist_widget_t *textlist)
 
 void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist)
 {
-  unsigned int i, elem_view;
-  char **p;
+  unsigned int n = utarray_len(textlist->list), i;
+  unsigned int vis = 0, sel_pos = 0, page, top;
+  int view = (int)textlist->view_size;
 
   /* We draw the background */
   gtcaca_widget_colorize_from_parent(GTCACA_WIDGET(textlist));
-
   if (textlist->view_size > 0)
     caca_fill_box(gmo.cv, textlist->x, textlist->y,
                   textlist->width, (int)textlist->view_size, ' ');
-  
-  p = NULL;
-  i = 0;
-  elem_view = 0;
-  while ( (p=(char**)utarray_next(textlist->list,p))) {
-    if (gtcaca_textlist_can_draw(textlist, i)) {
+
+  if (view <= 0) return;
+
+  /* Position of the selected item among the currently-visible (matching) rows,
+     so paging follows the filtered view rather than the full list. */
+  for (i = 0; i < n; i++) {
+    if (!_matches(textlist, i)) continue;
+    if (i == textlist->selected_item) sel_pos = vis;
+    vis++;
+  }
+  page = sel_pos / (unsigned int)view;
+  top = page * (unsigned int)view;
+
+  /* Draw the matching rows on the current page. */
+  {
+    unsigned int shown = 0, seen = 0;
+    for (i = 0; i < n; i++) {
+      if (!_matches(textlist, i)) continue;
+      if (seen++ < top) continue;
+      if (shown >= (unsigned int)view) break;
       gtcaca_textlist_selected_color(textlist, i);
-      caca_printf(gmo.cv, textlist->x, textlist->y + elem_view, "%s", *p);
-      elem_view++;
+      caca_printf(gmo.cv, textlist->x, textlist->y + shown, "%s", _item(textlist, i));
+      shown++;
     }
-    i++;
+  }
+
+  /* Search prompt on the row just below the list. */
+  if (textlist->searching) {
+    caca_set_color_ansi(gmo.cv, CACA_BLACK, CACA_WHITE);
+    caca_printf(gmo.cv, textlist->x, textlist->y + view, "/%s ", textlist->search_query);
   }
 }

@@ -38,6 +38,16 @@ int gtcaca_init(int *argc, char ***argv);
 void gtcaca_main(void);
 void gtcaca_main_quit(void);
 void gtcaca_redraw(void);
+/* Clear the whole canvas (custom render loops call this at the top of a frame,
+ * then draw individual widgets, then gtcaca_refresh). */
+void gtcaca_clear_screen(void);
+/* Flush the canvas to the terminal without redrawing every widget. Pair with
+ * per-widget draw calls to paint exactly what you want (cf. gtcaca_redraw,
+ * which paints the whole widget list). */
+void gtcaca_refresh(void);
+/* Draw a single widget, dispatching to its type-specific draw. Lets a custom
+ * render loop paint exactly the widgets it wants without switching on type. */
+void gtcaca_widget_draw(gtcaca_widget_t *widget);
 void gtcaca_present_shutdown(void);   /* restore terminal if the truecolour presenter is active */
 void gtcaca_shutdown(void);           /* full teardown (free display) for custom event loops */
 unsigned int gtcaca_get_newid(void);

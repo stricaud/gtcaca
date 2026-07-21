@@ -63,6 +63,7 @@ void  gtcaca_table_set_column_widths(gtcaca_table_widget_t *t, const int *widths
 void  gtcaca_table_draw(gtcaca_table_widget_t *t);
 int   gtcaca_table_key(gtcaca_table_widget_t *t, int key, void *userdata);
 long  gtcaca_table_selected_row(gtcaca_table_widget_t *t);
+long  gtcaca_table_current_row(gtcaca_table_widget_t *t); /* the current cell's row (pairs with current_col) */
 int   gtcaca_table_current_col(gtcaca_table_widget_t *t);
 void  gtcaca_table_set_current(gtcaca_table_widget_t *t, long row, int col);
 void  gtcaca_table_set_title(gtcaca_table_widget_t *t, const char *title);

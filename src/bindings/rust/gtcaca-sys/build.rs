@@ -27,6 +27,7 @@ const C_SOURCES: &[&str] = &[
     "json.c", "sparkline.c", "gauge.c", "barchart.c", "tree.c", "table.c",
     "map.c", "tabs.c", "mindmap.c", "segdisplay.c", "linechart.c", "hexview.c",
     "calendar.c", "dialog.c", "filechooser.c", "custom.c", "colordialog.c",
+    "piechart.c", "scatter.c", "widget_send_key.c",
 ];
 
 fn main() {

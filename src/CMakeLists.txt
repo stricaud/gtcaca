@@ -58,6 +58,9 @@ set(GTCACA_LIB_SRC
   filechooser.c
   colordialog.c
   custom.c
+  piechart.c
+  scatter.c
+  widget_send_key.c
 )
 
 set(GTCACA_HEADERS
@@ -108,6 +111,8 @@ set(GTCACA_HEADERS
   include/gtcaca/filechooser.h
   include/gtcaca/colordialog.h
   include/gtcaca/custom.h
+  include/gtcaca/piechart.h
+  include/gtcaca/scatter.h
 )
 
 set(GTCACA_LINK_LIBRARIES

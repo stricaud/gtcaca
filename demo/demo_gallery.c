@@ -43,6 +43,8 @@
 #include <gtcaca/mindmap.h>
 #include <gtcaca/segdisplay.h>
 #include <gtcaca/linechart.h>
+#include <gtcaca/piechart.h>
+#include <gtcaca/scatter.h>
 #include <gtcaca/dialog.h>
 #include <gtcaca/filechooser.h>
 #include <gtcaca/menu.h>
@@ -107,6 +109,8 @@ static void*mk_spark(int x,int y,int w,int h){gtcaca_sparkline_widget_t*s=gtcaca
 static void*mk_gauge(int x,int y,int w,int h){(void)h;gtcaca_gauge_widget_t*g=gtcaca_gauge_new(NULL,x,y,w);gtcaca_gauge_set_percent(g,72);return g;}
 static void*mk_bar(int x,int y,int w,int h){gtcaca_barchart_widget_t*b=gtcaca_barchart_new(NULL,x,y,w,h);float v[5]={30,75,45,90,60};const char*l[5]={"Jan","Feb","Mar","Apr","May"};gtcaca_barchart_set_data(b,v,l,5);return b;}
 static void*mk_line(int x,int y,int w,int h){gtcaca_linechart_widget_t*c=gtcaca_linechart_new(NULL,x,y,w,h);gtcaca_linechart_set_title(c,"sin / cos");double a[40],b[40];int i;for(i=0;i<40;i++){a[i]=sin(i*0.3);b[i]=0.6*cos(i*0.3);}gtcaca_linechart_add_series(c,a,40,CACA_LIGHTGREEN);gtcaca_linechart_add_series(c,b,40,CACA_LIGHTRED);return c;}
+static void*mk_pie(int x,int y,int w,int h){gtcaca_piechart_widget_t*p=gtcaca_piechart_new(NULL,x,y,w,h);float v[4]={45,25,20,10};const char*l[4]={"TCP","UDP","TLS","ARP"};gtcaca_piechart_set_data(p,v,l,4);gtcaca_piechart_set_title(p,"protocols");return p;}
+static void*mk_scatter(int x,int y,int w,int h){gtcaca_scatter_widget_t*s=gtcaca_scatter_new(NULL,x,y,w,h);int i;for(i=0;i<40;i++){double xx=i,yy=i*0.5+(double)((i*7)%11)-5;gtcaca_scatter_add_point(s,xx,yy,CACA_LIGHTGREEN);}gtcaca_scatter_set_title(s,"x vs y");return s;}
 static void*mk_seg(int x,int y,int w,int h){gtcaca_segdisplay_widget_t*s=gtcaca_segdisplay_new(NULL,x,y,w,h);gtcaca_segdisplay_set_title(s,"clock");gtcaca_segdisplay_set_text(s,"12:45");return s;}
 static void*mk_tree(int x,int y,int w,int h){gtcaca_tree_widget_t*t=gtcaca_tree_new(NULL,x,y,w,h);gtcaca_tree_set_title(t,"files");gtcaca_tree_set_model(t,&TREE);gtcaca_tree_key(t,CACA_KEY_RIGHT,NULL);return t;}
 static void*mk_table(int x,int y,int w,int h){gtcaca_table_widget_t*t=gtcaca_table_new(NULL,x,y,w,h);gtcaca_table_set_title(t,"people");gtcaca_table_set_model(t,&TBL);gtcaca_table_set_current(t,0,0);return t;}
@@ -143,6 +147,8 @@ static page_t P[] = {
   {"Gauge","percentage bar",34,1,mk_gauge},
   {"Bar chart","labelled bars",36,9,mk_bar},
   {"Line chart","XY plot",52,12,mk_line},
+  {"Pie chart","proportions + legend",44,11,mk_pie},
+  {"Scatter plot","x/y points, auto axes",50,13,mk_scatter},
   {"Seven-segment","LED digits",30,9,mk_seg},
   {"Tree","Right/Left fold, arrows",36,12,mk_tree},
   {"Table","arrows move the cell",36,9,mk_table},
@@ -187,6 +193,8 @@ static void draw_widget(void *o)
   case GTCACA_WIDGET_GAUGE: gtcaca_gauge_draw(o); break;
   case GTCACA_WIDGET_BARCHART: gtcaca_barchart_draw(o); break;
   case GTCACA_WIDGET_LINECHART: gtcaca_linechart_draw(o); break;
+  case GTCACA_WIDGET_PIECHART: gtcaca_piechart_draw(o); break;
+  case GTCACA_WIDGET_SCATTER: gtcaca_scatter_draw(o); break;
   case GTCACA_WIDGET_SEGDISPLAY: gtcaca_segdisplay_draw(o); break;
   case GTCACA_WIDGET_TREE: gtcaca_tree_draw(o); break;
   case GTCACA_WIDGET_TABLE: gtcaca_table_draw(o); break;

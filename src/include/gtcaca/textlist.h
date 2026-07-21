@@ -42,9 +42,17 @@ struct _gtcaca_textlist_widget_t {
   /* Now starts custom widget properties */
   unsigned int selected_item;
   UT_array *list;
-  
+
   // When we show less than what the widget has
   unsigned int view_size;
+
+  /* Incremental search: press '/' to start typing a query; the list then shows
+     only items containing it (case-insensitive) and Up/Down move among the
+     matches. Enter/Esc leave search mode. Enabled by default. */
+  int  search_enabled;
+  int  searching;
+  char search_query[128];
+  int  search_len;
 };
 
 /*
@@ -59,5 +67,9 @@ void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist);
 char *gtcaca_textlist_get_text_selected(gtcaca_textlist_widget_t *textlist);
 void gtcaca_textlist_draw(gtcaca_textlist_widget_t *textlist);
 void gtcaca_textlist_clear(gtcaca_textlist_widget_t *textlist);
+/* Enable/disable the '/' incremental search (on by default). */
+void gtcaca_textlist_set_search_enabled(gtcaca_textlist_widget_t *textlist, int enabled);
+/* Whether the widget is currently in search-input mode. */
+int  gtcaca_textlist_is_searching(gtcaca_textlist_widget_t *textlist);
 
 #endif // _GTCACA_TEXTLIST_H_
