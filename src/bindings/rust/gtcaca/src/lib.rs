@@ -178,7 +178,9 @@ pub fn redraw() {
 
 impl Drop for Gtcaca {
     fn drop(&mut self) {
-        unsafe { sys::gtcaca_present_shutdown() };
+        // Full teardown (frees the libcaca display), so the terminal leaves the
+        // alternate screen / raw mode and stays usable after exit.
+        unsafe { sys::gtcaca_shutdown() };
         HANDLERS.with(|h| h.borrow_mut().clear());
         ACTIVE.with(|a| a.set(false));
     }
@@ -1186,6 +1188,9 @@ impl Widget for Image<'_> {
 /// A scrollable, selectable list of text lines (e.g. an interface picker).
 pub struct Textlist<'a> {
     ptr: *mut sys::gtcaca_textlist_widget_t,
+    // The C widget stores the *pointer* we append (it does not copy the string),
+    // so we must keep every appended CString alive for as long as it is listed.
+    kept: RefCell<Vec<CString>>,
     _p: PhantomData<&'a ()>,
 }
 
@@ -1193,7 +1198,7 @@ impl<'a> Textlist<'a> {
     pub fn new(parent: &'a impl Widget, x: i32, y: i32) -> Textlist<'a> {
         let ptr = unsafe { sys::gtcaca_textlist_new(parent.as_widget_ptr(), x, y) };
         assert!(!ptr.is_null(), "gtcaca_textlist_new returned NULL");
-        Textlist { ptr, _p: PhantomData }
+        Textlist { ptr, kept: RefCell::new(Vec::new()), _p: PhantomData }
     }
 
     /// Number of visible rows.
@@ -1204,13 +1209,17 @@ impl<'a> Textlist<'a> {
     /// Append a line.
     pub fn append(&self, item: &str) {
         let c = cstring(item).unwrap_or_default();
-        // The C side copies the string; the cast to *mut is safe.
-        unsafe { sys::gtcaca_textlist_append(self.ptr, c.as_ptr() as *mut c_char) };
+        let ptr = c.as_ptr() as *mut c_char;
+        // Keep the string alive; the widget only stores this pointer.
+        self.kept.borrow_mut().push(c);
+        unsafe { sys::gtcaca_textlist_append(self.ptr, ptr) };
     }
 
     /// Remove all lines.
     pub fn clear(&self) {
+        // Clear the widget first (drops its pointers), then release our strings.
         unsafe { sys::gtcaca_textlist_clear(self.ptr) };
+        self.kept.borrow_mut().clear();
     }
 
     pub fn selection_up(&self) {

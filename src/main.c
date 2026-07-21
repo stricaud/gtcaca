@@ -251,6 +251,23 @@ void gtcaca_present_shutdown(void)   /* restore the terminal on exit (libcaca ha
   }
 }
 
+/* Full teardown for applications that drive their own event loop (i.e. do NOT
+ * call gtcaca_main()): disable mouse reporting, restore the presenter, and free
+ * the libcaca display so the terminal leaves the alternate screen / raw mode.
+ * Idempotent. Without this the terminal is left unusable after exit. */
+void gtcaca_shutdown(void)
+{
+  g_mouse_sgr = 0;
+  fputs("\033[?1002l\033[?1006l", stdout);   /* disable SGR mouse reporting */
+  fflush(stdout);
+  gtcaca_present_shutdown();                 /* restore cursor/colours */
+  if (gmo.dp) {
+    caca_set_mouse(gmo.dp, 0);
+    caca_free_display(gmo.dp);               /* leaves the alt screen / raw mode */
+    gmo.dp = NULL;
+  }
+}
+
 /* write the whole buffer, looping over short writes (a tty can accept fewer
    bytes than asked on a big frame — the cause of the bottom of a large screen
    never painting). */
