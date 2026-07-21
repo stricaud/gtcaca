@@ -113,7 +113,12 @@ void gtcaca_textlist_selection_down(gtcaca_textlist_widget_t *textlist)
 
 char *gtcaca_textlist_get_text_selected(gtcaca_textlist_widget_t *textlist)
 {
-  return utarray_eltptr(textlist->list, textlist->selected_item);
+  /* The list uses ut_str_icd, so each element is a (copied) char*. eltptr()
+     returns the address of that element (a char**); dereference it to get the
+     string itself. Returning the char** directly handed callers garbage. */
+  if (utarray_len(textlist->list) == 0) return NULL;
+  char **p = (char **)utarray_eltptr(textlist->list, textlist->selected_item);
+  return p ? *p : NULL;
 }
 
 int gtcaca_textlist_can_draw(gtcaca_textlist_widget_t *textlist, unsigned int i)

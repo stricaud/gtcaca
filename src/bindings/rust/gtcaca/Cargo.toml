@@ -12,7 +12,7 @@ authors.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-gtcaca-sys = { version = "0.1.6", path = "../gtcaca-sys" }
+gtcaca-sys = { version = "0.1.7", path = "../gtcaca-sys" }
 
 [[example]]
 name = "hello"
