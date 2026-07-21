@@ -316,6 +316,24 @@ impl<'a> Window<'a> {
         Window { ptr, _parent: PhantomData }
     }
 
+    /// Create a window centred on its parent, sized as a fraction of it and
+    /// clamped to fit — so callers don't hand-compute `width`/`height`. E.g.
+    /// `Window::centered_fraction(&app, Some("About"), 0.6, 0.6)` for a window
+    /// 60% of the screen. `wfrac`/`hfrac` are clamped to `(0.1, 1.0)`.
+    pub fn centered_fraction(
+        parent: &'a impl Widget,
+        title: Option<&str>,
+        wfrac: f64,
+        hfrac: f64,
+    ) -> Window<'a> {
+        let g = parent.geometry();
+        let wf = wfrac.clamp(0.1, 1.0);
+        let hf = hfrac.clamp(0.1, 1.0);
+        let w = ((g.width as f64 * wf) as i32).clamp(10, (g.width - 2).max(10));
+        let h = ((g.height as f64 * hf) as i32).clamp(6, (g.height - 2).max(6));
+        Window::centered(parent, title, w, h)
+    }
+
     /// Give this window keyboard focus.
     pub fn set_focus(&self) {
         unsafe { sys::gtcaca_window_set_focus(self.ptr) }
@@ -991,8 +1009,9 @@ impl Menu {
         unsafe { sys::gtcaca_menu_add_entry(self.ptr, c.as_ptr()) }
     }
 
-    /// Add an item under `entry`, invoking `action` when chosen.
-    pub fn add_item(&self, entry: i32, label: &str, shortcut: &str, action: extern "C" fn(*mut c_void), userdata: *mut c_void) {
+    /// Add an item under `entry`, invoking `action` when chosen. Returns the
+    /// item's index within the entry (for [`set_item_enabled`](Menu::set_item_enabled)).
+    pub fn add_item(&self, entry: i32, label: &str, shortcut: &str, action: extern "C" fn(*mut c_void), userdata: *mut c_void) -> i32 {
         let l = cstring(label).unwrap_or_default();
         let s = cstring(shortcut).unwrap_or_default();
         unsafe {
@@ -1007,7 +1026,7 @@ impl Menu {
                 >(action)),
                 userdata,
             )
-        };
+        }
     }
 
     pub fn add_separator(&self, entry: i32) {
@@ -1029,6 +1048,12 @@ impl Menu {
     /// Whether the menu bar currently has focus.
     pub fn is_focused(&self) -> bool {
         unsafe { sys::gtcaca_menu_is_focused(self.ptr) != 0 }
+    }
+
+    /// Enable or disable an item (by entry index and item index). A disabled
+    /// item is drawn greyed out, skipped by navigation, and never fires.
+    pub fn set_item_enabled(&self, entry: i32, item: i32, enabled: bool) {
+        unsafe { sys::gtcaca_menu_set_item_enabled(self.ptr, entry, item, enabled as c_int) };
     }
 
     pub fn draw(&self) {
@@ -1095,6 +1120,98 @@ impl<'a> Linechart<'a> {
 }
 
 impl Widget for Linechart<'_> {
+    fn as_widget_ptr(&self) -> *mut sys::gtcaca_widget_t {
+        self.ptr as *mut sys::gtcaca_widget_t
+    }
+}
+
+// ── Image ─────────────────────────────────────────────────────────────────────
+
+/// An image rendered as ANSI art (PNG/JPG via stb_image), e.g. an About logo.
+pub struct Image<'a> {
+    ptr: *mut sys::gtcaca_image_widget_t,
+    _p: PhantomData<&'a ()>,
+}
+
+impl<'a> Image<'a> {
+    pub fn new(parent: &'a impl Widget, x: i32, y: i32, width: i32, height: i32) -> Image<'a> {
+        let ptr = unsafe { sys::gtcaca_image_new(parent.as_widget_ptr(), x, y, width, height) };
+        assert!(!ptr.is_null(), "gtcaca_image_new returned NULL");
+        Image { ptr, _p: PhantomData }
+    }
+
+    /// Load an image file. Returns whether it loaded successfully.
+    pub fn load(&self, path: &str) -> bool {
+        let c = cstring(path).unwrap_or_default();
+        unsafe { sys::gtcaca_image_load(self.ptr, c.as_ptr()) != 0 }
+    }
+
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_image_draw(self.ptr) };
+    }
+}
+
+impl Widget for Image<'_> {
+    fn as_widget_ptr(&self) -> *mut sys::gtcaca_widget_t {
+        self.ptr as *mut sys::gtcaca_widget_t
+    }
+}
+
+// ── Textlist ──────────────────────────────────────────────────────────────────
+
+/// A scrollable, selectable list of text lines (e.g. an interface picker).
+pub struct Textlist<'a> {
+    ptr: *mut sys::gtcaca_textlist_widget_t,
+    _p: PhantomData<&'a ()>,
+}
+
+impl<'a> Textlist<'a> {
+    pub fn new(parent: &'a impl Widget, x: i32, y: i32) -> Textlist<'a> {
+        let ptr = unsafe { sys::gtcaca_textlist_new(parent.as_widget_ptr(), x, y) };
+        assert!(!ptr.is_null(), "gtcaca_textlist_new returned NULL");
+        Textlist { ptr, _p: PhantomData }
+    }
+
+    /// Number of visible rows.
+    pub fn set_view_size(&self, rows: u32) {
+        unsafe { sys::gtcaca_textlist_widget_set_view_size(self.ptr, rows) };
+    }
+
+    /// Append a line.
+    pub fn append(&self, item: &str) {
+        let c = cstring(item).unwrap_or_default();
+        // The C side copies the string; the cast to *mut is safe.
+        unsafe { sys::gtcaca_textlist_append(self.ptr, c.as_ptr() as *mut c_char) };
+    }
+
+    /// Remove all lines.
+    pub fn clear(&self) {
+        unsafe { sys::gtcaca_textlist_clear(self.ptr) };
+    }
+
+    pub fn selection_up(&self) {
+        unsafe { sys::gtcaca_textlist_selection_up(self.ptr) };
+    }
+    pub fn selection_down(&self) {
+        unsafe { sys::gtcaca_textlist_selection_down(self.ptr) };
+    }
+
+    /// The currently-selected line, if any.
+    pub fn selected(&self) -> Option<String> {
+        let p = unsafe { sys::gtcaca_textlist_get_text_selected(self.ptr) };
+        if p.is_null() {
+            None
+        } else {
+            Some(unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+        }
+    }
+
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_textlist_draw(self.ptr) };
+    }
+}
+
+impl Widget for Textlist<'_> {
     fn as_widget_ptr(&self) -> *mut sys::gtcaca_widget_t {
         self.ptr as *mut sys::gtcaca_widget_t
     }

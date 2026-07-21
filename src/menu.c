@@ -7,13 +7,19 @@
 #include <gtcaca/menu.h>
 #include <gtcaca/main.h>
 
+/* An item is "unselectable" if it is a separator or disabled. */
+static int _item_skip(const gtcaca_menu_item_t *it)
+{
+  return it->is_separator || !it->enabled;
+}
+
 static int _skip_separators_fwd(gtcaca_menu_entry_t *entry, int start)
 {
   int i = start;
-  while (i < entry->n_items && entry->items[i].is_separator) i++;
+  while (i < entry->n_items && _item_skip(&entry->items[i])) i++;
   if (i >= entry->n_items) {
     i = 0;
-    while (i < entry->n_items && entry->items[i].is_separator) i++;
+    while (i < entry->n_items && _item_skip(&entry->items[i])) i++;
   }
   return i;
 }
@@ -21,10 +27,10 @@ static int _skip_separators_fwd(gtcaca_menu_entry_t *entry, int start)
 static int _skip_separators_bwd(gtcaca_menu_entry_t *entry, int start)
 {
   int i = start;
-  while (i >= 0 && entry->items[i].is_separator) i--;
+  while (i >= 0 && _item_skip(&entry->items[i])) i--;
   if (i < 0) {
     i = entry->n_items - 1;
-    while (i >= 0 && entry->items[i].is_separator) i--;
+    while (i >= 0 && _item_skip(&entry->items[i])) i--;
   }
   return (i < 0) ? 0 : i;
 }
@@ -65,7 +71,7 @@ static int _gtcaca_menu_private_key_press(gtcaca_menu_widget_t *menu, int key, v
          on top of it. */
       menu->is_open = 0;
       menu->has_focus = 0;
-      if (item->action)
+      if (item->action && item->enabled)
         item->action(item->userdata);
     }
   }
@@ -168,6 +174,8 @@ void gtcaca_menu_draw(gtcaca_menu_widget_t *menu)
       } else {
         if (j == menu->active_item) {
           caca_set_color_ansi(gmo.cv, gmo.theme.menuitemfocus.fg, gmo.theme.menuitemfocus.bg);
+        } else if (!item->enabled) {
+          caca_set_color_ansi(gmo.cv, CACA_DARKGRAY, gmo.theme.menuitem.bg);
         } else {
           caca_set_color_ansi(gmo.cv, gmo.theme.menuitem.fg, gmo.theme.menuitem.bg);
         }
@@ -221,6 +229,7 @@ int gtcaca_menu_add_item(gtcaca_menu_widget_t *menu, int entry_idx, const char *
     item->shortcut[0] = '\0';
   }
   item->is_separator = 0;
+  item->enabled = 1;
   item->action = action;
   item->userdata = userdata;
   return idx;
@@ -267,4 +276,14 @@ void gtcaca_menu_set_focus(gtcaca_menu_widget_t *menu, int on)
 int gtcaca_menu_is_focused(gtcaca_menu_widget_t *menu)
 {
   return (menu && menu->has_focus) ? 1 : 0;
+}
+
+void gtcaca_menu_set_item_enabled(gtcaca_menu_widget_t *menu, int entry_idx,
+                                  int item_idx, int enabled)
+{
+  gtcaca_menu_entry_t *entry;
+  if (!menu || entry_idx < 0 || entry_idx >= menu->n_entries) return;
+  entry = &menu->entries[entry_idx];
+  if (item_idx < 0 || item_idx >= entry->n_items) return;
+  entry->items[item_idx].enabled = enabled ? 1 : 0;
 }

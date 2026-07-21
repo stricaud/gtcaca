@@ -15,6 +15,7 @@ typedef struct {
   char label[GTCACA_MENU_LABEL_MAX];
   char shortcut[GTCACA_MENU_SHORTCUT_MAX];
   int is_separator;
+  int enabled;                 /* 0 = greyed out and not selectable (default 1) */
   gtcaca_menu_action_t action;
   void *userdata;
 } gtcaca_menu_item_t;
@@ -67,5 +68,10 @@ int gtcaca_menu_handle_key(gtcaca_menu_widget_t *menu, int key);
  * the menu (e.g. from an F9/F10 handler) without reaching into the struct. */
 void gtcaca_menu_set_focus(gtcaca_menu_widget_t *menu, int on);
 int  gtcaca_menu_is_focused(gtcaca_menu_widget_t *menu);
+
+/* Enable or disable a menu item. A disabled item is drawn greyed out, skipped
+ * by keyboard navigation, and its action is not run if somehow reached. */
+void gtcaca_menu_set_item_enabled(gtcaca_menu_widget_t *menu, int entry_idx,
+                                  int item_idx, int enabled);
 
 #endif /* _GTCACA_MENU_H_ */
