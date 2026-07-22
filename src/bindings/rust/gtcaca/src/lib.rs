@@ -708,6 +708,18 @@ pub mod color {
     pub const WHITE: u8 = 15;
 }
 
+/// Series-style constants for [`Linechart::add_series_styled`].
+pub mod linechart {
+    /// Points joined by a thin line.
+    pub const LINE: i32 = 0;
+    /// A vertical stem per sample.
+    pub const IMPULSE: i32 = 1;
+    /// A filled column per sample.
+    pub const BAR: i32 = 2;
+    /// An unjoined marker per sample.
+    pub const DOT: i32 = 3;
+}
+
 pub mod key {
     pub const BACKSPACE: i32 = 0x08;
     pub const TAB: i32 = 0x09;
@@ -1280,6 +1292,28 @@ impl<'a> Linechart<'a> {
     /// index, or a negative value if the chart is full.
     pub fn add_series(&self, y: &[f64], colour: u8) -> i32 {
         unsafe { sys::gtcaca_linechart_add_series(self.ptr, y.as_ptr(), y.len() as c_int, colour) }
+    }
+
+    /// Append a styled, named series (the name shows in the legend). `style` is
+    /// one of the [`linechart`] constants. Returns its index, or a negative
+    /// value if the chart is full.
+    pub fn add_series_styled(&self, y: &[f64], colour: u8, style: i32, name: &str) -> i32 {
+        let c = cstring(name).unwrap_or_default();
+        unsafe {
+            sys::gtcaca_linechart_add_series_styled(
+                self.ptr,
+                y.as_ptr(),
+                y.len() as c_int,
+                colour,
+                style,
+                c.as_ptr(),
+            )
+        }
+    }
+
+    /// Draw the Y axis on a logarithmic scale.
+    pub fn set_log_y(&self, on: bool) {
+        unsafe { sys::gtcaca_linechart_set_log_y(self.ptr, on as c_int) };
     }
 
     /// Remove all series.
