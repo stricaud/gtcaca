@@ -1,7 +1,13 @@
+/* MSVC's <math.h> only declares M_PI et al. when _USE_MATH_DEFINES is set
+   before it is included (directly or transitively), so define it up front. */
+#define _USE_MATH_DEFINES
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #include <caca.h>
 
