@@ -565,6 +565,8 @@ static void _gtcaca_widget_activate(gtcaca_widget_t *widget)
   widget->has_focus = saved;
 }
 
+static int _focused_custom_consumes(int key);
+
 /* The editor widget needs Tab, Ctrl+N/P, arrows and Esc for itself; when it is
    focused the global shortcuts that use those keys step aside. */
 static int _focused_is_editor(void)
@@ -590,15 +592,21 @@ int gtcaca_widgets_handle_key_press(int key)
     }
   }
 
-  /* TAB: cycle focus to next focusable child in focused window */
+  /* TAB: cycle focus to next focusable child in focused window. A custom widget
+     gets first refusal — a view that drives its own selection (a diagram
+     canvas, a hex grid) needs Tab for that, and only falls back to focus
+     cycling when its key callback says it does not want the key. */
   if (key == '\t' && !_focused_is_editor()) {
-    gtcaca_window_widget_t *win = gtcaca_window_get_current_focus();
+    gtcaca_window_widget_t *win;
+    if (_focused_custom_consumes(key)) return 0;
+    win = gtcaca_window_get_current_focus();
     if (win) gtcaca_window_focus_next_child(win);
     return 0;
   }
 
   /* Ctrl+N / Ctrl+P: switch between windows */
-  if ((key == '\x0e' || key == '\x10') && !_focused_is_editor()) {
+  if ((key == '\x0e' || key == '\x10') && !_focused_is_editor() &&
+      !_focused_custom_consumes(key)) {
     gtcaca_window_widget_t *win = gtcaca_window_get_current_focus();
     if (win) {
       gtcaca_window_widget_t *next = (key == '\x0e')

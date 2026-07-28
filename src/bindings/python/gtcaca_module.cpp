@@ -632,7 +632,9 @@ PYBIND11_MODULE(_gtcaca, m) {
           gtcaca_custom_set_key_cb(w, tramp_custom_key, nullptr);
         },
         py::arg("callback"),
-        "Register a callback(key)->int invoked on key events when focused.");
+        "Register a callback(key)->int invoked on key events when focused. "
+        "Returning non-zero also claims the keys the main loop would otherwise "
+        "take for itself: q and Esc (quit), Tab (cycle focus), Ctrl+N/Ctrl+P.");
     c.def(
         "on_mouse",
         [](gtcaca_custom_widget_t *w, py::function f) {

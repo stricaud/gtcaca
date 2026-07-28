@@ -888,8 +888,9 @@ impl<'a> Custom<'a> {
     }
 
     /// Register a key handler, called while the widget is focused. Return
-    /// `true` to consume the key — that is also how a custom view keeps `q` and
-    /// `Esc` from being read as "quit the application".
+    /// `true` to consume the key — that is also how a custom view claims the
+    /// keys the main loop would otherwise take: `q` and `Esc` (quit), `Tab`
+    /// (cycle focus) and `Ctrl+N`/`Ctrl+P` (switch window).
     pub fn on_key<F: FnMut(i32) -> bool + 'static>(&self, cb: F) {
         store_handler(self.ptr as usize, cb);
         unsafe { sys::gtcaca_custom_set_key_cb(self.ptr, Some(custom_key_tramp), std::ptr::null_mut()) };

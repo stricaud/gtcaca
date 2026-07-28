@@ -10,6 +10,23 @@
 #include <gtcaca/log.h>
 #include <gtcaca/window.h>
 
+/* Ctrl+N / Ctrl+P move between windows, but a focused text widget needs them
+   for itself — Ctrl+N is "next line" in every Emacs-style editor, and stealing
+   it here left no editor focused at all, which in turn made the next Esc read
+   as "quit the application". A custom view that handles its own keys counts as
+   text-like too. */
+static int _gtcaca_text_widget_focused(void)
+{
+  gtcaca_widget_t *w;
+  CDL_FOREACH(gmo.widgets_list, w) {
+    if (!w->has_focus) continue;
+    if (w->type == GTCACA_WIDGET_EDITOR || w->type == GTCACA_WIDGET_ENTRY ||
+        w->type == GTCACA_WIDGET_TEXTVIEW || w->type == GTCACA_WIDGET_CUSTOM)
+      return 1;
+  }
+  return 0;
+}
+
 /* Private functions */
 static int _gtcaca_application_private_key_press(gtcaca_application_widget_t *application, int key, void *userdata)
 {
@@ -22,6 +39,7 @@ static int _gtcaca_application_private_key_press(gtcaca_application_widget_t *ap
 
   switch(key) {
   case CACA_KEY_CTRL_N:
+    if (_gtcaca_text_widget_focused()) break;
     window = gtcaca_window_get_current_focus();
     if (window) {
       while((window = (gtcaca_window_widget_t *)window->next)) {
@@ -33,6 +51,7 @@ static int _gtcaca_application_private_key_press(gtcaca_application_widget_t *ap
     }
     break; // case CACA_KEY_CTRL_N:
   case CACA_KEY_CTRL_P:
+    if (_gtcaca_text_widget_focused()) break;
     window = gtcaca_window_get_current_focus();
     if (window) {
       while((window = (gtcaca_window_widget_t *)window->prev)) {

@@ -260,10 +260,13 @@ the gesture: every motion and the release go to the same widget even if the
 pointer leaves its rectangle, which is what makes dragging an object out to the
 edge (and back) work.
 
-A focused custom widget also gets first refusal on `q` and `Esc`, which the main
-loop would otherwise read as "quit the application": return non-zero from the
-key callback to keep them. `gtcaca_custom_set_focusable(view, 0)` takes the
-widget out of the Tab cycle.
+A focused custom widget gets first refusal on the keys the main loop would
+otherwise take for itself — `q` and `Esc` (quit the application), `Tab` (cycle
+focus) and `Ctrl+N`/`Ctrl+P` (switch window). Return non-zero from the key
+callback to keep one; return zero and the toolkit's own behaviour still runs, so
+existing widgets are unaffected. A view that drives its own selection needs
+`Tab` for exactly this. `gtcaca_custom_set_focusable(view, 0)` takes the widget
+out of the Tab cycle altogether.
 
 Both bindings expose all three callbacks — Python as
 `Custom.on_draw/on_key/on_mouse` (with the `MOUSE_*` constants), Rust as
