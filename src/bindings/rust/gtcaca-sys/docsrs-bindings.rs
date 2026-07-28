@@ -102,6 +102,71 @@ pub struct caca_event {
     pub _address: u8,
 }
 extern "C" {
+    pub fn caca_get_canvas_width(arg1: *const caca_canvas_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_get_canvas_height(arg1: *const caca_canvas_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_get_canvas_chars(arg1: *const caca_canvas_t) -> *const u32;
+}
+extern "C" {
+    pub fn caca_get_canvas_attrs(arg1: *const caca_canvas_t) -> *const u32;
+}
+extern "C" {
+    pub fn caca_put_char(
+        arg1: *mut caca_canvas_t,
+        arg2: ::std::os::raw::c_int,
+        arg3: ::std::os::raw::c_int,
+        arg4: u32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_put_str(
+        arg1: *mut caca_canvas_t,
+        arg2: ::std::os::raw::c_int,
+        arg3: ::std::os::raw::c_int,
+        arg4: *const ::std::os::raw::c_char,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_get_canvas_handle_x(arg1: *const caca_canvas_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_get_canvas_handle_y(arg1: *const caca_canvas_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_set_attr(arg1: *mut caca_canvas_t, arg2: u32) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_set_color_ansi(
+        arg1: *mut caca_canvas_t,
+        arg2: u8,
+        arg3: u8,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    #[doc = " \\defgroup caca_primitives libcaca primitives drawing\n\n  These functions provide routines for primitive drawing, such as lines,\n  boxes, triangles and ellipses.\n\n  @{"]
+    pub fn caca_draw_line(
+        arg1: *mut caca_canvas_t,
+        arg2: ::std::os::raw::c_int,
+        arg3: ::std::os::raw::c_int,
+        arg4: ::std::os::raw::c_int,
+        arg5: ::std::os::raw::c_int,
+        arg6: u32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn caca_fill_box(
+        arg1: *mut caca_canvas_t,
+        arg2: ::std::os::raw::c_int,
+        arg3: ::std::os::raw::c_int,
+        arg4: ::std::os::raw::c_int,
+        arg5: ::std::os::raw::c_int,
+        arg6: u32,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
     #[doc = " \\defgroup caca_event libcaca event handling\n\n  These functions handle user events such as keyboard input and mouse\n  clicks.\n\n  @{"]
     pub fn caca_get_event(
         arg1: *mut caca_display_t,
@@ -826,6 +891,11 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 pub type gtcaca_custom_widget_t = _gtcaca_custom_widget_t;
+pub const gtcaca_mouse_event_t_GTCACA_MOUSE_PRESS: gtcaca_mouse_event_t = 0;
+pub const gtcaca_mouse_event_t_GTCACA_MOUSE_MOTION: gtcaca_mouse_event_t = 1;
+pub const gtcaca_mouse_event_t_GTCACA_MOUSE_RELEASE: gtcaca_mouse_event_t = 2;
+pub const gtcaca_mouse_event_t_GTCACA_MOUSE_WHEEL: gtcaca_mouse_event_t = 3;
+pub type gtcaca_mouse_event_t = ::std::os::raw::c_uint;
 pub type gtcaca_custom_draw_cb_t = ::std::option::Option<
     unsafe extern "C" fn(
         widget: *mut gtcaca_custom_widget_t,
@@ -836,6 +906,16 @@ pub type gtcaca_custom_key_cb_t = ::std::option::Option<
     unsafe extern "C" fn(
         widget: *mut gtcaca_custom_widget_t,
         key: ::std::os::raw::c_int,
+        userdata: *mut ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_int,
+>;
+pub type gtcaca_custom_mouse_cb_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        widget: *mut gtcaca_custom_widget_t,
+        event: gtcaca_mouse_event_t,
+        x: ::std::os::raw::c_int,
+        y: ::std::os::raw::c_int,
+        button: ::std::os::raw::c_int,
         userdata: *mut ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int,
 >;
@@ -870,6 +950,13 @@ extern "C" {
     pub fn gtcaca_custom_set_key_cb(
         widget: *mut gtcaca_custom_widget_t,
         cb: gtcaca_custom_key_cb_t,
+        userdata: *mut ::std::os::raw::c_void,
+    );
+}
+extern "C" {
+    pub fn gtcaca_custom_set_mouse_cb(
+        widget: *mut gtcaca_custom_widget_t,
+        cb: gtcaca_custom_mouse_cb_t,
         userdata: *mut ::std::os::raw::c_void,
     );
 }

@@ -27,6 +27,25 @@ Callbacks are plain Python callables. Key callbacks receive the integer key and
 may return an int (0 = not consumed, the default). Menu actions take no
 arguments. Exceptions raised inside a callback are reported via
 ``sys.unraisablehook`` and do not abort the event loop.
+
+A ``Custom`` widget can also take a mouse callback, which is what drag-and-drop
+views are built on::
+
+    canvas = gt.custom_new(win, 0, 0, 60, 20)
+
+    def on_mouse(event, x, y, button):
+        if event == gt.MOUSE_PRESS:
+            start_drag(x, y)
+        elif event == gt.MOUSE_MOTION:   # only while a button is held
+            drag_to(x, y)
+        elif event == gt.MOUSE_RELEASE:
+            drop(x, y)
+        return 1
+    canvas.on_mouse(on_mouse)
+
+``x``/``y`` are canvas coordinates; subtract the widget's ``x``/``y`` for
+widget-local ones. ``button`` is 1 left, 2 middle, 3 right, and 4/5 for a
+``MOUSE_WHEEL`` event (down/up), which is delivered while the widget is focused.
 """
 
 from ._gtcaca import *  # noqa: F401,F403

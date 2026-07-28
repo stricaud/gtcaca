@@ -84,6 +84,7 @@ widgets):
 | `textview_new(parent, x, y, w, h)` | `TextView` | `append`, `clear`, `set_mode`, `on_key` |
 | `statusbar_new(text)` | `StatusBar` | `set_text`, `set_rows_from_bottom` |
 | `menu_new()` | `Menu` | `add_entry`, `add_item`, `add_separator`, `handle_key` |
+| `custom_new(parent, x, y, w, h)` | `Custom` | `on_draw`, `on_key`, `on_mouse`, `set_focusable`, `draw` |
 
 Every widget exposes the shared preamble (`x`, `y`, `width`, `height`,
 `has_focus`, `is_visible`, `id`) plus `show()`, `hide()`, and `as_widget()`
@@ -96,6 +97,13 @@ Every widget exposes the shared preamble (`x`, `y`, `width`, `height`,
   exposed as module attributes: `KEY_RETURN`, `KEY_ESCAPE`, `KEY_TAB`,
   `KEY_UP`/`KEY_DOWN`/`KEY_LEFT`/`KEY_RIGHT`, `KEY_F1`, `KEY_F10`, etc.
 - **Menu actions** (the last argument to `menu.add_item`) take no arguments.
+- **Mouse callbacks** (`Custom.on_mouse`) receive `(event, x, y, button)`, where
+  `event` is `MOUSE_PRESS`, `MOUSE_MOTION`, `MOUSE_RELEASE` or `MOUSE_WHEEL`,
+  `x`/`y` are canvas coordinates and `button` is 1 left, 2 middle, 3 right (4/5
+  for wheel down/up). Motion only arrives while a button is held, and the press
+  that starts a drag owns the whole gesture — that is what drag-and-drop views
+  are built on. `Custom.on_draw` takes a no-argument painter; paint with
+  `put_str` / `put_char` / `set_color` / `fill_box`.
 - Exceptions raised inside a callback are reported via `sys.unraisablehook`
   and do not abort the event loop.
 

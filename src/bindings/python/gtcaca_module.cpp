@@ -67,6 +67,9 @@ static std::deque<py::function> &g_menu_cbs = *new std::deque<py::function>();
 // Draw callbacks for custom widgets, keyed by widget pointer.
 static std::unordered_map<const void *, py::function> &g_draw_cbs =
     *new std::unordered_map<const void *, py::function>();
+// Mouse callbacks for custom widgets, keyed by widget pointer.
+static std::unordered_map<const void *, py::function> &g_mouse_cbs =
+    *new std::unordered_map<const void *, py::function>();
 
 // Convert a Python parent argument (a widget instance or None) to the common
 // gtcaca_widget_t*.  Every concrete widget exposes as_widget(); None -> NULL.
@@ -110,6 +113,23 @@ static void tramp_custom_draw(gtcaca_custom_widget_t *w, void * /*ud*/) {
     e.discard_as_unraisable("gtcaca_custom_draw");
   }
 }
+// Mouse trampoline for custom widgets: callback(event, x, y, button) -> int.
+static int tramp_custom_mouse(gtcaca_custom_widget_t *w, gtcaca_mouse_event_t ev,
+                              int x, int y, int button, void * /*ud*/) {
+  py::gil_scoped_acquire gil;
+  auto it = g_mouse_cbs.find(static_cast<const void *>(w));
+  if (it == g_mouse_cbs.end())
+    return 0;
+  try {
+    py::object r = it->second((int)ev, x, y, button);
+    if (!r.is_none() && py::isinstance<py::int_>(r))
+      return r.cast<int>();
+  } catch (py::error_already_set &e) {
+    e.discard_as_unraisable("gtcaca_custom_mouse");
+  }
+  return 0;
+}
+
 GTCACA_KEY_TRAMPOLINE(tramp_entry, gtcaca_entry_widget_t)
 GTCACA_KEY_TRAMPOLINE(tramp_checkbox, gtcaca_checkbox_widget_t)
 GTCACA_KEY_TRAMPOLINE(tramp_radiobutton, gtcaca_radiobutton_widget_t)
@@ -614,6 +634,17 @@ PYBIND11_MODULE(_gtcaca, m) {
         py::arg("callback"),
         "Register a callback(key)->int invoked on key events when focused.");
     c.def(
+        "on_mouse",
+        [](gtcaca_custom_widget_t *w, py::function f) {
+          g_mouse_cbs[w] = std::move(f);
+          gtcaca_custom_set_mouse_cb(w, tramp_custom_mouse, nullptr);
+        },
+        py::arg("callback"),
+        "Register a callback(event, x, y, button)->int for mouse events: "
+        "event is MOUSE_PRESS / MOUSE_MOTION / MOUSE_RELEASE / MOUSE_WHEEL, "
+        "x/y are canvas coordinates, button is 1 left, 2 middle, 3 right, "
+        "4 wheel down, 5 wheel up. Motion arrives while a button is held.");
+    c.def(
         "set_focusable",
         [](gtcaca_custom_widget_t *w, bool v) {
           gtcaca_custom_set_focusable(w, v ? 1 : 0);
@@ -648,6 +679,12 @@ PYBIND11_MODULE(_gtcaca, m) {
   m.attr("LIGHTMAGENTA") = (int)CACA_LIGHTMAGENTA;
   m.attr("YELLOW") = (int)CACA_YELLOW;
   m.attr("WHITE") = (int)CACA_WHITE;
+
+  // -- mouse event constants (Custom.on_mouse) -----------------------------
+  m.attr("MOUSE_PRESS") = (int)GTCACA_MOUSE_PRESS;
+  m.attr("MOUSE_MOTION") = (int)GTCACA_MOUSE_MOTION;
+  m.attr("MOUSE_RELEASE") = (int)GTCACA_MOUSE_RELEASE;
+  m.attr("MOUSE_WHEEL") = (int)GTCACA_MOUSE_WHEEL;
 
   // -- key constants -------------------------------------------------------
   m.attr("KEY_RETURN") = (int)CACA_KEY_RETURN;

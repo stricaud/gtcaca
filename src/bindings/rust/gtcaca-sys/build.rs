@@ -122,6 +122,16 @@ fn main() {
         // the global display (gmo.dp) rather than gtcaca_main(), so expose the
         // handful of caca_get_event* entry points and the event type they need.
         .allowlist_function("caca_get_event.*")
+        // Canvas primitives: a Custom widget paints its own rectangle, so its
+        // draw callback needs the low-level put/fill calls (see the `canvas`
+        // module in the safe crate).
+        .allowlist_function("caca_put_str")
+        .allowlist_function("caca_put_char")
+        .allowlist_function("caca_set_color_ansi")
+        .allowlist_function("caca_set_attr")
+        .allowlist_function("caca_fill_box")
+        .allowlist_function("caca_draw_line")
+        .allowlist_function("caca_get_canvas_.*")
         .allowlist_type("gtcaca_.*")
         .allowlist_type("_?g(mo|tcaca)_.*")
         .allowlist_type("caca_event.*")

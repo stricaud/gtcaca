@@ -723,6 +723,29 @@ static void _focus_widget_in_window(gtcaca_widget_t *hit)
 static gtcaca_editor_widget_t *g_drag_editor = NULL;
 static int g_drag_anchor = 0;
 
+/* Same idea for a custom widget that registered a mouse callback: it owns the
+   whole press → motion* → release gesture, so drags (moving a shape, drawing a
+   rubber band) work without the toolkit knowing what is being dragged. */
+static gtcaca_custom_widget_t *g_drag_custom = NULL;
+
+/* Non-zero while a drag gesture is in flight, i.e. while motion events matter. */
+static int _drag_in_progress(void) { return g_drag_editor != NULL || g_drag_custom != NULL; }
+
+/* Give a focused custom widget first refusal on a key. Returns non-zero if its
+   callback consumed it. Used for the two keys the main loop would otherwise
+   swallow as "quit the application" ('q' and Esc). */
+static int _focused_custom_consumes(int key)
+{
+  gtcaca_widget_t *w;
+  int consumed = 0;
+  CDL_FOREACH(gmo.widgets_list, w) {
+    if (!w->has_focus || w->type != GTCACA_WIDGET_CUSTOM) continue;
+    { gtcaca_custom_widget_t *c = (gtcaca_custom_widget_t *)w;
+      if (c->key_cb && c->key_cb(c, key, c->key_cb_userdata)) consumed = 1; }
+  }
+  return consumed;
+}
+
 static void _gtcaca_handle_mouse_press(int mx, int my, int button)
 {
   gtcaca_widget_t *widget;
@@ -740,9 +763,16 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
     CDL_FOREACH(gmo.widgets_list, w) {
       if (w->has_focus && (w->type == GTCACA_WIDGET_TREE ||
                            w->type == GTCACA_WIDGET_TABLE ||
-                           w->type == GTCACA_WIDGET_EDITOR)) { target = w; break; }
+                           w->type == GTCACA_WIDGET_EDITOR ||
+                           w->type == GTCACA_WIDGET_CUSTOM)) { target = w; break; }
     }
     if (target) switch (target->type) {
+    case GTCACA_WIDGET_CUSTOM: {
+      gtcaca_custom_widget_t *c = (gtcaca_custom_widget_t *)target;
+      /* the widget scrolls itself: pass the wheel button through untranslated */
+      if (c->mouse_cb) c->mouse_cb(c, GTCACA_MOUSE_WHEEL, mx, my, button, c->mouse_cb_userdata);
+      break;
+    }
     case GTCACA_WIDGET_TREE:   gtcaca_tree_key((gtcaca_tree_widget_t *)target, key, NULL); break;
     case GTCACA_WIDGET_TABLE:  gtcaca_table_key((gtcaca_table_widget_t *)target, key, NULL); break;
     case GTCACA_WIDGET_EDITOR: {
@@ -935,6 +965,15 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
     g_drag_anchor = pos;
     break;
   }
+  case GTCACA_WIDGET_CUSTOM: {
+    gtcaca_custom_widget_t *c = (gtcaca_custom_widget_t *)hit;
+    _focus_widget_in_window(hit);
+    if (c->mouse_cb) {
+      c->mouse_cb(c, GTCACA_MOUSE_PRESS, mx, my, button, c->mouse_cb_userdata);
+      g_drag_custom = c;         /* it owns motion/release until the button lifts */
+    }
+    break;
+  }
   default:
     /* Entry, TextView, TextList, ProgressBar, Label, etc.: just focus. */
     _focus_widget_in_window(hit);
@@ -946,12 +985,25 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
 static void _gtcaca_handle_mouse_motion(int mx, int my)
 {
   int pos;
+  if (g_drag_custom) {
+    gtcaca_custom_widget_t *c = g_drag_custom;
+    if (c->mouse_cb) c->mouse_cb(c, GTCACA_MOUSE_MOTION, mx, my, 1, c->mouse_cb_userdata);
+  }
   if (!g_drag_editor) return;
   pos = gtcaca_editor_position_from_point(g_drag_editor, mx, my);
   gtcaca_editor_set_selection(g_drag_editor, pos, g_drag_anchor);  /* caret=pos, anchor=press */
 }
 
-static void _gtcaca_handle_mouse_release(void) { g_drag_editor = NULL; }
+static void _gtcaca_handle_mouse_release(int mx, int my)
+{
+  if (g_drag_custom) {
+    gtcaca_custom_widget_t *c = g_drag_custom;
+    g_drag_custom = NULL;   /* clear first: the callback may tear the widget down */
+    if (c->mouse_cb) c->mouse_cb(c, GTCACA_MOUSE_RELEASE, mx, my, 0, c->mouse_cb_userdata);
+    gtcaca_redraw();
+  }
+  g_drag_editor = NULL;
+}
 
 /* One key's worth of the application keymap (the editor/widgets see it). */
 static void _dispatch_key(int key, int *quit)
@@ -961,6 +1013,7 @@ static void _dispatch_key(int key, int *quit)
   case 'q':
   case 'Q': {
     int text_focused = 0;
+    if (_focused_custom_consumes(key)) break;   /* a custom view may want 'q' itself */
     CDL_FOREACH(gmo.widgets_list, widget) {
       if (widget->has_focus &&
           (widget->type == GTCACA_WIDGET_ENTRY || widget->type == GTCACA_WIDGET_EDITOR)) {
@@ -974,6 +1027,7 @@ static void _dispatch_key(int key, int *quit)
   case CACA_KEY_ESCAPE: {
     int handled = 0;
     if (_focused_is_editor()) { gtcaca_widgets_handle_key_press(key); break; }
+    if (_focused_custom_consumes(key)) break;   /* Esc may mean "cancel" in a custom view */
     CDL_FOREACH(gmo.widgets_list, widget) {
       if (widget->type == GTCACA_WIDGET_MENU && widget->has_focus) {
         ((gtcaca_menu_widget_t *)widget)->is_open = 0;
@@ -1014,12 +1068,12 @@ static void _handle_sgr_mouse(int b, int x, int y, int press)
     _gtcaca_handle_mouse_press(x, y, (b & 1) ? 4 : 5);   /* down -> 4, up -> 5 */
     gtcaca_redraw();
   } else if (b & 0x20) {                          /* motion while a button is held (drag) */
-    if (g_drag_editor) { _gtcaca_handle_mouse_motion(x, y); gtcaca_redraw(); }
+    if (_drag_in_progress()) { _gtcaca_handle_mouse_motion(x, y); gtcaca_redraw(); }
   } else if (press) {                             /* button down: 0 left, 1 middle, 2 right */
     _gtcaca_handle_mouse_press(x, y, (b & 3) + 1);
     gtcaca_redraw();
   } else {                                        /* button release */
-    _gtcaca_handle_mouse_release();
+    _gtcaca_handle_mouse_release(x, y);
   }
 }
 
@@ -1088,12 +1142,12 @@ void gtcaca_main(void)
             caca_get_event_mouse_button(&ev));
           gtcaca_redraw();
         } else if (evtype & CACA_EVENT_MOUSE_MOTION) {
-          if (g_drag_editor) {   /* only redraw while a drag-select is in progress */
+          if (_drag_in_progress()) {   /* only redraw while a drag is in progress */
             _gtcaca_handle_mouse_motion(caca_get_mouse_x(gmo.dp), caca_get_mouse_y(gmo.dp));
             gtcaca_redraw();
           }
         } else if (evtype & CACA_EVENT_MOUSE_RELEASE) {
-          _gtcaca_handle_mouse_release();
+          _gtcaca_handle_mouse_release(caca_get_mouse_x(gmo.dp), caca_get_mouse_y(gmo.dp));
         }
         continue;
       }

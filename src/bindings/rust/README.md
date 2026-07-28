@@ -12,6 +12,12 @@ The full C API (~490 functions) is available immediately through `gtcaca-sys`;
 the safe `gtcaca` crate wraps the core loop + common widgets and grows from
 there.
 
+Bespoke views go through `Custom`, the canvas escape hatch: `on_draw` paints the
+rectangle (with the `canvas` module's `put_str`/`fill_box`/…), `on_key` handles
+keys while focused, and `on_mouse` receives `(MouseEvent, x, y, button)` —
+`Press`, `Motion` (only while a button is held), `Release`, `Wheel` — so
+click-and-drag interfaces are a closure, not a fork of the toolkit.
+
 ## Build requirements
 
 libcaca dev files, found via `pkg-config`:

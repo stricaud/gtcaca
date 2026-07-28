@@ -7,12 +7,15 @@
 //! Every widget also gets [`Widget::send_key`] for feeding it keys and
 //! [`Widget::set_focus`] for the focus highlight.
 
-use std::ffi::{c_char, c_int, CStr, CString};
+use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::marker::PhantomData;
 
 use gtcaca_sys as sys;
 
-use crate::{cstring, Widget};
+use crate::{
+    cstring, dispatch_draw, dispatch_key, dispatch_mouse, store_draw_handler, store_handler,
+    store_mouse_handler, MouseEvent, Widget,
+};
 
 // Build a NUL-terminated C string vector plus a borrowed pointer array. The
 // returned `Vec<CString>` must be kept alive while the pointers are used.
@@ -810,3 +813,106 @@ impl<'a> Scatter<'a> {
     }
 }
 impl_widget!(Scatter);
+
+// ── Custom (canvas escape hatch) ────────────────────────────────────────────
+
+/// A rectangle of the screen you paint and drive yourself.
+///
+/// Every other widget is closed: it knows how it looks and which keys it eats.
+/// `Custom` knows neither — it forwards painting to [`Custom::on_draw`], keys
+/// to [`Custom::on_key`], and mouse gestures to [`Custom::on_mouse`], so a view
+/// the toolkit was never going to ship (a hex grid, a drag-and-drop diagram
+/// canvas, a game board) is an ordinary widget in a window.
+///
+/// ```no_run
+/// # use gtcaca::{canvas, color, Custom, MouseEvent, Widget, Window};
+/// # fn f(win: &Window) {
+/// let view = Custom::new(win, 0, 1, 60, 20);
+/// let r = view.geometry();
+/// view.on_draw(move || {
+///     canvas::set_color(color::WHITE, color::BLACK);
+///     canvas::fill_box(r.x, r.y, r.width, r.height, ' ');
+/// });
+/// view.on_mouse(|event, x, y, _button| {
+///     match event {
+///         MouseEvent::Press => { /* grab whatever is at (x, y) */ }
+///         MouseEvent::Motion => { /* drag it — motion only arrives while held */ }
+///         MouseEvent::Release => { /* drop it */ }
+///         MouseEvent::Wheel => { /* scroll */ }
+///     }
+///     true
+/// });
+/// # }
+/// ```
+pub struct Custom<'a> {
+    ptr: *mut sys::gtcaca_custom_widget_t,
+    _p: PhantomData<&'a ()>,
+}
+
+unsafe extern "C" fn custom_draw_tramp(w: *mut sys::gtcaca_custom_widget_t, _ud: *mut c_void) {
+    dispatch_draw(w as usize)
+}
+
+unsafe extern "C" fn custom_key_tramp(
+    w: *mut sys::gtcaca_custom_widget_t,
+    key: c_int,
+    _ud: *mut c_void,
+) -> c_int {
+    dispatch_key(w as usize, key)
+}
+
+unsafe extern "C" fn custom_mouse_tramp(
+    w: *mut sys::gtcaca_custom_widget_t,
+    event: sys::gtcaca_mouse_event_t,
+    x: c_int,
+    y: c_int,
+    button: c_int,
+    _ud: *mut c_void,
+) -> c_int {
+    dispatch_mouse(w as usize, MouseEvent::from_raw(event), x, y, button)
+}
+
+impl<'a> Custom<'a> {
+    /// Create a `width` × `height` custom view at `(x, y)` inside `parent`.
+    pub fn new(parent: &'a impl Widget, x: i32, y: i32, width: i32, height: i32) -> Custom<'a> {
+        let ptr = unsafe { sys::gtcaca_custom_new(parent.as_widget_ptr(), x, y, width, height) };
+        assert!(!ptr.is_null(), "gtcaca_custom_new returned NULL");
+        Custom { ptr, _p: PhantomData }
+    }
+
+    /// Register the painter, called on every redraw. Nothing clears the
+    /// rectangle first: the closure owns every cell, background included.
+    pub fn on_draw<F: FnMut() + 'static>(&self, cb: F) {
+        store_draw_handler(self.ptr as usize, cb);
+        unsafe { sys::gtcaca_custom_set_draw_cb(self.ptr, Some(custom_draw_tramp), std::ptr::null_mut()) };
+    }
+
+    /// Register a key handler, called while the widget is focused. Return
+    /// `true` to consume the key — that is also how a custom view keeps `q` and
+    /// `Esc` from being read as "quit the application".
+    pub fn on_key<F: FnMut(i32) -> bool + 'static>(&self, cb: F) {
+        store_handler(self.ptr as usize, cb);
+        unsafe { sys::gtcaca_custom_set_key_cb(self.ptr, Some(custom_key_tramp), std::ptr::null_mut()) };
+    }
+
+    /// Register a mouse handler: `(event, x, y, button)`, with `x`/`y` in
+    /// canvas cells and `button` 1 left, 2 middle, 3 right, 4/5 wheel
+    /// down/up. Presses land only inside the widget, and the whole press →
+    /// motion* → release gesture is delivered here, so drags work. Return
+    /// `true` if handled.
+    pub fn on_mouse<F: FnMut(MouseEvent, i32, i32, i32) -> bool + 'static>(&self, cb: F) {
+        store_mouse_handler(self.ptr as usize, cb);
+        unsafe { sys::gtcaca_custom_set_mouse_cb(self.ptr, Some(custom_mouse_tramp), std::ptr::null_mut()) };
+    }
+
+    /// Take the widget out of (or back into) the Tab focus cycle.
+    pub fn set_focusable(&self, focusable: bool) {
+        unsafe { sys::gtcaca_custom_set_focusable(self.ptr, focusable as c_int) };
+    }
+
+    /// Run the draw callback now (for a hand-rolled render loop).
+    pub fn draw(&self) {
+        unsafe { sys::gtcaca_custom_draw(self.ptr) };
+    }
+}
+impl_widget!(Custom);

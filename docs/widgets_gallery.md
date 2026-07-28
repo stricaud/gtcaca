@@ -228,6 +228,50 @@ descends/chooses, Esc cancels; save mode has an editable name field.
 
 ---
 
+## Custom (canvas escape hatch)
+
+Every widget above is closed: it knows how it looks and which keys it eats. The
+**custom** widget knows neither. It owns a rectangle and forwards painting, keys
+and mouse gestures to your callbacks, so a view the toolkit was never going to
+ship — a hex grid, a drag-and-drop diagram canvas, a game board — is still an
+ordinary widget in a window. Nothing clears the rectangle first: the draw
+callback owns every cell, background included, so it can repaint without
+flicker.
+
+```c
+gtcaca_custom_widget_t *view = gtcaca_custom_new(GTCACA_WIDGET(win), 0, 1, 60, 20);
+gtcaca_custom_set_draw_cb(view, on_draw, userdata);     /* paint with caca_put_str/… */
+gtcaca_custom_set_key_cb(view, on_key, userdata);       /* int (widget, key, ud)     */
+gtcaca_custom_set_mouse_cb(view, on_mouse, userdata);   /* clicks and drags          */
+```
+
+The mouse callback is `int (*)(widget, event, x, y, button, userdata)`:
+
+| event | when |
+| --- | --- |
+| `GTCACA_MOUSE_PRESS` | a button went down inside the widget |
+| `GTCACA_MOUSE_MOTION` | the pointer moved **while a button is held** |
+| `GTCACA_MOUSE_RELEASE` | the button came back up |
+| `GTCACA_MOUSE_WHEEL` | the wheel turned while the widget is focused (button 4 down, 5 up) |
+
+`x`/`y` are canvas coordinates — subtract `widget->x` / `widget->y` for
+widget-local ones — and `button` is 1 left, 2 middle, 3 right. A press claims
+the gesture: every motion and the release go to the same widget even if the
+pointer leaves its rectangle, which is what makes dragging an object out to the
+edge (and back) work.
+
+A focused custom widget also gets first refusal on `q` and `Esc`, which the main
+loop would otherwise read as "quit the application": return non-zero from the
+key callback to keep them. `gtcaca_custom_set_focusable(view, 0)` takes the
+widget out of the Tab cycle.
+
+Both bindings expose all three callbacks — Python as
+`Custom.on_draw/on_key/on_mouse` (with the `MOUSE_*` constants), Rust as
+`Custom::on_draw/on_key/on_mouse` (with the `MouseEvent` enum and the `canvas`
+painting module).
+
+---
+
 *A couple of widgets aren't pictured here: the **spinner** (a one-cell animated
 busy indicator, `gtcaca_spinner_new`) and the **menu** bar (`gtcaca_menu_new` +
 `gtcaca_menu_add_entry`/`add_item`), both of which are best seen live — see the

@@ -105,11 +105,45 @@ pub mod tutorials {
 // ---------------------------------------------------------------------------
 
 type KeyHandler = Box<dyn FnMut(i32) -> bool>;
+type DrawHandler = Box<dyn FnMut()>;
+type MouseHandler = Box<dyn FnMut(MouseEvent, i32, i32, i32) -> bool>;
 
 thread_local! {
     static HANDLERS: RefCell<HashMap<usize, KeyHandler>> =
         RefCell::new(HashMap::new());
+    static DRAW_HANDLERS: RefCell<HashMap<usize, DrawHandler>> =
+        RefCell::new(HashMap::new());
+    static MOUSE_HANDLERS: RefCell<HashMap<usize, MouseHandler>> =
+        RefCell::new(HashMap::new());
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
+}
+
+/// What a [`Custom`] widget's mouse callback is being told about.
+///
+/// [`MouseEvent::Motion`] only arrives while a button is held — i.e. during a
+/// drag, between the press that started it and its release — so a press →
+/// motion* → release sequence is one complete gesture.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum MouseEvent {
+    /// A button went down inside the widget.
+    Press,
+    /// The pointer moved while a button is held.
+    Motion,
+    /// The button came back up, ending the gesture.
+    Release,
+    /// The wheel turned while the widget is focused (button 4 down, 5 up).
+    Wheel,
+}
+
+impl MouseEvent {
+    fn from_raw(ev: sys::gtcaca_mouse_event_t) -> MouseEvent {
+        match ev {
+            sys::gtcaca_mouse_event_t_GTCACA_MOUSE_MOTION => MouseEvent::Motion,
+            sys::gtcaca_mouse_event_t_GTCACA_MOUSE_RELEASE => MouseEvent::Release,
+            sys::gtcaca_mouse_event_t_GTCACA_MOUSE_WHEEL => MouseEvent::Wheel,
+            _ => MouseEvent::Press,
+        }
+    }
 }
 
 fn dispatch_key(ptr: usize, key: c_int) -> c_int {
@@ -213,6 +247,8 @@ impl Drop for Gtcaca {
         // alternate screen / raw mode and stays usable after exit.
         unsafe { sys::gtcaca_shutdown() };
         HANDLERS.with(|h| h.borrow_mut().clear());
+        DRAW_HANDLERS.with(|h| h.borrow_mut().clear());
+        MOUSE_HANDLERS.with(|h| h.borrow_mut().clear());
         ACTIVE.with(|a| a.set(false));
     }
 }
@@ -327,6 +363,43 @@ fn store_handler<F: FnMut(i32) -> bool + 'static>(ptr: usize, cb: F) {
     HANDLERS.with(|h| {
         h.borrow_mut().insert(ptr, Box::new(cb));
     });
+}
+
+fn store_draw_handler<F: FnMut() + 'static>(ptr: usize, cb: F) {
+    DRAW_HANDLERS.with(|h| {
+        h.borrow_mut().insert(ptr, Box::new(cb));
+    });
+}
+
+fn store_mouse_handler<F: FnMut(MouseEvent, i32, i32, i32) -> bool + 'static>(ptr: usize, cb: F) {
+    MOUSE_HANDLERS.with(|h| {
+        h.borrow_mut().insert(ptr, Box::new(cb));
+    });
+}
+
+// Both dispatchers take the closure out of the map while it runs, so a handler
+// may register or drop handlers (including its own) without a double borrow —
+// same reasoning as dispatch_key.
+fn dispatch_draw(ptr: usize) {
+    DRAW_HANDLERS.with(|h| {
+        let taken = h.borrow_mut().remove(&ptr);
+        if let Some(mut cb) = taken {
+            cb();
+            h.borrow_mut().entry(ptr).or_insert(cb);
+        }
+    });
+}
+
+fn dispatch_mouse(ptr: usize, ev: MouseEvent, x: c_int, y: c_int, button: c_int) -> c_int {
+    MOUSE_HANDLERS.with(|h| {
+        let taken = h.borrow_mut().remove(&ptr);
+        if let Some(mut cb) = taken {
+            let consumed = cb(ev, x, y, button);
+            h.borrow_mut().entry(ptr).or_insert(cb);
+            return if consumed { 1 } else { 0 };
+        }
+        0
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -706,6 +779,74 @@ pub mod color {
     pub const LIGHTMAGENTA: u8 = 13;
     pub const YELLOW: u8 = 14;
     pub const WHITE: u8 = 15;
+}
+
+/// Direct painting on the shared canvas, for a [`Custom`] widget's draw
+/// callback (the one place the toolkit hands you raw cells).
+///
+/// Coordinates are absolute canvas cells — take the widget's
+/// [`Widget::geometry`] as the origin. Colours are the [`color`] constants.
+///
+/// ```no_run
+/// # use gtcaca::{canvas, color, Custom, Widget};
+/// # fn f(view: &Custom) {
+/// let r = view.geometry();
+/// view.on_draw({
+///     let r = r;
+///     move || {
+///         canvas::set_color(color::WHITE, color::BLUE);
+///         canvas::fill_box(r.x, r.y, r.width, r.height, ' ');
+///         canvas::put_str(r.x + 1, r.y + 1, "drag me");
+///     }
+/// });
+/// # }
+/// ```
+pub mod canvas {
+    use super::{cstring, sys};
+
+    /// Set the colour pair used by subsequent draw calls.
+    pub fn set_color(fg: u8, bg: u8) {
+        unsafe {
+            sys::caca_set_color_ansi(sys::gmo.cv, fg, bg);
+            sys::caca_set_attr(sys::gmo.cv, 0);
+        }
+    }
+
+    /// Draw `text` with its first character at `(x, y)`.
+    pub fn put_str(x: i32, y: i32, text: &str) {
+        let c = cstring(text).unwrap_or_default();
+        unsafe { sys::caca_put_str(sys::gmo.cv, x, y, c.as_ptr()) };
+    }
+
+    /// Draw a single character (any Unicode codepoint) at `(x, y)`.
+    pub fn put_char(x: i32, y: i32, ch: char) {
+        unsafe { sys::caca_put_char(sys::gmo.cv, x, y, ch as u32) };
+    }
+
+    /// Fill a `width` × `height` rectangle at `(x, y)` with `ch`.
+    pub fn fill_box(x: i32, y: i32, width: i32, height: i32, ch: char) {
+        if width <= 0 || height <= 0 {
+            return;
+        }
+        unsafe {
+            sys::caca_fill_box(sys::gmo.cv, x, y, x + width - 1, y + height - 1, ch as u32)
+        };
+    }
+
+    /// Draw a line of `ch` between two cells.
+    pub fn draw_line(x1: i32, y1: i32, x2: i32, y2: i32, ch: char) {
+        unsafe { sys::caca_draw_line(sys::gmo.cv, x1, y1, x2, y2, ch as u32) };
+    }
+
+    /// The canvas size in character cells, `(width, height)`.
+    pub fn size() -> (i32, i32) {
+        unsafe {
+            (
+                sys::caca_get_canvas_width(sys::gmo.cv) as i32,
+                sys::caca_get_canvas_height(sys::gmo.cv) as i32,
+            )
+        }
+    }
 }
 
 /// Series-style constants for [`Linechart::add_series_styled`].

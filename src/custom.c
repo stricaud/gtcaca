@@ -65,6 +65,8 @@ gtcaca_custom_widget_t *gtcaca_custom_new(gtcaca_widget_t *parent, int x, int y,
   c->draw_cb_userdata = NULL;
   c->key_cb = NULL;
   c->key_cb_userdata = NULL;
+  c->mouse_cb = NULL;
+  c->mouse_cb_userdata = NULL;
   c->focusable = 1;
 
   CDL_APPEND(gmo.widgets_list, GTCACA_WIDGET(c));
@@ -90,6 +92,13 @@ void gtcaca_custom_set_key_cb(gtcaca_custom_widget_t *widget, gtcaca_custom_key_
   if (!widget) return;
   widget->key_cb = cb;
   widget->key_cb_userdata = userdata;
+}
+
+void gtcaca_custom_set_mouse_cb(gtcaca_custom_widget_t *widget, gtcaca_custom_mouse_cb_t cb, void *userdata)
+{
+  if (!widget) return;
+  widget->mouse_cb = cb;
+  widget->mouse_cb_userdata = userdata;
 }
 
 void gtcaca_custom_set_focusable(gtcaca_custom_widget_t *widget, int focusable)
