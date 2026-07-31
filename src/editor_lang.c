@@ -183,7 +183,7 @@ static int _is_keyword(gtcaca_editor_langcfg_t *cfg, const char *text, int start
 void _gtcaca_editor_colorize(gtcaca_editor_widget_t *w)
 {
   gtcaca_editor_langcfg_t *cfg = w->langcfg;
-  const char *t = w->text;
+  const char *t = gtcaca_editor_text(w);
   int len = w->length;
   int i;
 

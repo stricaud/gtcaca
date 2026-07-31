@@ -28,14 +28,14 @@ static int _match_at(gtcaca_editor_widget_t *w, int pos, const char *text, int t
   int i, mc = flags & GTCACA_EDITOR_FIND_MATCHCASE;
   if (pos < 0 || pos + tlen > w->length) return 0;
   for (i = 0; i < tlen; i++) {
-    char a = w->text[pos + i], b = text[i];
+    char a = gtcaca_editor_text(w)[pos + i], b = text[i];
     if (mc ? (a != b) : !_ci_eq(a, b)) return 0;
   }
   if (flags & (GTCACA_EDITOR_FIND_WHOLEWORD | GTCACA_EDITOR_FIND_WORDSTART)) {
-    int before = (pos > 0) ? _is_word((unsigned char)w->text[pos - 1]) : 0;
+    int before = (pos > 0) ? _is_word((unsigned char)gtcaca_editor_text(w)[pos - 1]) : 0;
     if (before) return 0;                                  /* must start a word */
     if (flags & GTCACA_EDITOR_FIND_WHOLEWORD) {
-      int after = (pos + tlen < w->length) ? _is_word((unsigned char)w->text[pos + tlen]) : 0;
+      int after = (pos + tlen < w->length) ? _is_word((unsigned char)gtcaca_editor_text(w)[pos + tlen]) : 0;
       if (after) return 0;                                 /* …and end one */
     }
   }
@@ -57,8 +57,9 @@ static int _regex_find(gtcaca_editor_widget_t *w, const char *pat, int lo, int h
                opt, ONIG_ENCODING_UTF8, ONIG_SYNTAX_ONIGURUMA, &einfo) != ONIG_NORMAL)
     return -1;
   region = onig_region_new();
-  rc = onig_search(re, (const OnigUChar *)w->text, (const OnigUChar *)w->text + w->length,
-                   (const OnigUChar *)w->text + lo, (const OnigUChar *)w->text + hi, region, ONIG_OPTION_NONE);
+  { const char *doc = gtcaca_editor_text(w);
+    rc = onig_search(re, (const OnigUChar *)doc, (const OnigUChar *)doc + w->length,
+                     (const OnigUChar *)doc + lo, (const OnigUChar *)doc + hi, region, ONIG_OPTION_NONE); }
   if (rc >= 0) { start = region->beg[0]; if (mend) *mend = region->end[0]; }
   onig_region_free(region, 1);
   onig_free(re);

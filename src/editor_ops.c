@@ -17,16 +17,16 @@ static int _is_word(int c) { return isalnum(c) || c == '_' || c == '$'; }
 int gtcaca_editor_word_right_position(gtcaca_editor_widget_t *w, int pos)
 {
   int p = pos, len = w->length;
-  while (p < len && !_is_word((unsigned char)w->text[p])) p++;   /* skip gap   */
-  while (p < len && _is_word((unsigned char)w->text[p]))  p++;   /* skip word  */
+  while (p < len && !_is_word((unsigned char)gtcaca_editor_text(w)[p])) p++;   /* skip gap */
+  while (p < len && _is_word((unsigned char)gtcaca_editor_text(w)[p]))  p++;   /* skip word */
   return p;
 }
 
 int gtcaca_editor_word_left_position(gtcaca_editor_widget_t *w, int pos)
 {
   int p = pos;
-  while (p > 0 && !_is_word((unsigned char)w->text[p - 1])) p--;
-  while (p > 0 && _is_word((unsigned char)w->text[p - 1]))  p--;
+  while (p > 0 && !_is_word((unsigned char)gtcaca_editor_text(w)[p - 1])) p--;
+  while (p > 0 && _is_word((unsigned char)gtcaca_editor_text(w)[p - 1]))  p--;
   return p;
 }
 
@@ -83,11 +83,11 @@ int gtcaca_editor_brace_match(gtcaca_editor_widget_t *w, int pos)
   int dir, depth = 1, p;
   char c, partner;
   if (pos < 0 || pos >= w->length) return -1;
-  c = w->text[pos];
+  c = gtcaca_editor_text(w)[pos];
   partner = (char)_brace_partner(c, &dir);
   if (!partner) return -1;
   for (p = pos + dir; p >= 0 && p < w->length; p += dir) {
-    char d = w->text[p];
+    char d = gtcaca_editor_text(w)[p];
     if (_brace_styled_out(w, p)) continue;
     if (d == c)        depth++;
     else if (d == partner && --depth == 0) return p;

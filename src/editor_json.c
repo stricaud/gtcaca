@@ -22,7 +22,7 @@ static int _str_end(const char *t, int len, int p)
 
 void _gtcaca_editor_colorize_json(gtcaca_editor_widget_t *w)
 {
-  const char *t = w->text;
+  const char *t = gtcaca_editor_text(w);
   int len = w->length, i;
 
   if (w->styles_cap < len) {
@@ -81,7 +81,7 @@ void gtcaca_editor_fold_json(gtcaca_editor_widget_t *w)
     int lvl, fl;
 
     for (p = start; p < end; p++) {
-      char c = w->text[p];
+      char c = gtcaca_editor_text(w)[p];
       if (in_str) {
         if (c == '\\' && p + 1 < end) { p++; continue; }
         if (c == '"') in_str = 0;

@@ -289,6 +289,52 @@ painting module).
 
 ---
 
+## Text storage, clipboard and paste
+
+Three pieces the toolkit provides that are not widgets:
+
+**`gtcaca/rope.h` — the text storage.** A balanced tree of small chunks where
+every node caches the bytes *and* the newlines beneath it. Inserting, deleting,
+reading a byte and converting between an offset and a line are all O(log n),
+where a flat buffer made each edit memmove the tail and each line lookup scan
+the document. The editor widget is built on it, and it is usable on its own.
+
+**`gtcaca/clipboard.h` — the system clipboard.** A clipboard does not hold "a
+string", it holds *bytes and a name for what they are* — UTIs on macOS, MIME
+targets on X11 and Wayland, CF_* formats on Windows — so the primitive is typed:
+
+```c
+gtcaca_clip_t img;
+if (gtcaca_clipboard_has(GTCACA_CLIP_PNG) &&
+    gtcaca_clipboard_get_data(GTCACA_CLIP_PNG, &img) == 0) {
+  gtcaca_image_load_memory(widget, img.data, img.len);   /* no temp file */
+  gtcaca_clip_free(&img);
+}
+```
+
+Text is the common case, so `gtcaca_clipboard_set()` / `gtcaca_clipboard_get()`
+stay as thin wrappers over `text/plain`. Routes are tried in order: the
+platform's own clipboard (pbcopy/pbpaste and osascript on macOS, wl-copy or
+xclip/xsel on Unix, the Win32 clipboard on Windows), then OSC 52 for text — the
+escape that asks the *terminal* to hold it, which is what makes copy work over
+ssh — then an in-process store, which is typed too, so an image still
+round-trips inside one app on a machine with no clipboard at all.
+`gtcaca_clipboard_backend()` says which route the last call took.
+
+What each platform manages beyond text is uneven: Wayland and X11 take any MIME
+type, macOS handles PNG through osascript, Windows uses its registered "PNG"
+format, and `xsel` is text-only. Ask `gtcaca_clipboard_has()` rather than
+assuming — that is what it is for.
+
+**Bracketed paste.** The main loop turns on the terminal's bracketed-paste mode
+and hands a paste over in one piece via `gtcaca_set_paste_cb()`, instead of
+letting it arrive as thousands of keystrokes. Without a callback the text goes
+into the focused editor. This is the difference between a large paste being
+instant and being quadratic, and it stops auto-indent from cascading through
+pasted code.
+
+---
+
 *A couple of widgets aren't pictured here: the **spinner** (a one-cell animated
 busy indicator, `gtcaca_spinner_new`) and the **menu** bar (`gtcaca_menu_new` +
 `gtcaca_menu_add_entry`/`add_item`), both of which are best seen live — see the

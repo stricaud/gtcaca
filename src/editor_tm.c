@@ -488,7 +488,7 @@ static void _apply_caps(gtcaca_editor_widget_t *w, OnigRegion *region, int base,
 void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
 {
   gtcaca_editor_grammar_t *g = w->grammar;
-  const char *t = w->text;
+  const char *t = gtcaca_editor_text(w);
   int len = w->length, line, line_count;
   /* context stack: rule index of the active begin/end (-1 = root) + its style */
   int stack[TM_MAX_STACK]; int sp = 0;

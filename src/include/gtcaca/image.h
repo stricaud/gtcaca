@@ -1,6 +1,8 @@
 #ifndef _GTCACA_IMAGE_H_
 #define _GTCACA_IMAGE_H_
 
+#include <stddef.h>
+
 #include <gtcaca/main.h>
 #include <gtcaca/widget.h>
 
@@ -34,6 +36,9 @@ typedef struct _gtcaca_image_widget_t gtcaca_image_widget_t;
 
 gtcaca_image_widget_t *gtcaca_image_new(gtcaca_widget_t *parent, int x, int y, int width, int height);
 int  gtcaca_image_load(gtcaca_image_widget_t *img, const char *filepath);
+/* Load an encoded image (PNG, JPEG, …) straight from memory — what you get
+   from gtcaca_clipboard_get_data(GTCACA_CLIP_PNG, …), with no temp file. */
+int  gtcaca_image_load_memory(gtcaca_image_widget_t *img, const void *data, size_t len);
 void gtcaca_image_draw(gtcaca_image_widget_t *img);
 void gtcaca_image_free(gtcaca_image_widget_t *img);
 

@@ -22,7 +22,7 @@ const C_SOURCES: &[&str] = &[
     "textlist.c", "textview.c", "theme.c", "widget.c", "window.c", "image.c",
     "spinner.c", "scale.c", "spinbutton.c", "switch.c", "frame.c",
     "separator.c", "expander.c", "box.c",
-    "editor.c", "editor_lang.c", "editor_autoc.c", "editor_view.c",
+    "rope.c", "clipboard.c", "editor.c", "editor_lang.c", "editor_autoc.c", "editor_view.c",
     "editor_json.c", "editor_tm.c", "editor_search.c", "editor_ops.c",
     "json.c", "sparkline.c", "gauge.c", "barchart.c", "tree.c", "table.c",
     "map.c", "tabs.c", "mindmap.c", "segdisplay.c", "linechart.c", "hexview.c",

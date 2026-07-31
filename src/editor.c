@@ -5,6 +5,7 @@
 #include <caca.h>
 
 #include <gtcaca/editor.h>
+#include <gtcaca/rope.h>
 #include <gtcaca/main.h>
 
 /* ── small helpers ─────────────────────────────────────────────────────────── */
@@ -34,9 +35,9 @@ static int _char_len_at(gtcaca_editor_widget_t *w, int pos)
 {
   int n, i;
   if (pos < 0 || pos >= w->length) return 1;
-  n = _utf8_seq_len((unsigned char)w->text[pos]);
+  n = _utf8_seq_len((unsigned char)gtcaca_rope_at(w->rope, pos));
   for (i = 1; i < n; i++)
-    if (pos + i >= w->length || !_is_utf8_cont((unsigned char)w->text[pos + i]))
+    if (pos + i >= w->length || !_is_utf8_cont((unsigned char)gtcaca_rope_at(w->rope, pos + i)))
       return i;                              /* short/broken sequence */
   return n;
 }
@@ -47,7 +48,7 @@ static int _prev_char_start(gtcaca_editor_widget_t *w, int pos)
 {
   if (pos <= 0) return 0;
   pos--;
-  while (pos > 0 && _is_utf8_cont((unsigned char)w->text[pos])) pos--;
+  while (pos > 0 && _is_utf8_cont((unsigned char)gtcaca_rope_at(w->rope, pos))) pos--;
   return pos;
 }
 
@@ -59,9 +60,14 @@ static uint32_t _cp_at(gtcaca_editor_widget_t *w, int pos, int *len)
   size_t consumed = 0;
   uint32_t cp;
   if (len) *len = n;
-  if (n == 1) return (unsigned char)w->text[pos];   /* fast path, incl. broken */
-  cp = caca_utf8_to_utf32(w->text + pos, &consumed);
-  return consumed ? cp : (unsigned char)w->text[pos];
+  if (n == 1) return (unsigned char)gtcaca_rope_at(w->rope, pos);  /* incl. broken */
+  {
+    char seq[8];
+    int got = gtcaca_rope_copy(w->rope, pos, n < 8 ? n : 7, seq);
+    seq[got] = '\0';
+    cp = caca_utf8_to_utf32(seq, &consumed);
+  }
+  return consumed ? cp : (unsigned char)gtcaca_rope_at(w->rope, pos);
 }
 
 /* Display columns for a codepoint: 0 for combining marks / zero-width, 2 for
@@ -104,15 +110,30 @@ static int _char_width_at(gtcaca_editor_widget_t *w, int pos)
   return _cp_width(_cp_at(w, pos, &len));
 }
 
-static void _ensure_cap(gtcaca_editor_widget_t *w, int needed)
+/* Rebuild the flat copy if an edit has happened since it was last made. Only
+   whole-document scanners pay for this; editing and drawing do not. */
+const char *gtcaca_editor_text(gtcaca_editor_widget_t *w)
 {
-  if (needed <= w->cap) return;
-  int ncap = w->cap ? w->cap * 2 : 256;
-  if (ncap < needed) ncap = needed;
-  char *p = realloc(w->text, ncap);
-  if (!p) { fprintf(stderr, "Error: editor buffer realloc failed\n"); return; }
-  w->text = p;
-  w->cap  = ncap;
+  if (!w) return "";
+  if (!w->flat_valid) {
+    char *s = w->rope ? gtcaca_rope_str(w->rope) : NULL;
+    if (!s) { s = malloc(1); if (s) s[0] = '\0'; }
+    free(w->text);
+    w->text = s;
+    w->cap = w->length + 1;
+    w->flat_valid = 1;
+  }
+  return w->text ? w->text : "";
+}
+
+/* Every edit goes through here: the rope changes, the flat copy is dropped. */
+static void _touched(gtcaca_editor_widget_t *w)
+{
+  w->length = gtcaca_rope_len(w->rope);
+  w->flat_valid = 0;
+  w->colorize_dirty = 1;
+  w->fold_dirty = 1;
+  w->line_count_valid = 0;
 }
 
 /* ── raw buffer ops (no undo, no caret adjust) ─────────────────────────────── */
@@ -121,13 +142,8 @@ static void _raw_insert(gtcaca_editor_widget_t *w, int pos, const char *s, int l
 {
   if (len <= 0) return;
   pos = _clampi(pos, 0, w->length);
-  _ensure_cap(w, w->length + len + 1);
-  memmove(w->text + pos + len, w->text + pos, (size_t)(w->length - pos) + 1); /* +1 NUL */
-  memcpy(w->text + pos, s, (size_t)len);
-  w->length += len;
-  w->colorize_dirty = 1;
-  w->fold_dirty = 1;
-  w->line_count_valid = 0;
+  gtcaca_rope_insert(w->rope, pos, s, len);
+  _touched(w);
 }
 
 static void _raw_delete(gtcaca_editor_widget_t *w, int pos, int len)
@@ -135,11 +151,8 @@ static void _raw_delete(gtcaca_editor_widget_t *w, int pos, int len)
   if (len <= 0) return;
   pos = _clampi(pos, 0, w->length);
   if (pos + len > w->length) len = w->length - pos;
-  memmove(w->text + pos, w->text + pos + len, (size_t)(w->length - pos - len) + 1);
-  w->length -= len;
-  w->colorize_dirty = 1;
-  w->fold_dirty = 1;
-  w->line_count_valid = 0;
+  gtcaca_rope_delete(w->rope, pos, len);
+  _touched(w);
 }
 
 /* ── undo / redo stacks ────────────────────────────────────────────────────── */
@@ -228,7 +241,13 @@ void gtcaca_editor_delete_range(gtcaca_editor_widget_t *w, int pos, int len)
   if (pos + len > w->length) len = w->length - pos;
   if (len <= 0) return;
   _stack_clear(&w->redo, &w->redo_count, &w->redo_cap);
-  _stack_push(&w->undo, &w->undo_count, &w->undo_cap, 0, pos, w->text + pos, len, _cur_undo_group(w));
+  { char *gone = malloc((size_t)len + 1);
+    if (gone) {
+      gtcaca_rope_copy(w->rope, pos, len, gone);
+      gone[len] = '\0';
+      _stack_push(&w->undo, &w->undo_count, &w->undo_cap, 0, pos, gone, len, _cur_undo_group(w));
+      free(gone);
+    } }
   _raw_delete(w, pos, len);
   _adjust_after_delete(w, pos, len);
   w->modified = 1;
@@ -244,8 +263,8 @@ int gtcaca_editor_get_line_count(gtcaca_editor_widget_t *w)
      run per line inside the O(n²) scroll-to-caret loop — without the cache a
      single M-> on a large file is O(n³) (≈10 s). Invalidated on every edit. */
   if (w->line_count_valid) return w->line_count_cache;
-  n = 1;
-  for (i = 0; i < w->length; i++) if (w->text[i] == '\n') n++;
+  (void)i;
+  n = gtcaca_rope_lines(w->rope) + 1;
   w->line_count_cache = n;
   w->line_count_valid = 1;
   return n;
@@ -253,29 +272,19 @@ int gtcaca_editor_get_line_count(gtcaca_editor_widget_t *w)
 
 int gtcaca_editor_line_from_position(gtcaca_editor_widget_t *w, int pos)
 {
-  int i, line = 0;
-  pos = _clampi(pos, 0, w->length);
-  for (i = 0; i < pos; i++) if (w->text[i] == '\n') line++;
-  return line;
+  return gtcaca_rope_line_of(w->rope, _clampi(pos, 0, w->length));
 }
 
 int gtcaca_editor_position_from_line(gtcaca_editor_widget_t *w, int line)
 {
-  int i, cur = 0;
   if (line <= 0) return 0;
-  for (i = 0; i < w->length; i++) {
-    if (w->text[i] == '\n') {
-      if (++cur == line) return i + 1;
-    }
-  }
-  return w->length;
+  return gtcaca_rope_line_start(w->rope, line);
 }
 
 int gtcaca_editor_get_line_end_position(gtcaca_editor_widget_t *w, int line)
 {
   int p = gtcaca_editor_position_from_line(w, line);
-  while (p < w->length && w->text[p] != '\n') p++;
-  return p;
+  return gtcaca_rope_find(w->rope, p, '\n');
 }
 
 /* visual column of byte position pos within its line, expanding tabs */
@@ -285,7 +294,7 @@ static int _visual_col(gtcaca_editor_widget_t *w, int pos)
                 w, gtcaca_editor_line_from_position(w, pos));
   int i = start, col = 0;
   while (i < pos) {
-    if (w->text[i] == '\t') { col += w->tab_width - (col % w->tab_width); i++; }
+    if (gtcaca_rope_at(w->rope, i) == '\t') { col += w->tab_width - (col % w->tab_width); i++; }
     else { col += _char_width_at(w, i); i += _char_len_at(w, i); }
   }
   return col;
@@ -298,7 +307,7 @@ static int _pos_from_visual_col(gtcaca_editor_widget_t *w, int line, int vcol)
   int end   = gtcaca_editor_get_line_end_position(w, line);
   int i = start, col = 0;
   while (i < end && col < vcol) {
-    if (w->text[i] == '\t') { col += w->tab_width - (col % w->tab_width); i++; }
+    if (gtcaca_rope_at(w->rope, i) == '\t') { col += w->tab_width - (col % w->tab_width); i++; }
     else { col += _char_width_at(w, i); i += _char_len_at(w, i); }
   }
   return i;
@@ -376,7 +385,7 @@ int gtcaca_editor_get_text_range(gtcaca_editor_widget_t *w, int start, int end, 
   n = end - start;
   if (n > len - 1) n = len - 1;
   if (n < 0) n = 0;
-  memcpy(buf, w->text + start, (size_t)n);
+  gtcaca_rope_copy(w->rope, start, n, buf);
   buf[n] = '\0';
   return n;
 }
@@ -489,7 +498,7 @@ void gtcaca_editor_add_char(gtcaca_editor_widget_t *w, char c)
 {
   char s[2]; s[0] = c; s[1] = '\0';
   if (!_delete_selection(w) && w->overtype &&
-      w->current_pos < w->length && w->text[w->current_pos] != '\n')
+      w->current_pos < w->length && gtcaca_rope_at(w->rope, w->current_pos) != '\n')
     gtcaca_editor_delete_range(w, w->current_pos, _char_len_at(w, w->current_pos)); /* overwrite the char */
   _insert_len(w, w->current_pos, s, 1);  /* caret auto-advances past it */
 }
@@ -505,7 +514,7 @@ void gtcaca_editor_add_char_utf32(gtcaca_editor_widget_t *w, uint32_t cp)
   if (!n) return;
   s[n] = '\0';
   if (!_delete_selection(w) && w->overtype &&
-      w->current_pos < w->length && w->text[w->current_pos] != '\n')
+      w->current_pos < w->length && gtcaca_rope_at(w->rope, w->current_pos) != '\n')
     gtcaca_editor_delete_range(w, w->current_pos, _char_len_at(w, w->current_pos));
   _insert_len(w, w->current_pos, s, (int)n);  /* caret auto-advances past it */
 }
@@ -597,10 +606,10 @@ void gtcaca_editor_set_text(gtcaca_editor_widget_t *w, const char *text)
 {
   int len = text ? (int)strlen(text) : 0;
   gtcaca_editor_empty_undo_buffer(w);
-  _ensure_cap(w, len + 1);
-  if (len) memcpy(w->text, text, (size_t)len);
+  gtcaca_rope_clear(w->rope);
+  if (len) gtcaca_rope_insert(w->rope, 0, text, len);
   w->length = len;
-  w->text[len] = '\0';
+  w->flat_valid = 0;
   w->current_pos = w->anchor = 0;
   w->first_visible_line = w->x_offset = 0;
   w->goal_col = -1;
@@ -618,7 +627,7 @@ int gtcaca_editor_get_text(gtcaca_editor_widget_t *w, char *buf, int len)
   int n = w->length;
   if (n > len - 1) n = len - 1;
   if (n < 0) n = 0;
-  memcpy(buf, w->text, (size_t)n);
+  gtcaca_rope_copy(w->rope, 0, n, buf);
   buf[n] = '\0';
   return n;
 }
@@ -634,7 +643,7 @@ void gtcaca_editor_clear_all(gtcaca_editor_widget_t *w)
 char gtcaca_editor_get_char_at(gtcaca_editor_widget_t *w, int pos)
 {
   if (pos < 0 || pos >= w->length) return '\0';
-  return w->text[pos];
+  return gtcaca_rope_at(w->rope, pos);
 }
 
 void gtcaca_editor_set_save_point(gtcaca_editor_widget_t *w) { w->modified = 0; }
@@ -803,8 +812,9 @@ gtcaca_editor_widget_t *gtcaca_editor_new(gtcaca_widget_t *parent, int x, int y,
   w->color_nonfocus_fg = gmo.theme.textview.fg;
   w->color_nonfocus_bg = gmo.theme.textview.bg;
 
-  _ensure_cap(w, 1);
-  w->text[0] = '\0';
+  w->rope = gtcaca_rope_new();
+  w->text = NULL;
+  w->flat_valid = 0;
   w->length = 0;
   w->current_pos = w->anchor = 0;
   w->goal_col = -1;
@@ -869,6 +879,7 @@ void gtcaca_editor_free(gtcaca_editor_widget_t *w)
   free(w->undo);
   free(w->redo);
   free(w->styles);
+  gtcaca_rope_free(w->rope);
   free(w->text);
   free(w);
 }
@@ -1120,7 +1131,7 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
     vcol = 0;
     pos = line_start;
     while (pos < line_end) {
-      unsigned char b = (unsigned char)w->text[pos];
+      unsigned char b = (unsigned char)gtcaca_rope_at(w->rope, pos);
       int is_tab = (b == '\t');
       int clen, cwid, draw_cells, k;
       uint32_t cp;

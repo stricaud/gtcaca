@@ -72,6 +72,28 @@ int gtcaca_image_load(gtcaca_image_widget_t *img, const char *filepath)
   return 0;
 }
 
+int gtcaca_image_load_memory(gtcaca_image_widget_t *img, const void *data, size_t len)
+{
+  int channels;
+
+  if (!img || !data || !len) return -1;
+
+  stbi_image_free(img->pixels);
+  img->pixels = NULL;
+  free(img->filepath);
+  img->filepath = NULL;
+
+  img->pixels = stbi_load_from_memory((const stbi_uc *)data, (int)len,
+                                      &img->img_width, &img->img_height,
+                                      &channels, 4);
+  if (!img->pixels) {
+    fprintf(stderr, "gtcaca_image_load_memory: cannot decode %d bytes: %s\n",
+            (int)len, stbi_failure_reason());
+    return -1;
+  }
+  return 0;
+}
+
 void gtcaca_image_draw(gtcaca_image_widget_t *img)
 {
   caca_dither_t *dither;

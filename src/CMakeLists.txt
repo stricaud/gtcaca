@@ -33,6 +33,8 @@ set(GTCACA_LIB_SRC
   separator.c
   expander.c
   box.c
+  rope.c
+  clipboard.c
   editor.c
   editor_lang.c
   editor_autoc.c
@@ -111,6 +113,8 @@ set(GTCACA_HEADERS
   include/gtcaca/filechooser.h
   include/gtcaca/colordialog.h
   include/gtcaca/custom.h
+  include/gtcaca/rope.h
+  include/gtcaca/clipboard.h
   include/gtcaca/piechart.h
   include/gtcaca/scatter.h
 )

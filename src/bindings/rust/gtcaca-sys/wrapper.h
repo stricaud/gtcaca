@@ -52,3 +52,5 @@
 #include <gtcaca/tree.h>
 #include <gtcaca/widget.h>
 #include <gtcaca/window.h>
+#include <gtcaca/rope.h>
+#include <gtcaca/clipboard.h>

@@ -163,7 +163,13 @@ struct _gtcaca_editor_widget_t {
   void                        *update_cb_userdata;
 
   /* Document */
+  /* The document. `rope` is the storage — edits and line lookups go through it
+     and cost O(log n). `text` is a flat copy kept for the code that wants a
+     plain C string (search, colourization, JSON); it is rebuilt lazily by
+     gtcaca_editor_text() and stale until then, so read it through that. */
+  struct gtcaca_rope *rope;
   char *text;
+  int   flat_valid;
   int   length;
   int   cap;
 
@@ -251,6 +257,10 @@ void gtcaca_editor_set_update_cb(gtcaca_editor_widget_t *w, gtcaca_editor_update
 
 /* ── Text content ───────────────────────────── */
 void gtcaca_editor_set_text(gtcaca_editor_widget_t *w, const char *text);
+/* The whole document as one NUL-terminated string, materialised from the rope
+   if an edit has happened since the last call. Borrowed, valid until the next
+   edit. Anything that scans the document wholesale wants this. */
+const char *gtcaca_editor_text(gtcaca_editor_widget_t *w);
 int  gtcaca_editor_get_text(gtcaca_editor_widget_t *w, char *buf, int len);
 int  gtcaca_editor_get_length(gtcaca_editor_widget_t *w);
 void gtcaca_editor_append_text(gtcaca_editor_widget_t *w, const char *s, int len);
