@@ -138,6 +138,60 @@ void gtcaca_colordialog_free(gtcaca_colordialog_widget_t *d)
 }
 
 /* ── blocking helper ─────────────────────────────────────────────────────────── */
+/* Which swatch covers a canvas cell, or -1. Mirrors the draw above. */
+static int swatch_at(const gtcaca_colordialog_widget_t *d, int x, int y)
+{
+  int grid_x = d->x + (d->width - GRID_W) / 2, grid_y = d->y + 2, i;
+  for (i = 0; i < 16; i++) {
+    int r = i / COLS, c = i % COLS;
+    int cx = grid_x + c * (SW + GAPX), cy = grid_y + r * (SH + GAPY);
+    if (x >= cx && x < cx + SW && y >= cy && y < cy + SH) return i;
+  }
+  return -1;
+}
+
+/* Read one key, with a short wait — used to look past an ESC. */
+static int next_key(int *key)
+{
+  caca_event_t e;
+  if (!caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &e, 30000)) return 0;   /* 30 ms */
+  *key = caca_get_event_key_ch(&e);
+  return 1;
+}
+
+/* An ESC arrived. It may be a real cancel, an arrow key, or a mouse report the
+   host enabled — decode it here, because reading it as "cancel" made the dialog
+   disappear the moment anyone pressed an arrow or moved the mouse. */
+static void esc_sequence(gtcaca_colordialog_widget_t *d)
+{
+  int k, b = 0, x = 0, y = 0, field = 0, fin = 0, i;
+
+  if (!next_key(&k))               { d->result = -1; return; }      /* a bare Esc */
+  if (k != '[' && k != 'O')        { d->result = -1; return; }
+  if (!next_key(&k))               { d->result = -1; return; }
+  switch (k) {                                                      /* arrow keys */
+  case 'A': gtcaca_colordialog_key(d, CACA_KEY_UP, NULL);    return;
+  case 'B': gtcaca_colordialog_key(d, CACA_KEY_DOWN, NULL);  return;
+  case 'C': gtcaca_colordialog_key(d, CACA_KEY_RIGHT, NULL); return;
+  case 'D': gtcaca_colordialog_key(d, CACA_KEY_LEFT, NULL);  return;
+  case '<': break;                                                  /* SGR mouse  */
+  default:  return;                                                 /* ignore     */
+  }
+  for (i = 0; i < 32; i++) {                    /* ESC [ < b ; x ; y (M|m) */
+    if (!next_key(&k)) return;
+    if      (k >= '0' && k <= '9') { if (field == 0) b = b*10 + (k-'0');
+                                     else if (field == 1) x = x*10 + (k-'0');
+                                     else y = y*10 + (k-'0'); }
+    else if (k == ';')             field++;
+    else if (k == 'M' || k == 'm') { fin = k; break; }
+    else return;
+  }
+  if (fin == 'M' && !(b & 0x20) && !(b & 0x40)) {          /* a click picks one */
+    int sw = swatch_at(d, x - 1, y - 1);
+    if (sw >= 0) { d->sel = sw; d->result = sw; }
+  }
+}
+
 int gtcaca_colordialog_run(const char *title, int initial)
 {
   int cw = caca_get_canvas_width(gmo.cv), chh = caca_get_canvas_height(gmo.cv);
@@ -155,9 +209,12 @@ int gtcaca_colordialog_run(const char *title, int initial)
   if (initial >= 0 && initial < 16) d->sel = initial;
 
   while (d->result == GTCACA_COLORDIALOG_ONGOING) {
+    int key;
     gtcaca_redraw();
     if (!caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &ev, -1)) continue;
-    gtcaca_colordialog_key(d, caca_get_event_key_ch(&ev), NULL);
+    key = caca_get_event_key_ch(&ev);
+    if (key == CACA_KEY_ESCAPE) esc_sequence(d);
+    else gtcaca_colordialog_key(d, key, NULL);
   }
   res = d->result;
   gtcaca_colordialog_free(d);

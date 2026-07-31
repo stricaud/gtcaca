@@ -643,7 +643,9 @@ PYBIND11_MODULE(_gtcaca, m) {
         },
         py::arg("callback"),
         "Register a callback(event, x, y, button)->int for mouse events: "
-        "event is MOUSE_PRESS / MOUSE_MOTION / MOUSE_RELEASE / MOUSE_WHEEL, "
+        "event is MOUSE_PRESS / MOUSE_MOTION / MOUSE_RELEASE / MOUSE_WHEEL / "
+        "MOUSE_DOUBLE (a second press on the same cell, delivered just after "
+        "the press), "
         "x/y are canvas coordinates, button is 1 left, 2 middle, 3 right, "
         "4 wheel down, 5 wheel up. Motion arrives while a button is held.");
     c.def(
@@ -682,11 +684,16 @@ PYBIND11_MODULE(_gtcaca, m) {
   m.attr("YELLOW") = (int)CACA_YELLOW;
   m.attr("WHITE") = (int)CACA_WHITE;
 
+  m.def("set_double_click_time", &gtcaca_set_double_click_time, py::arg("ms"),
+        "How close together two presses must be to raise MOUSE_DOUBLE (default 400 ms).");
+  m.def("get_double_click_time", &gtcaca_get_double_click_time);
+
   // -- mouse event constants (Custom.on_mouse) -----------------------------
   m.attr("MOUSE_PRESS") = (int)GTCACA_MOUSE_PRESS;
   m.attr("MOUSE_MOTION") = (int)GTCACA_MOUSE_MOTION;
   m.attr("MOUSE_RELEASE") = (int)GTCACA_MOUSE_RELEASE;
   m.attr("MOUSE_WHEEL") = (int)GTCACA_MOUSE_WHEEL;
+  m.attr("MOUSE_DOUBLE") = (int)GTCACA_MOUSE_DOUBLE;
 
   // -- key constants -------------------------------------------------------
   m.attr("KEY_RETURN") = (int)CACA_KEY_RETURN;

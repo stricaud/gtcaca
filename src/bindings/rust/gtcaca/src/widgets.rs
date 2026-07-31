@@ -839,6 +839,7 @@ impl_widget!(Scatter);
 ///         MouseEvent::Motion => { /* drag it — motion only arrives while held */ }
 ///         MouseEvent::Release => { /* drop it */ }
 ///         MouseEvent::Wheel => { /* scroll */ }
+///         MouseEvent::Double => { /* rename, open, edit — a double click */ }
 ///     }
 ///     true
 /// });

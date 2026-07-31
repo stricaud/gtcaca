@@ -133,6 +133,10 @@ pub enum MouseEvent {
     Release,
     /// The wheel turned while the widget is focused (button 4 down, 5 up).
     Wheel,
+    /// A second press on the same cell, inside the double-click time. It
+    /// arrives just after that click's [`MouseEvent::Press`], so a handler can
+    /// call off whatever the press began and treat the pair as one gesture.
+    Double,
 }
 
 impl MouseEvent {
@@ -141,6 +145,7 @@ impl MouseEvent {
             sys::gtcaca_mouse_event_t_GTCACA_MOUSE_MOTION => MouseEvent::Motion,
             sys::gtcaca_mouse_event_t_GTCACA_MOUSE_RELEASE => MouseEvent::Release,
             sys::gtcaca_mouse_event_t_GTCACA_MOUSE_WHEEL => MouseEvent::Wheel,
+            sys::gtcaca_mouse_event_t_GTCACA_MOUSE_DOUBLE => MouseEvent::Double,
             _ => MouseEvent::Press,
         }
     }
@@ -234,6 +239,17 @@ impl Gtcaca {
 /// the loop is not running.
 pub fn quit() {
     unsafe { sys::gtcaca_main_quit() }
+}
+
+/// How close together two presses must be to raise [`MouseEvent::Double`], in
+/// milliseconds (default 400).
+pub fn set_double_click_time(ms: i32) {
+    unsafe { sys::gtcaca_set_double_click_time(ms) }
+}
+
+/// The current double-click time in milliseconds.
+pub fn double_click_time() -> i32 {
+    unsafe { sys::gtcaca_get_double_click_time() }
 }
 
 /// Force a redraw of all widgets. Callable from a key handler; see [`quit`].

@@ -98,7 +98,9 @@ Every widget exposes the shared preamble (`x`, `y`, `width`, `height`,
   `KEY_UP`/`KEY_DOWN`/`KEY_LEFT`/`KEY_RIGHT`, `KEY_F1`, `KEY_F10`, etc.
 - **Menu actions** (the last argument to `menu.add_item`) take no arguments.
 - **Mouse callbacks** (`Custom.on_mouse`) receive `(event, x, y, button)`, where
-  `event` is `MOUSE_PRESS`, `MOUSE_MOTION`, `MOUSE_RELEASE` or `MOUSE_WHEEL`,
+  `event` is `MOUSE_PRESS`, `MOUSE_MOTION`, `MOUSE_RELEASE`, `MOUSE_WHEEL` or
+  `MOUSE_DOUBLE` (a second press on the same cell, just after that press —
+  `set_double_click_time(ms)` tunes the window),
   `x`/`y` are canvas coordinates and `button` is 1 left, 2 middle, 3 right (4/5
   for wheel down/up). Motion only arrives while a button is held, and the press
   that starts a drag owns the whole gesture — that is what drag-and-drop views

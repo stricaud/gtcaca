@@ -226,6 +226,12 @@ descends/chooses, Esc cancels; save mode has an editable name field.
 ![filechooser](images/filechooser.png)
 `gtcaca_filechooser_run(start_dir, out_path, len, save_mode)`
 
+### Colour picker (modal)
+The 16 ANSI colours as a swatch grid. Arrows (or Tab) move, Enter picks, Esc
+cancels — and a click picks the swatch under the pointer. Returns the colour
+index, or -1 if cancelled.
+`gtcaca_colordialog_run(title, initial)` · `gtcaca_color_name(idx)`
+
 ---
 
 ## Custom (canvas escape hatch)
@@ -253,12 +259,20 @@ The mouse callback is `int (*)(widget, event, x, y, button, userdata)`:
 | `GTCACA_MOUSE_MOTION` | the pointer moved **while a button is held** |
 | `GTCACA_MOUSE_RELEASE` | the button came back up |
 | `GTCACA_MOUSE_WHEEL` | the wheel turned while the widget is focused (button 4 down, 5 up) |
+| `GTCACA_MOUSE_DOUBLE` | a second press on the same cell, inside the double-click time |
 
 `x`/`y` are canvas coordinates — subtract `widget->x` / `widget->y` for
 widget-local ones — and `button` is 1 left, 2 middle, 3 right. A press claims
 the gesture: every motion and the release go to the same widget even if the
 pointer leaves its rectangle, which is what makes dragging an object out to the
 edge (and back) work.
+
+Double clicks are timed by the toolkit, so no app has to do it itself:
+`GTCACA_MOUSE_DOUBLE` follows the ordinary press of the second click (the same
+order GTK uses), which means a widget that ignores it still sees two plain
+clicks, and one that handles it can call off whatever the press started — a
+drag, say — and treat the pair as a single gesture. The window is 400 ms by
+default; `gtcaca_set_double_click_time()` changes it.
 
 A focused custom widget gets first refusal on the keys the main loop would
 otherwise take for itself — `q` and `Esc` (quit the application), `Tab` (cycle

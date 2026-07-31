@@ -431,6 +431,12 @@ extern "C" {
 extern "C" {
     pub fn gtcaca_terminal_supports_blocks() -> ::std::os::raw::c_int;
 }
+extern "C" {
+    pub fn gtcaca_set_double_click_time(ms: ::std::os::raw::c_int);
+}
+extern "C" {
+    pub fn gtcaca_get_double_click_time() -> ::std::os::raw::c_int;
+}
 pub type gtcaca_barchart_widget_t = _gtcaca_barchart_widget_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -895,6 +901,7 @@ pub const gtcaca_mouse_event_t_GTCACA_MOUSE_PRESS: gtcaca_mouse_event_t = 0;
 pub const gtcaca_mouse_event_t_GTCACA_MOUSE_MOTION: gtcaca_mouse_event_t = 1;
 pub const gtcaca_mouse_event_t_GTCACA_MOUSE_RELEASE: gtcaca_mouse_event_t = 2;
 pub const gtcaca_mouse_event_t_GTCACA_MOUSE_WHEEL: gtcaca_mouse_event_t = 3;
+pub const gtcaca_mouse_event_t_GTCACA_MOUSE_DOUBLE: gtcaca_mouse_event_t = 4;
 pub type gtcaca_mouse_event_t = ::std::os::raw::c_uint;
 pub type gtcaca_custom_draw_cb_t = ::std::option::Option<
     unsafe extern "C" fn(

@@ -56,4 +56,9 @@ unsigned int gtcaca_get_newid(void);
    returns 0 (assume ASCII-safe) when unsure. */
 int gtcaca_terminal_supports_blocks(void);
 
+/* How close together two presses must be to count as a double click, in
+   milliseconds (default 400). Applies to GTCACA_MOUSE_DOUBLE. */
+void gtcaca_set_double_click_time(int ms);
+int  gtcaca_get_double_click_time(void);
+
 #endif // _GTCACA_MAIN_H_

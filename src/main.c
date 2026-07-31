@@ -9,6 +9,9 @@
 #endif
 #include <fcntl.h>
 #include <errno.h>
+#ifndef _WIN32
+#include <sys/time.h>      /* gettimeofday, for double-click timing */
+#endif
 
 #include <caca.h>
 
@@ -736,6 +739,46 @@ static int g_drag_anchor = 0;
    rubber band) work without the toolkit knowing what is being dragged. */
 static gtcaca_custom_widget_t *g_drag_custom = NULL;
 
+/* ── double clicks ───────────────────────────────────────────────────────────
+   Every app that wants "double-click to open/rename/edit" would otherwise have
+   to time clicks itself, so the toolkit does it once: a second press on the
+   same cell of the same widget, inside the double-click time, is followed by a
+   GTCACA_MOUSE_DOUBLE event. */
+static int   g_dbl_ms = 400;
+static void *g_last_press_widget = NULL;
+static int   g_last_press_x = -1, g_last_press_y = -1;
+static long  g_last_press_time = 0;
+
+void gtcaca_set_double_click_time(int ms) { g_dbl_ms = ms < 0 ? 0 : ms; }
+int  gtcaca_get_double_click_time(void)   { return g_dbl_ms; }
+
+/* Milliseconds on a wall clock; only differences are ever used. */
+static long _now_ms(void)
+{
+#ifdef _WIN32
+  return (long)GetTickCount();
+#else
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (long)tv.tv_sec * 1000L + tv.tv_usec / 1000;
+#endif
+}
+
+/* Is this press the second half of a double click on `w` at (x, y)? Records the
+   press either way, and never lets one press start two double clicks. */
+static int _double_click(void *w, int x, int y)
+{
+  long t = _now_ms();
+  int again = (w && w == g_last_press_widget &&
+               x == g_last_press_x && y == g_last_press_y &&
+               t - g_last_press_time <= g_dbl_ms);
+  g_last_press_widget = again ? NULL : w;        /* a third click starts over */
+  g_last_press_x = x;
+  g_last_press_y = y;
+  g_last_press_time = t;
+  return again;
+}
+
 /* Non-zero while a drag gesture is in flight, i.e. while motion events matter. */
 static int _drag_in_progress(void) { return g_drag_editor != NULL || g_drag_custom != NULL; }
 
@@ -975,10 +1018,12 @@ static void _gtcaca_handle_mouse_press(int mx, int my, int button)
   }
   case GTCACA_WIDGET_CUSTOM: {
     gtcaca_custom_widget_t *c = (gtcaca_custom_widget_t *)hit;
+    int dbl = _double_click(c, mx, my);
     _focus_widget_in_window(hit);
     if (c->mouse_cb) {
       c->mouse_cb(c, GTCACA_MOUSE_PRESS, mx, my, button, c->mouse_cb_userdata);
       g_drag_custom = c;         /* it owns motion/release until the button lifts */
+      if (dbl) c->mouse_cb(c, GTCACA_MOUSE_DOUBLE, mx, my, button, c->mouse_cb_userdata);
     }
     break;
   }

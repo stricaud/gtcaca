@@ -22,7 +22,13 @@ typedef enum {
   GTCACA_MOUSE_PRESS = 0,
   GTCACA_MOUSE_MOTION,
   GTCACA_MOUSE_RELEASE,
-  GTCACA_MOUSE_WHEEL     /* button 4 = wheel down, 5 = wheel up */
+  GTCACA_MOUSE_WHEEL,    /* button 4 = wheel down, 5 = wheel up */
+  /* A second press on the same cell of the same widget, inside the double-click
+     time (see gtcaca_set_double_click_time). It arrives *after* the ordinary
+     PRESS for that click — as in GTK — so a widget that ignores it still sees
+     two plain clicks, and one that handles it can undo whatever the press
+     began (a drag, say) and treat the pair as one gesture. */
+  GTCACA_MOUSE_DOUBLE
 } gtcaca_mouse_event_t;
 
 typedef void (*gtcaca_custom_draw_cb_t)(gtcaca_custom_widget_t *widget, void *userdata);
