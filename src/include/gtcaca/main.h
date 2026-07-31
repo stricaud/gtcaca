@@ -61,4 +61,16 @@ int gtcaca_terminal_supports_blocks(void);
 void gtcaca_set_double_click_time(int ms);
 int  gtcaca_get_double_click_time(void);
 
+/* ── pasting ────────────────────────────────────────────────────────────────
+ * Terminals deliver a paste as plain keystrokes, so a 2000-line paste arrives
+ * as 150,000 key events — and an editor that inserts one character at a time
+ * spends O(n²) doing it. gtcaca turns on the terminal's *bracketed paste* mode,
+ * collects the whole block, and hands it over in one piece, which makes a paste
+ * a single edit (and stops auto-indent from cascading through pasted code).
+ *
+ * Register a callback to decide what a paste means in your app; without one the
+ * text is inserted into the focused editor, if there is one. */
+typedef void (*gtcaca_paste_cb_t)(const char *text, int len, void *userdata);
+void gtcaca_set_paste_cb(gtcaca_paste_cb_t cb, void *userdata);
+
 #endif // _GTCACA_MAIN_H_

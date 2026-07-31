@@ -235,6 +235,14 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
 static int       g_present = -2;     /* -2 uninit, 0 = use libcaca, 1 = our renderer */
 static int       g_truecolor = 0;    /* 24-bit available (else 256-colour cube) */
 static int       g_mouse_sgr = 0;    /* re-assert SGR mouse on each redraw while the UI loop runs */
+static gtcaca_paste_cb_t g_paste_cb = NULL;
+static void             *g_paste_ud = NULL;
+
+void gtcaca_set_paste_cb(gtcaca_paste_cb_t cb, void *userdata)
+{
+  g_paste_cb = cb;
+  g_paste_ud = userdata;
+}
 static char     *g_ob = NULL;        /* output buffer */
 static size_t    g_obcap = 0;
 
@@ -386,7 +394,8 @@ void gtcaca_redraw(void)
      startup gets wiped when libcaca switches to the alt screen — which is exactly
      why the wheel stopped reaching us. Keeping it on every frame is cheap and
      robust. */
-  if (g_mouse_sgr) { const char *s = "\033[?1002h\033[?1006h"; if (write(1, s, strlen(s)) < 0) { /* ignore */ } }
+  if (g_mouse_sgr) { const char *s = "\033[?1002h\033[?1006h\033[?2004h";
+                     if (write(1, s, strlen(s)) < 0) { /* ignore */ } }
 }
 
 int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
@@ -1133,12 +1142,91 @@ static void _handle_sgr_mouse(int b, int x, int y, int press)
 /* We just read an ESC. Peek ahead a few ms: if it begins an SGR mouse report,
    parse and handle it; otherwise dispatch the ESC (and any peeked key) as keys
    so Meta/Escape still work. */
+/* Collect a bracketed paste (everything up to ESC [ 201~) and hand it over in
+   one piece. The app decides what a paste means; failing that it goes into the
+   focused editor, which is what a terminal user expects. */
+static void _read_bracketed_paste(void)
+{
+  size_t cap = 8192, len = 0;
+  char *buf = malloc(cap);
+  int k, tail = 0;                                /* how much of ESC [ 2 0 1 ~ we have */
+  if (!buf) return;
+
+  for (;;) {
+    if (!_next_key(&k)) break;                    /* terminal went quiet: take what we have */
+    if (len + 8 > cap) {
+      char *bigger = realloc(buf, cap * 2);
+      if (!bigger) break;
+      buf = bigger; cap *= 2;
+    }
+    /* Watch for the closing ESC [ 2 0 1 ~ without disturbing the text. */
+    if (tail == 0 && k == 0x1b) { tail = 1; continue; }
+    if (tail) {
+      static const char END[] = "[201~";
+      if (k == END[tail - 1]) {
+        tail++;
+        if (tail == 6) break;                     /* the whole terminator */
+        continue;
+      }
+      /* Not the terminator after all: put back what we swallowed. */
+      buf[len++] = 0x1b;
+      { int j; for (j = 0; j < tail - 1 && len + 2 < cap; j++) buf[len++] = END[j]; }
+      tail = 0;
+    }
+    if (k == '\r') k = '\n';                      /* terminals send CR for newlines */
+    if (k >= 0 && k < 0x80) buf[len++] = (char)k;
+    else if (k > 0) {                             /* a non-ASCII codepoint: re-encode */
+      uint32_t cp = (uint32_t)(k & ~GTCACA_KEY_UNICODE);
+      if (cp < 0x800)        { buf[len++] = (char)(0xc0 | (cp >> 6));
+                               buf[len++] = (char)(0x80 | (cp & 0x3f)); }
+      else if (cp < 0x10000) { buf[len++] = (char)(0xe0 | (cp >> 12));
+                               buf[len++] = (char)(0x80 | ((cp >> 6) & 0x3f));
+                               buf[len++] = (char)(0x80 | (cp & 0x3f)); }
+    }
+  }
+  buf[len] = '\0';
+
+  if (len) {
+    if (g_paste_cb) {
+      g_paste_cb(buf, (int)len, g_paste_ud);
+    } else {                                      /* default: the focused editor */
+      gtcaca_widget_t *w;
+      CDL_FOREACH(gmo.widgets_list, w) {
+        if (w->has_focus && w->type == GTCACA_WIDGET_EDITOR) {
+          gtcaca_editor_widget_t *e = (gtcaca_editor_widget_t *)w;
+          int pos = gtcaca_editor_get_current_pos(e);
+          gtcaca_editor_insert_text(e, pos, buf);
+          gtcaca_editor_goto_pos(e, pos + (int)len);
+          if (e->update_cb) e->update_cb(e, e->update_cb_userdata);
+          break;
+        }
+      }
+    }
+  }
+  free(buf);
+}
+
+/* We just read an ESC. It may be a real Esc/Meta, an SGR mouse report, or the
+   start of a bracketed paste — decode which, and dispatch the rest as keys. */
 static void _esc_or_sgr_mouse(int *quit)
 {
   int k, b = 0, x = 0, y = 0, field = 0, fin = 0, i;
   if (!_next_key(&k)) { _dispatch_key(CACA_KEY_ESCAPE, quit); return; }
   if (k != '[')       { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key(k, quit); return; }
   if (!_next_key(&k)) { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); return; }
+  if (k == '2') {                                 /* maybe ESC [ 200~ : a paste */
+    static const char START[] = "00~";
+    for (i = 0; i < 3; i++) {
+      if (!_next_key(&k) || k != START[i]) {       /* not a paste after all */
+        _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); _dispatch_key('2', quit);
+        { int j; for (j = 0; j < i; j++) _dispatch_key(START[j], quit); }
+        if (i < 3) _dispatch_key(k, quit);
+        return;
+      }
+    }
+    _read_bracketed_paste();
+    return;
+  }
   if (k != '<')       { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); _dispatch_key(k, quit); return; }
   for (i = 0; i < 32; i++) {
     if (!_next_key(&k)) return;                   /* truncated report: drop it */
@@ -1160,7 +1248,7 @@ void gtcaca_main(void)
      reports reach our parser (handles both wheel directions). This is exactly
      the setup that worked before the truecolour work. */
   caca_set_mouse(gmo.dp, 0);
-  fputs("\033[?1002h\033[?1006h", stdout);   /* button-event tracking + SGR encoding */
+  fputs("\033[?1002h\033[?1006h\033[?2004h", stdout);   /* mouse + bracketed paste */
   fflush(stdout);
   g_mouse_sgr = 1;   /* keep it asserted after every redraw (alt-screen switch resets it) */
 
@@ -1173,6 +1261,7 @@ void gtcaca_main(void)
             caca_get_display_driver(gmo.dp) ? caca_get_display_driver(gmo.dp) : "?");
 
   while (!quit && !g_quit_requested) {
+    int dirty = 0;
     while (caca_get_event(gmo.dp, CACA_EVENT_ANY, &ev, 0)) {
       int evtype = caca_get_event_type(&ev);
       if (getenv("CCM_EVLOG")) {
@@ -1184,7 +1273,7 @@ void gtcaca_main(void)
       }
       if (!(evtype & CACA_EVENT_KEY_PRESS)) {
         if (evtype & CACA_EVENT_RESIZE) {
-          gtcaca_redraw();
+          dirty = 1;
         } else if (evtype & CACA_EVENT_MOUSE_PRESS) {
           /* Use the display's *tracked* mouse position rather than the event's
              coordinates: libcaca reports garbage per-event coordinates on some
@@ -1193,11 +1282,11 @@ void gtcaca_main(void)
             caca_get_mouse_x(gmo.dp),
             caca_get_mouse_y(gmo.dp),
             caca_get_event_mouse_button(&ev));
-          gtcaca_redraw();
+          dirty = 1;
         } else if (evtype & CACA_EVENT_MOUSE_MOTION) {
           if (_drag_in_progress()) {   /* only redraw while a drag is in progress */
             _gtcaca_handle_mouse_motion(caca_get_mouse_x(gmo.dp), caca_get_mouse_y(gmo.dp));
-            gtcaca_redraw();
+            dirty = 1;
           }
         } else if (evtype & CACA_EVENT_MOUSE_RELEASE) {
           _gtcaca_handle_mouse_release(caca_get_mouse_x(gmo.dp), caca_get_mouse_y(gmo.dp));
@@ -1214,16 +1303,22 @@ void gtcaca_main(void)
                           : caca_get_event_key_ch(&ev); }
 
       /* An ESC may be a real Esc/Meta or the start of an SGR mouse report. */
-      if (key == CACA_KEY_ESCAPE) { _esc_or_sgr_mouse(&quit); gtcaca_redraw(); continue; }
+      if (key == CACA_KEY_ESCAPE) { _esc_or_sgr_mouse(&quit); dirty = 1; continue; }
 
       _dispatch_key(key, &quit);
-      gtcaca_redraw();
+      dirty = 1;
     }
+    /* Repaint once per batch of input, not once per key. A paste arrives as
+       thousands of keystrokes in one go; redrawing after each one made the
+       screen the bottleneck (and the work grows with the document, so it got
+       quadratic). Interactive typing is unaffected — a single keystroke empties
+       the queue, so it still repaints immediately. */
+    if (dirty) { gtcaca_redraw(); dirty = 0; }
     usleep(10000);
   }
 
   g_mouse_sgr = 0;
-  fputs("\033[?1002l\033[?1006l", stdout);   /* restore: disable SGR mouse reporting */
+  fputs("\033[?1002l\033[?1006l\033[?2004l", stdout);   /* restore the terminal's modes */
   fflush(stdout);
   gtcaca_present_shutdown();                  /* restore cursor if we took over output */
   if (gmo.dp) {
