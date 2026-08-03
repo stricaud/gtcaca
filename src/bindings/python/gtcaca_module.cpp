@@ -19,9 +19,12 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/functional.h>
+#include <pybind11/stl.h>
 
 #include <deque>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 extern "C" {
 #include <caca.h>
@@ -39,6 +42,7 @@ extern "C" {
 #include <gtcaca/textview.h>
 #include <gtcaca/statusbar.h>
 #include <gtcaca/menu.h>
+#include <gtcaca/dialog.h>
 #include <gtcaca/widget.h>
 #include <gtcaca/custom.h>
 }
@@ -609,8 +613,65 @@ PYBIND11_MODULE(_gtcaca, m) {
         },
         py::arg("entry_idx"));
     c.def("handle_key", &gtcaca_menu_handle_key, py::arg("key"));
+    c.def(
+        "set_focus",
+        [](gtcaca_menu_widget_t *menu, bool on) {
+          gtcaca_menu_set_focus(menu, on ? 1 : 0);
+        },
+        py::arg("on") = true,
+        "Give (or remove) keyboard focus to the menu bar. Lets an application\n"
+        "open the menu from its own key handler; removing focus also closes\n"
+        "any open dropdown.");
+    c.def(
+        "is_focused",
+        [](gtcaca_menu_widget_t *menu) {
+          return gtcaca_menu_is_focused(menu) != 0;
+        },
+        "Whether the menu bar currently holds keyboard focus.");
+    c.def(
+        "set_item_enabled",
+        [](gtcaca_menu_widget_t *menu, int entry_idx, int item_idx, bool enabled) {
+          gtcaca_menu_set_item_enabled(menu, entry_idx, item_idx, enabled ? 1 : 0);
+        },
+        py::arg("entry_idx"), py::arg("item_idx"), py::arg("enabled"),
+        "Enable or disable an item: disabled items are greyed out, skipped by\n"
+        "keyboard navigation, and their action never runs.");
   }
   m.def("menu_new", &gtcaca_menu_new, py::return_value_policy::reference);
+
+  // -- modal dialogs -------------------------------------------------------
+  // These run their own blocking event loop and return the user's choice, so
+  // they can be called straight from a key handler or a menu action.  The GIL
+  // is deliberately *held* throughout: the loop calls gtcaca_redraw(), which
+  // re-enters Python through any custom-widget draw trampoline.
+  m.def(
+      "dialog_run",
+      [](const std::string &title, const std::string &message,
+         const std::vector<std::string> &buttons) {
+        std::vector<const char *> ptrs;
+        ptrs.reserve(buttons.size());
+        for (const auto &b : buttons) ptrs.push_back(b.c_str());
+        return gtcaca_dialog_run(title.c_str(), message.c_str(),
+                                 ptrs.empty() ? nullptr : ptrs.data(),
+                                 static_cast<int>(ptrs.size()));
+      },
+      py::arg("title"), py::arg("message"), py::arg("buttons"),
+      "Modal dialog with a row of buttons; returns the chosen index, or -1 if\n"
+      "cancelled with ESC.");
+  m.def(
+      "dialog_confirm",
+      [](const std::string &title, const std::string &message) {
+        return gtcaca_dialog_confirm(title.c_str(), message.c_str()) != 0;
+      },
+      py::arg("title"), py::arg("message"),
+      "Modal OK/Cancel dialog; True if the user chose OK.");
+  m.def(
+      "dialog_message",
+      [](const std::string &title, const std::string &message) {
+        gtcaca_dialog_message(title.c_str(), message.c_str());
+      },
+      py::arg("title"), py::arg("message"),
+      "Modal dialog with a single OK button.");
 
   // -- custom widget (canvas escape hatch) ---------------------------------
   {
