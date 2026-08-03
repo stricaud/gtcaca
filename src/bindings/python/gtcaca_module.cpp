@@ -201,6 +201,86 @@ GTCACA_VALUE_TRAMPOLINE(tramp_expander, gtcaca_expander_widget_t, int, v != 0)
 GTCACA_VALUE_TRAMPOLINE(tramp_scale, gtcaca_scale_widget_t, double, v)
 GTCACA_VALUE_TRAMPOLINE(tramp_spinbutton, gtcaca_spinbutton_widget_t, double, v)
 
+// Per-cell colour hook for the hexview.  This runs for every painted byte, so
+// it stays as cheap as a dict lookup plus one Python call; a model that needs
+// more should precompute and close over the result.
+static std::unordered_map<const void *, py::function> &g_cell_cbs =
+    *new std::unordered_map<const void *, py::function>();
+
+static int tramp_hexview_cell(gtcaca_hexview_widget_t *h, long offset, int is_ascii,
+                              uint16_t *fg, uint16_t *bg, void * /*ud*/) {
+  py::gil_scoped_acquire gil;
+  auto it = g_cell_cbs.find(static_cast<const void *>(h));
+  if (it == g_cell_cbs.end())
+    return 0;
+  try {
+    py::object r = it->second(offset, is_ascii != 0);
+    if (r.is_none())
+      return 0;
+    auto pair = r.cast<std::pair<int, int>>();
+    *fg = (uint16_t)(pair.first & 0x0FFF);
+    *bg = (uint16_t)(pair.second & 0x0FFF);
+    return 1;
+  } catch (py::error_already_set &e) {
+    e.discard_as_unraisable("gtcaca_hexview_cell");
+  }
+  return 0;
+}
+
+// Editing and data-provider hooks, all keyed by widget pointer.
+static std::unordered_map<const void *, py::function> &g_edit_cbs =
+    *new std::unordered_map<const void *, py::function>();
+static std::unordered_map<const void *, py::function> &g_splice_cbs =
+    *new std::unordered_map<const void *, py::function>();
+static std::unordered_map<const void *, py::function> &g_read_cbs =
+    *new std::unordered_map<const void *, py::function>();
+
+static int tramp_hexview_edit(gtcaca_hexview_widget_t *h, long offset, uint8_t value,
+                              void * /*ud*/) {
+  py::gil_scoped_acquire gil;
+  auto it = g_edit_cbs.find(static_cast<const void *>(h));
+  if (it == g_edit_cbs.end())
+    return 0;
+  try {
+    return py::cast<bool>(it->second(offset, (int)value)) ? 1 : 0;
+  } catch (py::error_already_set &e) {
+    e.discard_as_unraisable("gtcaca_hexview_edit");
+  }
+  return 0;
+}
+
+static int tramp_hexview_splice(gtcaca_hexview_widget_t *h, long offset, int is_insert,
+                                void * /*ud*/) {
+  py::gil_scoped_acquire gil;
+  auto it = g_splice_cbs.find(static_cast<const void *>(h));
+  if (it == g_splice_cbs.end())
+    return 0;
+  try {
+    return py::cast<bool>(it->second(offset, is_insert != 0)) ? 1 : 0;
+  } catch (py::error_already_set &e) {
+    e.discard_as_unraisable("gtcaca_hexview_splice");
+  }
+  return 0;
+}
+
+static long tramp_hexview_read(gtcaca_hexview_widget_t *h, long offset, uint8_t *out,
+                               long n, void * /*ud*/) {
+  py::gil_scoped_acquire gil;
+  auto it = g_read_cbs.find(static_cast<const void *>(h));
+  if (it == g_read_cbs.end())
+    return 0;
+  try {
+    auto chunk = it->second(offset, n).cast<std::string>();
+    long got = (long)chunk.size();
+    if (got > n) got = n;
+    memcpy(out, chunk.data(), (size_t)got);
+    return got;
+  } catch (py::error_already_set &e) {
+    e.discard_as_unraisable("gtcaca_hexview_read");
+  }
+  return 0;
+}
+
 // The calendar marker callback carries no widget pointer, so its Python
 // callable travels in the userdata, like menu actions do.
 static std::deque<py::function> &g_cal_cbs = *new std::deque<py::function>();
@@ -1196,7 +1276,7 @@ PYBIND11_MODULE(_gtcaca, m) {
         [](gtcaca_hexview_widget_t *h, py::buffer buf) {
           py::buffer_info info = buf.request();
           gtcaca_hexview_set_data(h, static_cast<const uint8_t *>(info.ptr),
-                                  (int)(info.size * info.itemsize));
+                                  (long)(info.size * info.itemsize));
         },
         py::arg("data"),
         "Show `data` (bytes / any buffer). The buffer is NOT copied by the C\n"
@@ -1204,12 +1284,155 @@ PYBIND11_MODULE(_gtcaca, m) {
         py::keep_alive<1, 2>());
     c.def("set_highlight", &gtcaca_hexview_set_highlight, py::arg("off"), py::arg("len"));
     c.def("cursor", &gtcaca_hexview_cursor);
+    c.def("set_cursor", &gtcaca_hexview_set_cursor, py::arg("off"),
+          "Move the cursor from the application, scrolling it into view.");
+    c.def(
+        "on_cell",
+        [](gtcaca_hexview_widget_t *h, py::object cb) {
+          if (cb.is_none()) {
+            g_cell_cbs.erase(static_cast<const void *>(h));
+            gtcaca_hexview_set_cell_cb(h, nullptr, nullptr);
+            return;
+          }
+          g_cell_cbs[static_cast<const void *>(h)] = cb.cast<py::function>();
+          gtcaca_hexview_set_cell_cb(h, tramp_hexview_cell, nullptr);
+        },
+        py::arg("callback"),
+        "Per-cell colour hook: callback(offset, is_ascii) -> (fg, bg) | None,\n"
+        "with 12-bit 0xRGB colours.  Returning None uses the widget's own\n"
+        "colouring.  Called for every painted byte, so keep it cheap.\n"
+        "Pass None to remove the hook.");
     c.def("set_title", [](gtcaca_hexview_widget_t *h, const std::string &t) {
       gtcaca_hexview_set_title(h, t.c_str());
     }, py::arg("title"));
     c.def("key", [](gtcaca_hexview_widget_t *h, int key) {
       return gtcaca_hexview_key(h, key, nullptr);
     }, py::arg("key"));
+    c.def("__len__", &gtcaca_hexview_length);
+    // -- cursor / selection
+    c.def("nibble", &gtcaca_hexview_nibble, "1 while the low nibble is being typed.");
+    c.def("set_nibble", [](gtcaca_hexview_widget_t *h, bool low) {
+      gtcaca_hexview_set_nibble(h, low ? 1 : 0);
+    }, py::arg("low"));
+    c.def("pane", [](gtcaca_hexview_widget_t *h) {
+      return gtcaca_hexview_pane(h) != 0;
+    }, "True when the cursor is in the ASCII pane.");
+    c.def("set_pane", [](gtcaca_hexview_widget_t *h, bool ascii_pane) {
+      gtcaca_hexview_set_pane(h, ascii_pane ? 1 : 0);
+    }, py::arg("ascii_pane"));
+    c.def("set_selection", &gtcaca_hexview_set_selection, py::arg("anchor"), py::arg("caret"));
+    c.def("clear_selection", &gtcaca_hexview_clear_selection);
+    c.def(
+        "selection",
+        [](gtcaca_hexview_widget_t *h) -> py::object {
+          long lo = 0, hi = 0;
+          if (!gtcaca_hexview_selection(h, &lo, &hi))
+            return py::none();
+          return py::make_tuple(lo, hi);
+        },
+        "Inclusive (lo, hi), or None.");
+    // -- appearance
+    c.def("set_bytes_per_row", &gtcaca_hexview_set_bytes_per_row, py::arg("n"),
+          "0 fits as many as the width allows.");
+    c.def("bytes_per_row", &gtcaca_hexview_bytes_per_row, "The effective value.");
+    c.def("set_group_size", &gtcaca_hexview_set_group_size, py::arg("bytes"),
+          "Blank column every N bytes; 0 disables grouping.");
+    c.def("set_base_addr", &gtcaca_hexview_set_base_addr, py::arg("base"));
+    c.def("set_addr_digits", &gtcaca_hexview_set_addr_digits, py::arg("digits"),
+          "0 derives the width from the data length.");
+    c.def("set_show_ascii", [](gtcaca_hexview_widget_t *h, bool on) {
+      gtcaca_hexview_set_show_ascii(h, on ? 1 : 0);
+    }, py::arg("on"));
+    c.def("set_box", [](gtcaca_hexview_widget_t *h, bool on) {
+      gtcaca_hexview_set_box(h, on ? 1 : 0);
+    }, py::arg("on"), "Draw the surrounding box (off for a borderless pane).");
+    // -- tags
+    c.def(
+        "add_tag",
+        [](gtcaca_hexview_widget_t *h, long off, long len, int fg, int bg,
+           const std::string &name) {
+          return gtcaca_hexview_add_tag(h, off, len, (uint16_t)fg, (uint16_t)bg,
+                                        name.empty() ? nullptr : name.c_str());
+        },
+        py::arg("off"), py::arg("len"), py::arg("fg"), py::arg("bg"),
+        py::arg("name") = std::string(""),
+        "A named, coloured region (12-bit 0xRGB). Later tags paint over earlier.");
+    c.def("clear_tags", &gtcaca_hexview_clear_tags);
+    c.def(
+        "tag_at",
+        [](gtcaca_hexview_widget_t *h, long off) -> py::object {
+          const char *n = gtcaca_hexview_tag_at(h, off);
+          return n ? py::cast(std::string(n)) : py::none();
+        },
+        py::arg("off"));
+    // -- editing
+    c.def("set_editable", [](gtcaca_hexview_widget_t *h, bool on) {
+      gtcaca_hexview_set_editable(h, on ? 1 : 0);
+    }, py::arg("on"));
+    c.def("editable", [](gtcaca_hexview_widget_t *h) {
+      return gtcaca_hexview_editable(h) != 0;
+    });
+    c.def("set_insert_mode", [](gtcaca_hexview_widget_t *h, bool on) {
+      gtcaca_hexview_set_insert_mode(h, on ? 1 : 0);
+    }, py::arg("on"));
+    c.def("insert_mode", [](gtcaca_hexview_widget_t *h) {
+      return gtcaca_hexview_insert_mode(h) != 0;
+    });
+    c.def(
+        "on_edit",
+        [](gtcaca_hexview_widget_t *h, py::object cb) {
+          if (cb.is_none()) {
+            g_edit_cbs.erase(static_cast<const void *>(h));
+            gtcaca_hexview_set_edit_cb(h, nullptr, nullptr);
+            return;
+          }
+          g_edit_cbs[static_cast<const void *>(h)] = cb.cast<py::function>();
+          gtcaca_hexview_set_edit_cb(h, tramp_hexview_edit, nullptr);
+        },
+        py::arg("callback"),
+        "callback(offset, value) -> bool: a byte was typed over. Return True to\n"
+        "accept; the widget never mutates the data itself, so the application\n"
+        "keeps its own undo history and model.");
+    c.def(
+        "on_splice",
+        [](gtcaca_hexview_widget_t *h, py::object cb) {
+          if (cb.is_none()) {
+            g_splice_cbs.erase(static_cast<const void *>(h));
+            gtcaca_hexview_set_splice_cb(h, nullptr, nullptr);
+            return;
+          }
+          g_splice_cbs[static_cast<const void *>(h)] = cb.cast<py::function>();
+          gtcaca_hexview_set_splice_cb(h, tramp_hexview_splice, nullptr);
+        },
+        py::arg("callback"),
+        "callback(offset, is_insert) -> bool: insert or delete one byte.\n"
+        "Call set_data() again afterwards if the buffer moved.");
+    // -- provider
+    c.def(
+        "on_read",
+        [](gtcaca_hexview_widget_t *h, py::object cb, long len) {
+          if (cb.is_none()) {
+            g_read_cbs.erase(static_cast<const void *>(h));
+            gtcaca_hexview_set_read_cb(h, nullptr, nullptr, 0);
+            return;
+          }
+          g_read_cbs[static_cast<const void *>(h)] = cb.cast<py::function>();
+          gtcaca_hexview_set_read_cb(h, tramp_hexview_read, nullptr, len);
+        },
+        py::arg("callback"), py::arg("length"),
+        "callback(offset, n) -> bytes: serve data the widget does not hold, for\n"
+        "files bigger than memory. Replaces set_data().");
+    // -- search
+    c.def(
+        "find",
+        [](gtcaca_hexview_widget_t *h, py::buffer needle, long from, bool backwards) {
+          py::buffer_info info = needle.request();
+          return gtcaca_hexview_find(h, static_cast<const uint8_t *>(info.ptr),
+                                     (int)(info.size * info.itemsize), from,
+                                     backwards ? 1 : 0);
+        },
+        py::arg("needle"), py::arg("from_offset") = 0, py::arg("backwards") = false,
+        "Offset of the match, or -1. Wrapping is the caller's business.");
   }
   m.def(
       "hexview_new",
@@ -2374,4 +2597,7 @@ PYBIND11_MODULE(_gtcaca, m) {
   m.attr("KEY_F8") = (int)CACA_KEY_F8;
   m.attr("KEY_F9") = (int)CACA_KEY_F9;
   m.attr("KEY_F10") = (int)CACA_KEY_F10;
+  m.attr("KEY_F11") = (int)CACA_KEY_F11;
+  m.attr("KEY_F12") = (int)CACA_KEY_F12;
+  m.attr("KEY_INSERT") = (int)CACA_KEY_INSERT;
 }
