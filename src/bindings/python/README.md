@@ -358,16 +358,109 @@ tr.select(3)
 print(tr.selected_node(), tr.visible_count())
 ```
 
-### HexView
+### HexView — byte viewer *and* editor
+
+As a viewer:
 
 ```python
-hv = gt.hexview_new(win, 0, 1, 70, 20)
+hv = gt.hexview_new(win, 0, 1, 78, 20)
 data = open("file.bin", "rb").read()
 hv.set_data(data)            # keep `data` alive: the widget does not copy it
-hv.set_highlight(16, 8)
+hv.set_highlight(16, 8)      # one reverse-video range
 hv.set_title("file.bin")
-hv.key(gt.KEY_DOWN)
-print(hv.cursor())
+hv.key(gt.KEY_DOWN)          # arrows/page/home/end move, TAB swaps panes
+print(hv.cursor(), len(hv))
+```
+
+**Layout** — every dimension is adjustable:
+
+```python
+hv.set_bytes_per_row(0)      # 0 = fit as many as the width allows
+hv.bytes_per_row()           # the effective value
+hv.set_group_size(4)         # blank column every 4 bytes (0 = no grouping)
+hv.set_addr_digits(8)        # 0 = derive from the data length
+hv.set_base_addr(0x400000)   # show file offsets as load addresses
+hv.set_show_ascii(False)     # hex only
+hv.set_box(False)            # borderless, for a full-width pane
+```
+
+**Colouring** — one hook, called for every painted byte (twice: hex cell and
+ASCII cell). Returning `None` falls through to the widget's own colouring, which
+is cursor → selection → tags → highlight range.
+
+```python
+def cell(off, is_ascii):
+    if off in bookmarks:
+        return (0x000, 0xF66)          # 12-bit 0xRGB
+    return None
+
+hv.on_cell(cell)
+hv.on_cell(None)                       # remove
+```
+
+Named coloured regions, for bookmarks or parsed fields — later tags paint over
+earlier ones:
+
+```python
+hv.add_tag(0, 8, 0xFFF, 0x006, "header")
+hv.add_tag(4, 2, 0x000, 0x0F0, "length")
+print(hv.tag_at(4))                    # "length"
+hv.clear_tags()
+```
+
+**Cursor and selection:**
+
+```python
+hv.set_cursor(0x100); hv.cursor()
+hv.set_pane(True); hv.pane()           # True = ASCII pane
+hv.set_nibble(True); hv.nibble()       # which half-byte is being typed
+hv.set_selection(10, 40); hv.selection()   # -> (10, 40) inclusive
+hv.clear_selection()
+```
+
+**Editing.** The widget never mutates the bytes. It reports the intended change
+and your code applies it — which is what lets an application keep its own undo
+history, layers, or a memory-mapped file behind the view:
+
+```python
+buf = bytearray(open("file.bin", "rb").read())
+
+def on_edit(off, value):        # a byte was typed over
+    buf[off] = value
+    return True                 # False rejects it; the cursor does not advance
+
+def on_splice(off, is_insert):  # one byte inserted or deleted
+    buf.insert(off, 0) if is_insert else buf.pop(off)
+    hv.set_data(buf)            # re-point: the buffer may have moved
+    return True
+
+hv.set_editable(True)
+hv.on_edit(on_edit)
+hv.on_splice(on_splice)
+hv.set_insert_mode(True)        # INSERT toggles it too
+```
+
+Once editable, `key()` also handles hex digits (two nibbles per byte), printable
+ASCII in the ASCII pane, DELETE, BACKSPACE and INSERT.
+
+**Large data.** Instead of a flat buffer, serve bytes on demand — for files
+bigger than memory, a remote target, or a stream decompressed as you scroll:
+
+```python
+fh = open("huge.iso", "rb")
+def read(off, n):
+    fh.seek(off)
+    return fh.read(n)
+
+hv.on_read(read, os.path.getsize("huge.iso"))    # replaces set_data()
+```
+
+**Search:**
+
+```python
+hv.find(b"\x89PNG")                       # -> offset, or -1
+hv.find(b"PNG", from_offset=100)
+hv.find(b"PNG", from_offset=len(hv), backwards=True)
 ```
 
 ---
