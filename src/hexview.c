@@ -7,14 +7,18 @@
 #include <gtcaca/hexview.h>
 #include <gtcaca/main.h>
 
-/* Colours the widget falls back on when the application installs no cell hook.
-   Kept as 12-bit RGB so every path through _pen() speaks one language. */
+/* Every file-static here carries an _hv_ prefix on purpose: <caca.h> drags in
+   <unistd.h> on mingw, which declares the MSVCRT _read/_write, and plain
+   `_read`/`_write` helpers collide with them at compile time on Windows.
+
+   Colours the widget falls back on when the application installs no cell hook.
+   Kept as 12-bit RGB so every path through _hv_pen() speaks one language. */
 #define RGB_WHITE   0xFFF
 #define RGB_BLACK   0x000
 #define RGB_CYAN    0x0CC
 #define RGB_SELBG   0x448
 
-static long _clamp(long v, long lo, long hi)
+static long _hv_clamp(long v, long lo, long hi)
 {
   if (v < lo) return lo;
   if (v > hi) return hi;
@@ -25,7 +29,7 @@ static long _clamp(long v, long lo, long hi)
 
 /* Read up to `n` bytes at `off` into `out`; returns how many. Hides whether the
    bytes come from a borrowed buffer or an application provider. */
-static long _read(gtcaca_hexview_widget_t *h, long off, uint8_t *out, long n)
+static long _hv_read(gtcaca_hexview_widget_t *h, long off, uint8_t *out, long n)
 {
   if (off < 0 || off >= h->len) return 0;
   if (n > h->len - off) n = h->len - off;
@@ -37,14 +41,14 @@ static long _read(gtcaca_hexview_widget_t *h, long off, uint8_t *out, long n)
   return n;
 }
 
-static int _byte(gtcaca_hexview_widget_t *h, long off, uint8_t *out)
+static int _hv_byte(gtcaca_hexview_widget_t *h, long off, uint8_t *out)
 {
-  return _read(h, off, out, 1) == 1;
+  return _hv_read(h, off, out, 1) == 1;
 }
 
 /* ── layout ────────────────────────────────────────────────────────────────*/
 
-static int _addr_digits(gtcaca_hexview_widget_t *h)
+static int _hv_addr_digits(gtcaca_hexview_widget_t *h)
 {
   long max;
   int d;
@@ -56,7 +60,7 @@ static int _addr_digits(gtcaca_hexview_widget_t *h)
 }
 
 /* Columns one row of `bpr` bytes needs, given the current options. */
-static int _row_width(gtcaca_hexview_widget_t *h, int bpr, int addr_w)
+static int _hv_row_width(gtcaca_hexview_widget_t *h, int bpr, int addr_w)
 {
   int gaps = (h->group_size > 0 && bpr > h->group_size)
                  ? (bpr - 1) / h->group_size
@@ -68,36 +72,36 @@ static int _row_width(gtcaca_hexview_widget_t *h, int bpr, int addr_w)
 }
 
 /* Effective bytes per row: the configured value, or the widest that fits. */
-static int _bpr(gtcaca_hexview_widget_t *h)
+static int _hv_bpr(gtcaca_hexview_widget_t *h)
 {
   int inner, addr_w, step, n, best;
   if (h->bytes_per_row > 0)
     return h->bytes_per_row > GTCACA_HEXVIEW_MAX_BPR ? GTCACA_HEXVIEW_MAX_BPR
                                                      : h->bytes_per_row;
   inner = h->show_box ? h->width - 2 : h->width;
-  addr_w = _addr_digits(h);
+  addr_w = _hv_addr_digits(h);
   step = h->group_size > 0 ? h->group_size : 1;
   best = step;
   for (n = step; n <= GTCACA_HEXVIEW_MAX_BPR; n += step)
-    if (_row_width(h, n, addr_w) <= inner) best = n;
+    if (_hv_row_width(h, n, addr_w) <= inner) best = n;
   return best;
 }
 
 int gtcaca_hexview_bytes_per_row(gtcaca_hexview_widget_t *h)
 {
-  return h ? _bpr(h) : 0;
+  return h ? _hv_bpr(h) : 0;
 }
 
-static int _rows(gtcaca_hexview_widget_t *h)
+static int _hv_rows(gtcaca_hexview_widget_t *h)
 {
   int r = h->show_box ? h->height - 2 : h->height;
   return r > 0 ? r : 1;
 }
 
 /* Scroll so `off` is on screen. */
-static void _reveal(gtcaca_hexview_widget_t *h, long off)
+static void _hv_reveal(gtcaca_hexview_widget_t *h, long off)
 {
-  int rows = _rows(h), bpr = _bpr(h);
+  int rows = _hv_rows(h), bpr = _hv_bpr(h);
   long row = off / bpr;
   if (row < h->top) h->top = row;
   else if (row >= h->top + rows) h->top = row - rows + 1;
@@ -172,7 +176,7 @@ void gtcaca_hexview_set_data(gtcaca_hexview_widget_t *h, const uint8_t *data, lo
   h->data = data;
   h->read_cb = NULL;
   h->len = len < 0 ? 0 : len;
-  if (h->top * _bpr(h) >= h->len) h->top = 0;
+  if (h->top * _hv_bpr(h) >= h->len) h->top = 0;
   if (h->cursor >= h->len) h->cursor = h->len > 0 ? h->len - 1 : 0;
   if (h->anchor >= h->len) h->anchor = -1;
 }
@@ -201,9 +205,9 @@ int gtcaca_hexview_cursor(gtcaca_hexview_widget_t *h)
 void gtcaca_hexview_set_cursor(gtcaca_hexview_widget_t *h, long off)
 {
   if (!h || h->len <= 0) return;
-  h->cursor = _clamp(off, 0, h->len - 1);
+  h->cursor = _hv_clamp(off, 0, h->len - 1);
   h->nibble = 0;
-  _reveal(h, h->cursor);
+  _hv_reveal(h, h->cursor);
 }
 
 int  gtcaca_hexview_nibble(gtcaca_hexview_widget_t *h) { return h ? h->nibble : 0; }
@@ -223,9 +227,9 @@ void gtcaca_hexview_set_pane(gtcaca_hexview_widget_t *h, int ascii_pane)
 void gtcaca_hexview_set_selection(gtcaca_hexview_widget_t *h, long anchor, long caret)
 {
   if (!h || h->len <= 0) return;
-  h->anchor = _clamp(anchor, 0, h->len - 1);
-  h->cursor = _clamp(caret, 0, h->len - 1);
-  _reveal(h, h->cursor);
+  h->anchor = _hv_clamp(anchor, 0, h->len - 1);
+  h->cursor = _hv_clamp(caret, 0, h->len - 1);
+  _hv_reveal(h, h->cursor);
 }
 
 void gtcaca_hexview_clear_selection(gtcaca_hexview_widget_t *h)
@@ -283,7 +287,7 @@ void gtcaca_hexview_set_highlight(gtcaca_hexview_widget_t *h, long off, long len
   if (!h) return;
   h->hl_off = off;
   h->hl_len = len;
-  if (len > 0 && off >= 0) _reveal(h, off);
+  if (len > 0 && off >= 0) _hv_reveal(h, off);
 }
 
 int gtcaca_hexview_add_tag(gtcaca_hexview_widget_t *h, long off, long len,
@@ -317,7 +321,7 @@ void gtcaca_hexview_clear_tags(gtcaca_hexview_widget_t *h)
 }
 
 /* The last tag wins, so a tag added later paints over an earlier one. */
-static const gtcaca_hexview_tag_t *_tag_at(gtcaca_hexview_widget_t *h, long off)
+static const gtcaca_hexview_tag_t *_hv_tag_at(gtcaca_hexview_widget_t *h, long off)
 {
   int i;
   for (i = h->n_tags - 1; i >= 0; i--)
@@ -330,7 +334,7 @@ const char *gtcaca_hexview_tag_at(gtcaca_hexview_widget_t *h, long off)
 {
   const gtcaca_hexview_tag_t *t;
   if (!h) return NULL;
-  t = _tag_at(h, off);
+  t = _hv_tag_at(h, off);
   return t ? t->name : NULL;
 }
 
@@ -340,8 +344,8 @@ void gtcaca_hexview_set_top(gtcaca_hexview_widget_t *h, long row)
 {
   long last;
   if (!h || h->len <= 0) return;
-  last = (h->len - 1) / _bpr(h);          /* last row that holds a byte */
-  h->top = _clamp(row, 0, last);
+  last = (h->len - 1) / _hv_bpr(h);          /* last row that holds a byte */
+  h->top = _hv_clamp(row, 0, last);
 }
 
 void gtcaca_hexview_scroll(gtcaca_hexview_widget_t *h, int rows)
@@ -399,7 +403,7 @@ long gtcaca_hexview_find(gtcaca_hexview_widget_t *h, const uint8_t *needle,
     if (from > h->len - nlen) from = h->len - nlen;
     for (i = from; i >= 0; i--) {
       for (j = 0; j < nlen; j++)
-        if (!_byte(h, i + j, &b) || b != needle[j]) break;
+        if (!_hv_byte(h, i + j, &b) || b != needle[j]) break;
       if (j == nlen) return i;
     }
     return -1;
@@ -407,7 +411,7 @@ long gtcaca_hexview_find(gtcaca_hexview_widget_t *h, const uint8_t *needle,
   if (from < 0) from = 0;
   for (i = from; i <= h->len - nlen; i++) {
     for (j = 0; j < nlen; j++)
-      if (!_byte(h, i + j, &b) || b != needle[j]) break;
+      if (!_hv_byte(h, i + j, &b) || b != needle[j]) break;
     if (j == nlen) return i;
   }
   return -1;
@@ -417,7 +421,7 @@ long gtcaca_hexview_find(gtcaca_hexview_widget_t *h, const uint8_t *needle,
 
 /* Set the pen for one byte cell. The application's hook wins outright; without
    it the order is cursor, selection, tag, highlight range, theme. */
-static void _pen(gtcaca_hexview_widget_t *h, long idx, int is_ascii,
+static void _hv_pen(gtcaca_hexview_widget_t *h, long idx, int is_ascii,
                  uint8_t fg, uint8_t bg)
 {
   const gtcaca_hexview_tag_t *tag;
@@ -448,7 +452,7 @@ static void _pen(gtcaca_hexview_widget_t *h, long idx, int is_ascii,
     caca_set_color_argb(gmo.cv, 0xF000u | RGB_WHITE, 0xF000u | RGB_SELBG);
     return;
   }
-  if ((tag = _tag_at(h, idx)) != NULL) {
+  if ((tag = _hv_tag_at(h, idx)) != NULL) {
     caca_set_color_argb(gmo.cv, (uint16_t)(0xF000u | (tag->fg & 0x0FFFu)),
                         (uint16_t)(0xF000u | (tag->bg & 0x0FFFu)));
     return;
@@ -471,9 +475,9 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
 
   fg = h->has_focus ? h->color_focus_fg : h->color_nonfocus_fg;
   bg = h->has_focus ? h->color_focus_bg : h->color_nonfocus_bg;
-  bpr = _bpr(h);
-  rows = _rows(h);
-  addr_w = _addr_digits(h);
+  bpr = _hv_bpr(h);
+  rows = _hv_rows(h);
+  addr_w = _hv_addr_digits(h);
   x0 = h->show_box ? h->x + 1 : h->x;
   y0 = h->show_box ? h->y + 1 : h->y;
   right = h->x + h->width - (h->show_box ? 1 : 0);
@@ -494,7 +498,7 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
     int cx = x0, cy = y0 + r;
     if (base >= h->len) break;
 
-    got = _read(h, base, row, bpr);
+    got = _hv_read(h, base, row, bpr);
 
     caca_set_color_ansi(gmo.cv, fg, bg);
     snprintf(tmp, sizeof tmp, "%0*lx", addr_w, (unsigned long)(h->base_addr + base));
@@ -509,7 +513,7 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
       if (cx + 2 > right) break;
       if (i < got) {
         snprintf(tmp, sizeof tmp, "%02x", row[i]);
-        _pen(h, base + i, 0, fg, bg);
+        _hv_pen(h, base + i, 0, fg, bg);
         caca_put_char(gmo.cv, cx, cy, tmp[0]);
         caca_put_char(gmo.cv, cx + 1, cy, tmp[1]);
       }
@@ -523,7 +527,7 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
     for (i = 0; i < got; i++) {
       uint8_t b = row[i];
       if (cx >= right - 1) break;
-      _pen(h, base + i, 1, fg, bg);
+      _hv_pen(h, base + i, 1, fg, bg);
       caca_put_char(gmo.cv, cx, cy, (b >= 32 && b < 127) ? (char)b : '.');
       cx += 1;
     }
@@ -534,7 +538,7 @@ void gtcaca_hexview_draw(gtcaca_hexview_widget_t *h)
 
 /* ── keys ──────────────────────────────────────────────────────────────────*/
 
-static int _hexval(int key)
+static int _hv_hexval(int key)
 {
   if (key >= '0' && key <= '9') return key - '0';
   if (key >= 'a' && key <= 'f') return key - 'a' + 10;
@@ -543,19 +547,19 @@ static int _hexval(int key)
 }
 
 /* Ask the application to put `value` at `off`; returns whether it accepted. */
-static int _write(gtcaca_hexview_widget_t *h, long off, uint8_t value)
+static int _hv_write(gtcaca_hexview_widget_t *h, long off, uint8_t value)
 {
   if (!h->edit_cb) return 0;
   return h->edit_cb(h, off, value, h->edit_ud) != 0;
 }
 
-static int _splice(gtcaca_hexview_widget_t *h, long off, int is_insert)
+static int _hv_splice(gtcaca_hexview_widget_t *h, long off, int is_insert)
 {
   if (!h->splice_cb) return 0;
   return h->splice_cb(h, off, is_insert, h->splice_ud) != 0;
 }
 
-static int _key_edit(gtcaca_hexview_widget_t *h, int key)
+static int _hv_key_edit(gtcaca_hexview_widget_t *h, int key)
 {
   uint8_t cur = 0;
   int v;
@@ -565,46 +569,46 @@ static int _key_edit(gtcaca_hexview_widget_t *h, int key)
     return 1;
   }
   if (key == CACA_KEY_DELETE) {
-    if (_splice(h, h->cursor, 0)) {
+    if (_hv_splice(h, h->cursor, 0)) {
       if (h->cursor >= h->len && h->cursor > 0) h->cursor--;
       h->nibble = 0;
     }
     return 1;
   }
   if (key == CACA_KEY_BACKSPACE) {
-    if (h->cursor > 0 && _splice(h, h->cursor - 1, 0)) {
+    if (h->cursor > 0 && _hv_splice(h, h->cursor - 1, 0)) {
       h->cursor--;
       h->nibble = 0;
-      _reveal(h, h->cursor);
+      _hv_reveal(h, h->cursor);
     }
     return 1;
   }
 
   if (h->ascii_pane) {
     if (key < 32 || key > 126) return 0;
-    if (h->insert_mode && !_splice(h, h->cursor, 1)) return 1;
-    if (_write(h, h->cursor, (uint8_t)key) && h->cursor + 1 < h->len) {
+    if (h->insert_mode && !_hv_splice(h, h->cursor, 1)) return 1;
+    if (_hv_write(h, h->cursor, (uint8_t)key) && h->cursor + 1 < h->len) {
       h->cursor++;
-      _reveal(h, h->cursor);
+      _hv_reveal(h, h->cursor);
     }
     return 1;
   }
 
-  v = _hexval(key);
+  v = _hv_hexval(key);
   if (v < 0) return 0;
   /* A fresh byte is only spliced in on the high nibble, so typing both digits
      of one byte inserts once rather than twice. */
-  if (h->insert_mode && h->nibble == 0 && !_splice(h, h->cursor, 1)) return 1;
-  _byte(h, h->cursor, &cur);
+  if (h->insert_mode && h->nibble == 0 && !_hv_splice(h, h->cursor, 1)) return 1;
+  _hv_byte(h, h->cursor, &cur);
   if (h->nibble == 0) {
-    if (_write(h, h->cursor, (uint8_t)((v << 4) | (cur & 0x0F))))
+    if (_hv_write(h, h->cursor, (uint8_t)((v << 4) | (cur & 0x0F))))
       h->nibble = 1;
   } else {
-    if (_write(h, h->cursor, (uint8_t)((cur & 0xF0) | v))) {
+    if (_hv_write(h, h->cursor, (uint8_t)((cur & 0xF0) | v))) {
       h->nibble = 0;
       if (h->cursor + 1 < h->len) {
         h->cursor++;
-        _reveal(h, h->cursor);
+        _hv_reveal(h, h->cursor);
       }
     }
   }
@@ -618,8 +622,8 @@ int gtcaca_hexview_key(gtcaca_hexview_widget_t *h, int key, void *userdata)
   (void)userdata;
   if (!h || h->len <= 0) return 0;
 
-  rows = _rows(h);
-  bpr = _bpr(h);
+  rows = _hv_rows(h);
+  bpr = _hv_bpr(h);
   c = h->cursor;
 
   switch (key) {
@@ -637,11 +641,11 @@ int gtcaca_hexview_key(gtcaca_hexview_widget_t *h, int key, void *userdata)
     h->nibble = 0;
     return 1;
   default:
-    return h->editable ? _key_edit(h, key) : 0;
+    return h->editable ? _hv_key_edit(h, key) : 0;
   }
 
-  h->cursor = _clamp(c, 0, h->len - 1);
+  h->cursor = _hv_clamp(c, 0, h->len - 1);
   h->nibble = 0;
-  _reveal(h, h->cursor);
+  _hv_reveal(h, h->cursor);
   return 1;
 }
