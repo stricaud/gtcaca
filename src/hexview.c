@@ -334,6 +334,21 @@ const char *gtcaca_hexview_tag_at(gtcaca_hexview_widget_t *h, long off)
   return t ? t->name : NULL;
 }
 
+long gtcaca_hexview_top(gtcaca_hexview_widget_t *h) { return h ? h->top : 0; }
+
+void gtcaca_hexview_set_top(gtcaca_hexview_widget_t *h, long row)
+{
+  long last;
+  if (!h || h->len <= 0) return;
+  last = (h->len - 1) / _bpr(h);          /* last row that holds a byte */
+  h->top = _clamp(row, 0, last);
+}
+
+void gtcaca_hexview_scroll(gtcaca_hexview_widget_t *h, int rows)
+{
+  if (h) gtcaca_hexview_set_top(h, h->top + rows);
+}
+
 void gtcaca_hexview_set_cell_cb(gtcaca_hexview_widget_t *h,
                                 gtcaca_hexview_cell_cb cb, void *userdata)
 {

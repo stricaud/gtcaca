@@ -129,6 +129,11 @@ long gtcaca_hexview_length(gtcaca_hexview_widget_t *h);
 /* ── cursor and selection ──────────────────────────────────────────────────*/
 int  gtcaca_hexview_cursor(gtcaca_hexview_widget_t *h);   /* -1 if no data */
 void gtcaca_hexview_set_cursor(gtcaca_hexview_widget_t *h, long off);
+/* Scroll by whole rows without touching the cursor — what a mouse wheel wants.
+ * Positive scrolls down. Clamped so at least one row stays on screen. */
+void gtcaca_hexview_scroll(gtcaca_hexview_widget_t *h, int rows);
+long gtcaca_hexview_top(gtcaca_hexview_widget_t *h);
+void gtcaca_hexview_set_top(gtcaca_hexview_widget_t *h, long row);
 int  gtcaca_hexview_nibble(gtcaca_hexview_widget_t *h);
 void gtcaca_hexview_set_nibble(gtcaca_hexview_widget_t *h, int low);
 int  gtcaca_hexview_pane(gtcaca_hexview_widget_t *h);     /* 1 = ASCII pane */

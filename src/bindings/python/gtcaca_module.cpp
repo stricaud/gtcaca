@@ -1286,6 +1286,10 @@ PYBIND11_MODULE(_gtcaca, m) {
     c.def("cursor", &gtcaca_hexview_cursor);
     c.def("set_cursor", &gtcaca_hexview_set_cursor, py::arg("off"),
           "Move the cursor from the application, scrolling it into view.");
+    c.def("scroll", &gtcaca_hexview_scroll, py::arg("rows"),
+          "Scroll by whole rows without moving the cursor (positive = down).");
+    c.def("top", &gtcaca_hexview_top, "First visible row.");
+    c.def("set_top", &gtcaca_hexview_set_top, py::arg("row"));
     c.def(
         "on_cell",
         [](gtcaca_hexview_widget_t *h, py::object cb) {
