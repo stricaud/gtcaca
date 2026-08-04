@@ -241,6 +241,39 @@ void gtcaca_tree_select(gtcaca_tree_widget_t *t, void *target)
   if (t->top < 0) t->top = 0;
 }
 
+void gtcaca_tree_reveal(gtcaca_tree_widget_t *t, void *target)
+{
+  long path[64];
+  int plen, d, inner_h;
+  tnode *P;
+  long row, vis;
+  rowinfo ri;
+  if (!t || !t->model || !target) return;
+  plen = _find_path(t, NULL, target, path, 0, (int)(sizeof path / sizeof path[0]));
+  if (plen <= 0) return;
+
+  /* Unlike gtcaca_tree_select(), nothing is collapsed first: only the ancestors
+     on the path are opened, so folds the user set elsewhere survive. That is
+     what lets a view follow an external cursor without undoing their work. */
+  P = (tnode *)t->root;
+  for (d = 0; d < plen - 1; d++) {
+    tnode *C = tree_expand(t, P, path[d]);
+    if (!C) return;
+    P = C;
+  }
+
+  /* With other subtrees possibly open, the target's row is no longer arithmetic
+     — walk the flattened rows and match. */
+  vis = gtcaca_tree_visible_count(t);
+  for (row = 0; row < vis; row++)
+    if (_resolve(t, row, &ri) && ri.node == target) { t->sel = row; break; }
+
+  inner_h = t->height - 2;
+  if (t->sel < t->top) t->top = t->sel;
+  if (inner_h > 0 && t->sel >= t->top + inner_h) t->top = t->sel - inner_h + 1;
+  if (t->top < 0) t->top = 0;
+}
+
 void gtcaca_tree_draw(gtcaca_tree_widget_t *t)
 {
   uint8_t fg = gmo.theme.textview.fg, bg = gmo.theme.textview.bg;
@@ -333,6 +366,16 @@ int gtcaca_tree_key(gtcaca_tree_widget_t *t, int key, void *userdata)
       if (ri.self) _collapse(ri.parent, ri.self);
       else tree_expand(t, ri.parent, ri.index);
     }
+    break;
+  /* The row markers are drawn as '+' and '-', so those are the keys a user
+     reaches for first. Bind them to what they advertise. */
+  case '+':
+  case '=':                       /* same physical key, unshifted */
+    if (_resolve(t, t->sel, &ri) && ri.has_kids && !ri.self)
+      tree_expand(t, ri.parent, ri.index);
+    break;
+  case '-':
+    if (_resolve(t, t->sel, &ri) && ri.self) _collapse(ri.parent, ri.self);
     break;
   default:
     return 0;

@@ -2143,6 +2143,10 @@ PYBIND11_MODULE(_gtcaca, m) {
     c.def("select", [](gtcaca_tree_widget_t *t, py::object node) {
       gtcaca_tree_select(t, py_to_node(node));
     }, py::arg("node"));
+    c.def("reveal", [](gtcaca_tree_widget_t *t, py::object node) {
+      gtcaca_tree_reveal(t, py_to_node(node));
+    }, py::arg("node"),
+       "Select `node`, opening only its ancestors and keeping other folds.");
     c.def("set_title", [](gtcaca_tree_widget_t *t, const std::string &s) {
       gtcaca_tree_set_title(t, s.c_str());
     }, py::arg("title"));

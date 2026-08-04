@@ -79,6 +79,10 @@ void *gtcaca_tree_selected_node(gtcaca_tree_widget_t *t);   /* model handle of s
  * node itself becomes the selected (highlighted) row and is scrolled into view.
  * No-op if the handle is not found in the model. */
 void  gtcaca_tree_select(gtcaca_tree_widget_t *t, void *node);
+/* Like select(), but non-destructive: opens only the ancestors on the path and
+ * leaves every other fold as the user left it. Use this when the tree follows
+ * an external cursor, so following does not undo their folding. */
+void  gtcaca_tree_reveal(gtcaca_tree_widget_t *t, void *node);
 void  gtcaca_tree_set_title(gtcaca_tree_widget_t *t, const char *title);
 void  gtcaca_tree_free(gtcaca_tree_widget_t *t);
 
