@@ -25,6 +25,12 @@ typedef struct _gmo_t gmo_t;
 
 extern gmo_t gmo;
 
+/* Directory holding the running executable, or NULL if it cannot be determined.
+   An application that ships data files beside its binary — grammars, themes,
+   help text — resolves them against this rather than against a prefix baked in
+   at compile time, which is what makes a relocatable bundle work. */
+const char *gtcaca_executable_dir(void);
+
 /* Key-event tag: a printable non-ASCII Unicode codepoint is delivered to key
    callbacks as (codepoint | GTCACA_KEY_UNICODE). The flag keeps codepoints in
    the Latin-Extended range (U+0111 'đ', U+0119 'ę', …) from being mistaken for
