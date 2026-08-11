@@ -24,6 +24,15 @@ Colour names: `black blue green cyan red magenta brown lightgray darkgray
 lightblue lightgreen lightcyan lightred lightmagenta yellow white`, plus
 `default` and `transparent`.
 
+`#` or `;` starts a comment, either as a whole line or after whitespace at the
+end of a value (`window_bg = blue   # the sky`). Preceded by whitespace, so a
+value may still *begin* with `#` — an application whose own keys take `#rrggbb`
+can share the file. Trailing blanks are trimmed, and a line with no `=` is
+ignored rather than running on into the next one.
+
+Keys gtcaca does not recognise are skipped, so an application is free to keep
+its own settings in the same file and parse it a second time for them.
+
 Widget names are the field names of `gtcaca_theme_t`: `default`, `window`,
 `windowfocus`, `text`, `textfocus`, `button`, `buttonfocus`, `entry`,
 `entryfocus`, `checkbox`, `checkboxfocus`, `progressbar`, `statusbar`,

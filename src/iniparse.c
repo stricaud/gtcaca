@@ -87,7 +87,7 @@ ini_t *ini_parse_buffer(char *buf, long size)
   char *keybuf;
   char *valuebuf;
   long tmppos;
-  typedef enum {UNKNOWN, READ_SECTION, READ_KEY, READ_VALUE} reader_t;
+  typedef enum {UNKNOWN, READ_SECTION, READ_KEY, READ_VALUE, READ_COMMENT} reader_t;
   reader_t reader = UNKNOWN;
   ini_t *ini;
 
@@ -128,11 +128,19 @@ ini_t *ini_parse_buffer(char *buf, long size)
       case '\r':
       case '\t':
 	break;
+      case '#':
+      case ';':
+	reader = READ_COMMENT;   /* comment line, to end of line */
+	break;
       case '[':
 	reader = READ_SECTION;
 	break;
       default:
-	buf--;
+	/* Re-examine this character as the first of a key. `pos` must step back
+	   with `buf`, or the two drift apart by one for every key in the file and
+	   the `pos < size` loop stops that many bytes short of the end — silently
+	   dropping whatever is at the tail. */
+	buf--; pos--;
 	reader = READ_KEY;
 	break;
       }
@@ -154,6 +162,10 @@ ini_t *ini_parse_buffer(char *buf, long size)
       break;
     case READ_KEY:
       switch(*buf) {
+      case '\n':                 /* no '=' on this line: not a pair, drop it */
+	tmppos = 0;
+	reader = UNKNOWN;
+	break;
       case '=':
 	keybuf[tmppos] = '\0';
 	tmppos = 0;
@@ -174,16 +186,28 @@ ini_t *ini_parse_buffer(char *buf, long size)
       }
       break;
     case READ_VALUE:
-      if (*buf == '\n') {
-	reader = UNKNOWN;
+      /* A '#' or ';' *after whitespace* ends the value: "blue   # the sky".
+         Preceded by whitespace, so a value may still start with '#' — an app
+         whose colours are "#rrggbb" keeps working. */
+      if (*buf == '\n' ||
+	  ((*buf == '#' || *buf == ';') && tmppos > 0 &&
+	   (valuebuf[tmppos-1] == ' ' || valuebuf[tmppos-1] == '\t'))) {
+	while (tmppos > 0 && (valuebuf[tmppos-1] == ' ' ||
+			      valuebuf[tmppos-1] == '\t' ||
+			      valuebuf[tmppos-1] == '\r')) {
+	  tmppos--;                /* trailing blanks would break every lookup */
+	}
 	valuebuf[tmppos] = '\0';
-	//	printf("value:[%s]\n", valuebuf);
 	_add_section_key_value(ini, sectionbuf, keybuf, valuebuf);
 	tmppos = 0;
+	reader = (*buf == '\n') ? UNKNOWN : READ_COMMENT;
       } else {
 	valuebuf[tmppos] = *buf;
 	tmppos++;
       }
+      break;
+    case READ_COMMENT:
+      if (*buf == '\n') { reader = UNKNOWN; }
       break;
     }
 
