@@ -134,6 +134,7 @@ static void _touched(gtcaca_editor_widget_t *w)
   w->colorize_dirty = 1;
   w->fold_dirty = 1;
   w->line_count_valid = 0;
+  w->edit_count++;
 }
 
 /* ── raw buffer ops (no undo, no caret adjust) ─────────────────────────────── */
@@ -616,6 +617,7 @@ void gtcaca_editor_set_text(gtcaca_editor_widget_t *w, const char *text)
   w->modified = 0;
   w->colorize_dirty = 1;
   w->line_count_valid = 0;
+  w->edit_count++;
   gtcaca_editor_autoc_cancel(w);
   gtcaca_editor_annotation_clear_all(w);
   w->lines_meta_len = 0;   /* metadata is rebuilt for the new document */
@@ -647,6 +649,8 @@ char gtcaca_editor_get_char_at(gtcaca_editor_widget_t *w, int pos)
 }
 
 void gtcaca_editor_set_save_point(gtcaca_editor_widget_t *w) { w->modified = 0; }
+unsigned gtcaca_editor_get_edit_count(gtcaca_editor_widget_t *w) { return w ? w->edit_count : 0u; }
+
 int  gtcaca_editor_get_modify(gtcaca_editor_widget_t *w)     { return w->modified; }
 void gtcaca_editor_set_line_numbers(gtcaca_editor_widget_t *w, int on) { w->show_line_numbers = on ? 1 : 0; }
 void gtcaca_editor_set_tab_width(gtcaca_editor_widget_t *w, int n) { w->tab_width = n > 0 ? n : 8; }

@@ -246,6 +246,7 @@ struct _gtcaca_editor_widget_t {
   int                   fold_dirty;           /* line visibility needs recompute */
   int                   line_count_cache;     /* cached newline count + 1 … */
   int                   line_count_valid;     /* … valid until the next text edit */
+  unsigned              edit_count;           /* bumped by every text change */
 };
 
 /* ── Construction ──────────────────────────────────────────────────────────── */
@@ -354,6 +355,19 @@ void gtcaca_editor_end_undo_action(gtcaca_editor_widget_t *w);
 /* ── State & display options ──────────────────────────────────────────────── */
 void gtcaca_editor_set_save_point(gtcaca_editor_widget_t *w); /* mark as unmodified */
 int  gtcaca_editor_get_modify(gtcaca_editor_widget_t *w);
+
+/* Defined since the edit counter was added, so callers can compile either way. */
+#define GTCACA_HAVE_EDIT_COUNT 1
+
+/* A number that changes whenever the text changes, and not otherwise — moving
+   the caret or the selection leaves it alone. Cheap to read.
+
+   For work that has to follow the text but not the caret: remember the value
+   alongside the result and redo the work only when it differs. An application
+   driven by the update callback cannot otherwise tell an edit from a cursor
+   move, and re-running a whole-document pass (re-folding, re-indexing) on every
+   arrow key is only free while the document is small. */
+unsigned gtcaca_editor_get_edit_count(gtcaca_editor_widget_t *w);
 void gtcaca_editor_set_line_numbers(gtcaca_editor_widget_t *w, int on);
 void gtcaca_editor_set_tab_width(gtcaca_editor_widget_t *w, int n);
 int  gtcaca_editor_get_tab_width(gtcaca_editor_widget_t *w);
