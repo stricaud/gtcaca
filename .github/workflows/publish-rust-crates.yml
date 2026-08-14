@@ -1,6 +1,11 @@
 name: Publish Rust crates to crates.io
 
-# Trigger: push a tag like `rust-v0.0.1`
+# Trigger: any release tag (`v0.1.28`), or a Rust-only tag (`rust-v0.1.28`)
+# when you want to ship the crates without cutting a full release.
+#
+# The tag is the version: set-version.sh stamps it into Cargo.toml before
+# publishing, exactly like setuptools-scm does for the Python wheels. Nothing
+# needs bumping by hand.
 #
 # One-time crates.io setup:
 #   cargo login                              # on your machine
@@ -9,8 +14,12 @@ name: Publish Rust crates to crates.io
 
 on:
   push:
-    tags: ["rust-v*"]
+    tags: ["v*", "rust-v*"]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -30,34 +39,19 @@ jobs:
       - name: Vendor C sources
         run: bash src/bindings/rust/scripts/sync-sources.sh
 
+      - name: Stamp version from tag
+        run: bash src/bindings/rust/scripts/set-version.sh
+
       - name: Publish gtcaca-sys
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         working-directory: src/bindings/rust
         # Idempotent: skip if this exact version is already on crates.io, so a
         # re-run of a tag (or a bump where only one crate changed) doesn't fail.
-        run: |
-          set -e
-          VER=$(cargo metadata --no-deps --format-version 1 \
-                | python3 -c "import sys,json;print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='gtcaca-sys'))")
-          if curl -sf "https://crates.io/api/v1/crates/gtcaca-sys/$VER" >/dev/null; then
-            echo "gtcaca-sys $VER already published — skipping."
-          else
-            cargo publish -p gtcaca-sys --allow-dirty
-            echo "Waiting for crates.io to index gtcaca-sys $VER…"
-            sleep 30
-          fi
+        run: bash ../../../.github/scripts/publish-crate.sh gtcaca-sys 30
 
       - name: Publish gtcaca
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         working-directory: src/bindings/rust
-        run: |
-          set -e
-          VER=$(cargo metadata --no-deps --format-version 1 \
-                | python3 -c "import sys,json;print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name']=='gtcaca'))")
-          if curl -sf "https://crates.io/api/v1/crates/gtcaca/$VER" >/dev/null; then
-            echo "gtcaca $VER already published — skipping."
-          else
-            cargo publish -p gtcaca --allow-dirty
-          fi
+        run: bash ../../../.github/scripts/publish-crate.sh gtcaca

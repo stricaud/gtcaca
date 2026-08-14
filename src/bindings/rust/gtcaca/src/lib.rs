@@ -1282,12 +1282,12 @@ impl<'a> Hexview<'a> {
 
     /// Set the bytes shown.
     pub fn set_data(&self, data: &[u8]) {
-        unsafe { sys::gtcaca_hexview_set_data(self.ptr, data.as_ptr(), data.len() as c_int) };
+        unsafe { sys::gtcaca_hexview_set_data(self.ptr, data.as_ptr(), data.len() as c_long) };
     }
 
     /// Highlight a byte range (e.g. the selected field's bytes).
     pub fn set_highlight(&self, off: i32, len: i32) {
-        unsafe { sys::gtcaca_hexview_set_highlight(self.ptr, off, len) };
+        unsafe { sys::gtcaca_hexview_set_highlight(self.ptr, off as c_long, len as c_long) };
     }
 
     /// The current byte-cursor offset (moved by the arrow keys), or `None` if
