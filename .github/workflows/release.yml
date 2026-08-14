@@ -108,4 +108,9 @@ jobs:
           path: dist
           pattern: "*"
           merge-multiple: true   # collect all wheels + the sdist into dist/
+      # Idempotent: PyPI forbids re-uploading a filename, so a re-run of a tag
+      # (or a rebuild after one matrix leg was fixed) would otherwise 400 on the
+      # first already-uploaded wheel and never reach the missing ones.
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
