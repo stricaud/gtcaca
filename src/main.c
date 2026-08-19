@@ -246,6 +246,54 @@ void gtcaca_set_paste_cb(gtcaca_paste_cb_t cb, void *userdata)
 static char     *g_ob = NULL;        /* output buffer */
 static size_t    g_obcap = 0;
 
+/* ── terminal control channel ────────────────────────────────────────────────
+ * Mode-setting escapes (mouse reporting, bracketed paste, cursor restore) must
+ * reach the *terminal*, not stdout. Send them to stdout and any redirection —
+ * a wrapper piping the app through tee, `2>&1 | log`, a launcher that captures
+ * output — drops "\033[?1002h" into the pipe instead. The terminal is then
+ * never told to report mouse, so no press/drag/wheel report ever arrives and
+ * every mouse feature dies silently while the UI still paints normally.
+ * So: open the controlling terminal once and write control sequences there,
+ * falling back to fd 1 when there is none (or on Windows, where the console is
+ * stdout). Only control sequences go here — the truecolour presenter still
+ * paints on stdout, alongside libcaca's own output. */
+static int g_ctlfd = -2;             /* -2 = not opened yet */
+
+static int _ctl_fd(void)
+{
+  if (g_ctlfd == -2) {
+#ifdef _WIN32
+    g_ctlfd = 1;
+#else
+    g_ctlfd = open("/dev/tty", O_WRONLY);
+    if (g_ctlfd < 0) g_ctlfd = 1;    /* no controlling terminal: stdout is all we have */
+    else {
+      int fl = fcntl(g_ctlfd, F_GETFD);
+      if (fl >= 0) fcntl(g_ctlfd, F_SETFD, fl | FD_CLOEXEC);   /* don't leak into children */
+    }
+#endif
+  }
+  return g_ctlfd;
+}
+
+static void _ctl(const char *s)      /* write a control sequence to the terminal */
+{
+  size_t n = strlen(s), off = 0;
+  int fd = _ctl_fd();
+  while (off < n) {
+    ssize_t w = write(fd, s + off, n - off);
+    if (w > 0) { off += (size_t)w; continue; }
+    if (w < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+    break;                           /* a real error: give up */
+  }
+}
+
+static void _ctl_close(void)         /* teardown; a later _ctl() just reopens */
+{
+  if (g_ctlfd >= 0 && g_ctlfd != 1) close(g_ctlfd);
+  g_ctlfd = -2;
+}
+
 static int _present_enabled(void)
 {
   if (g_present == -2) {
@@ -264,10 +312,8 @@ static int _present_enabled(void)
 
 void gtcaca_present_shutdown(void)   /* restore the terminal on exit (libcaca handles the rest) */
 {
-  if (g_present == 1) {
-    const char *s = "\033[0m\033[?25h";   /* reset colours, show the cursor */
-    if (write(1, s, strlen(s)) < 0) { /* ignore */ }
-  }
+  if (g_present == 1)
+    _ctl("\033[0m\033[?25h");             /* reset colours, show the cursor */
 }
 
 /* Full teardown for applications that drive their own event loop (i.e. do NOT
@@ -277,14 +323,14 @@ void gtcaca_present_shutdown(void)   /* restore the terminal on exit (libcaca ha
 void gtcaca_shutdown(void)
 {
   g_mouse_sgr = 0;
-  fputs("\033[?1002l\033[?1006l", stdout);   /* disable SGR mouse reporting */
-  fflush(stdout);
+  _ctl("\033[?1002l\033[?1006l\033[?2004l"); /* disable SGR mouse + bracketed paste */
   gtcaca_present_shutdown();                 /* restore cursor/colours */
   if (gmo.dp) {
     caca_set_mouse(gmo.dp, 0);
     caca_free_display(gmo.dp);               /* leaves the alt screen / raw mode */
     gmo.dp = NULL;
   }
+  _ctl_close();
 }
 
 /* write the whole buffer, looping over short writes (a tty can accept fewer
@@ -394,8 +440,7 @@ void gtcaca_redraw(void)
      startup gets wiped when libcaca switches to the alt screen — which is exactly
      why the wheel stopped reaching us. Keeping it on every frame is cheap and
      robust. */
-  if (g_mouse_sgr) { const char *s = "\033[?1002h\033[?1006h\033[?2004h";
-                     if (write(1, s, strlen(s)) < 0) { /* ignore */ } }
+  if (g_mouse_sgr) _ctl("\033[?1002h\033[?1006h\033[?2004h");
 }
 
 int _gtcaca_widget_handle_key_press(gtcaca_widget_t *widget, int key)
@@ -1248,15 +1293,15 @@ void gtcaca_main(void)
      reports reach our parser (handles both wheel directions). This is exactly
      the setup that worked before the truecolour work. */
   caca_set_mouse(gmo.dp, 0);
-  fputs("\033[?1002h\033[?1006h\033[?2004h", stdout);   /* mouse + bracketed paste */
-  fflush(stdout);
-  g_mouse_sgr = 1;   /* keep it asserted after every redraw (alt-screen switch resets it) */
+  _ctl("\033[?1002h\033[?1006h\033[?2004h");   /* mouse + bracketed paste, to the terminal */
+  g_mouse_sgr = 1;  /* keep it asserted after every redraw (alt-screen switch resets it) */
 
   gtcaca_redraw();
 
   if (getenv("CCM_EVLOG"))
-    fprintf(stderr, "[ccm] present=%d truecolor=%d isatty(1)=%d TERM=%s COLORTERM=%s driver=%s\n",
-            g_present, g_truecolor, isatty(1), getenv("TERM") ? getenv("TERM") : "?",
+    fprintf(stderr, "[ccm] present=%d truecolor=%d isatty(1)=%d ctlfd=%d(%s) TERM=%s COLORTERM=%s driver=%s\n",
+            g_present, g_truecolor, isatty(1), _ctl_fd(),
+            _ctl_fd() == 1 ? "stdout" : "/dev/tty", getenv("TERM") ? getenv("TERM") : "?",
             getenv("COLORTERM") ? getenv("COLORTERM") : "?",
             caca_get_display_driver(gmo.dp) ? caca_get_display_driver(gmo.dp) : "?");
 
@@ -1318,14 +1363,14 @@ void gtcaca_main(void)
   }
 
   g_mouse_sgr = 0;
-  fputs("\033[?1002l\033[?1006l\033[?2004l", stdout);   /* restore the terminal's modes */
-  fflush(stdout);
+  _ctl("\033[?1002l\033[?1006l\033[?2004l");  /* restore the terminal's modes */
   gtcaca_present_shutdown();                  /* restore cursor if we took over output */
   if (gmo.dp) {
     caca_set_mouse(gmo.dp, 0);
     caca_free_display(gmo.dp);
     gmo.dp = NULL;   /* so a later gtcaca_shutdown() (e.g. the Rust Drop) doesn't double-free */
   }
+  _ctl_close();
 }
 
 unsigned int gtcaca_get_newid(void)
