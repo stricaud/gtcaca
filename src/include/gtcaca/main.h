@@ -77,6 +77,11 @@ int  gtcaca_get_double_click_time(void);
  * Register a callback to decide what a paste means in your app; without one the
  * text is inserted into the focused editor, if there is one. */
 typedef void (*gtcaca_paste_cb_t)(const char *text, int len, void *userdata);
+/* Does the Del key erase forward on this terminal? See main.c: 0x7f is Del
+   unless this tty's erase character is not 0x7f, in which case 0x7f is its
+   Backspace. Widgets use this to keep the two keys apart. */
+int gtcaca_del_deletes_forward(void);
+
 void gtcaca_set_paste_cb(gtcaca_paste_cb_t cb, void *userdata);
 
 #endif // _GTCACA_MAIN_H_

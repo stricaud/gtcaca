@@ -210,8 +210,12 @@ int _gtcaca_editor_autoc_key(gtcaca_editor_widget_t *w, int key)
   case CACA_KEY_CTRL_G:
     gtcaca_editor_autoc_cancel(w);
     return 1;
+  case CACA_KEY_DELETE:
+    /* Del erases forward, which is not "narrow the word being completed" —
+       let the editor handle it and leave the popup alone. */
+    if (gtcaca_del_deletes_forward()) return 0;
+    /* fall through: on a terminal where 0x7f is Backspace it narrows */
   case CACA_KEY_BACKSPACE:
-  case CACA_KEY_DELETE:                       /* 0x7f mac backspace */
     if (w->current_pos <= a->pos_start) {     /* deleting past the word start */
       if (a->cancel_at_start) gtcaca_editor_autoc_cancel(w);
       return 0;                               /* let the delete happen normally */

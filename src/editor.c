@@ -685,8 +685,11 @@ static int _editor_private_key(gtcaca_editor_widget_t *w, int key, void *userdat
   case CACA_KEY_PAGEDOWN:  gtcaca_editor_page_down(w);   break;
   case CACA_KEY_RETURN:
   case 10:                 gtcaca_editor_new_line(w);    break;
-  case CACA_KEY_BACKSPACE:                       /* 0x08 */
-  case CACA_KEY_DELETE:    gtcaca_editor_delete_back(w); break;  /* 0x7f (mac backspace) */
+  case CACA_KEY_BACKSPACE: gtcaca_editor_delete_back(w); break;   /* 0x08 */
+  case CACA_KEY_DELETE:                                           /* 0x7f: Del, usually */
+    if (gtcaca_del_deletes_forward()) gtcaca_editor_clear(w);      /* forward, or the selection */
+    else                              gtcaca_editor_delete_back(w);
+    break;
   case CACA_KEY_TAB:       gtcaca_editor_add_char(w, '\t'); break;
   default:
     if (GTCACA_KEY_IS_UNICODE(key))   gtcaca_editor_add_char_utf32(w, GTCACA_KEY_CODEPOINT(key));

@@ -10,6 +10,9 @@
 #include <fcntl.h>
 #include <errno.h>
 #ifndef _WIN32
+#include <termios.h>      /* VERASE — which key this tty calls erase */
+#endif
+#ifndef _WIN32
 #include <sys/time.h>      /* gettimeofday, for double-click timing */
 #endif
 
@@ -286,6 +289,32 @@ static void _ctl(const char *s)      /* write a control sequence to the terminal
     if (w < 0 && (errno == EINTR || errno == EAGAIN)) continue;
     break;                           /* a real error: give up */
   }
+}
+
+/* ── Del versus Backspace ───────────────────────────────────────────────────
+ * libcaca reports the Del key (ESC[3~, ncurses' KEY_DC) as CACA_KEY_DELETE —
+ * 0x7f, the very code a Backspace key produces when ncurses has not claimed
+ * it. Widgets that treat the two alike make Del erase backwards.
+ *
+ * ncurses claims the *tty's* erase character (termios VERASE, what `stty
+ * erase` sets) and hands it back as KEY_BACKSPACE — CACA_KEY_BACKSPACE, 0x08 —
+ * whatever terminfo's kbs says. So where the erase character is 0x7f, as it is
+ * nearly everywhere, a 0x7f still arriving can only be Del. The exception is a
+ * terminal whose erase character is something else (`stty erase ^H`): there a
+ * raw 0x7f was never claimed by ncurses and is that keyboard's Backspace, so it
+ * must keep erasing backwards. */
+int gtcaca_del_deletes_forward(void)
+{
+  static int cached = -1;
+  if (cached < 0) {
+#ifdef _WIN32
+    cached = 1;                      /* the console reports the two separately */
+#else
+    struct termios t;
+    cached = (tcgetattr(STDIN_FILENO, &t) == 0 && t.c_cc[VERASE] != 0x7f) ? 0 : 1;
+#endif
+  }
+  return cached;
 }
 
 static void _ctl_close(void)         /* teardown; a later _ctl() just reopens */
