@@ -1190,13 +1190,44 @@ static void _dispatch_key(int key, int *quit)
  * enable SGR mouse reporting ourselves, and parse the "ESC [ < b ; x ; y ; M|m"
  * reports out of the key stream. SGR gives exact coordinates and *both* wheel
  * directions. */
-static int _next_key(int *k)
+/* Escape sequences reach us one key event at a time, and over a network link
+ * the bytes of a single sequence straddle packets. One flat timeout for every
+ * byte is what made a paste over ssh spill "20~" before the text and "201~"
+ * after it: a late packet broke ESC [ 2 0 0 ~ apart, and the leftovers were
+ * dispatched as ordinary typing. So the wait depends on what is still in
+ * question:
+ *
+ *   ESC   — lone Esc, or the start of a sequence? The only genuinely ambiguous
+ *           moment, so it stays short: Esc and Meta must not feel laggy.
+ *           GTCACA_ESCDELAY (milliseconds) raises it for very slow links.
+ *   SEQ   — we have seen ESC [ and are committed. Nobody hand-types "[200~",
+ *           so waiting out a stalled packet costs nothing and loses nothing.
+ *   PASTE — inside a bracketed paste, where a pause means the network rather
+ *           than the end of the paste. Giving up early here is what let the
+ *           closing ESC [ 201~ be typed into the buffer. */
+#define SEQ_WAIT_US   400000
+#define PASTE_WAIT_US 1000000
+
+static int _esc_wait_us(void)
+{
+  static int cached = -1;
+  if (cached < 0) {
+    const char *e = getenv("GTCACA_ESCDELAY");
+    int ms = e ? atoi(e) : 0;
+    cached = (ms > 0 ? ms : 80) * 1000;
+  }
+  return cached;
+}
+
+static int _next_key_in(int *k, int usec)
 {
   caca_event_t e;
-  if (!caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &e, 30000)) return 0;  /* 30 ms */
+  if (!caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &e, usec)) return 0;
   *k = caca_get_event_key_ch(&e);
   return 1;
 }
+
+static int _next_key(int *k) { return _next_key_in(k, _esc_wait_us()); }
 
 static void _handle_sgr_mouse(int b, int x, int y, int press)
 {
@@ -1227,7 +1258,7 @@ static void _read_bracketed_paste(void)
   if (!buf) return;
 
   for (;;) {
-    if (!_next_key(&k)) break;                    /* terminal went quiet: take what we have */
+    if (!_next_key_in(&k, PASTE_WAIT_US)) break;  /* really gone quiet: take what we have */
     if (len + 8 > cap) {
       char *bigger = realloc(buf, cap * 2);
       if (!bigger) break;
@@ -1287,11 +1318,13 @@ static void _esc_or_sgr_mouse(int *quit)
   int k, b = 0, x = 0, y = 0, field = 0, fin = 0, i;
   if (!_next_key(&k)) { _dispatch_key(CACA_KEY_ESCAPE, quit); return; }
   if (k != '[')       { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key(k, quit); return; }
-  if (!_next_key(&k)) { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); return; }
+  /* Past this point the ESC is spoken for: only the rest of the sequence can
+     follow, so wait long enough for a packet that took its time. */
+  if (!_next_key_in(&k, SEQ_WAIT_US)) { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); return; }
   if (k == '2') {                                 /* maybe ESC [ 200~ : a paste */
     static const char START[] = "00~";
     for (i = 0; i < 3; i++) {
-      if (!_next_key(&k) || k != START[i]) {       /* not a paste after all */
+      if (!_next_key_in(&k, SEQ_WAIT_US) || k != START[i]) {   /* not a paste after all */
         _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); _dispatch_key('2', quit);
         { int j; for (j = 0; j < i; j++) _dispatch_key(START[j], quit); }
         if (i < 3) _dispatch_key(k, quit);
@@ -1303,7 +1336,7 @@ static void _esc_or_sgr_mouse(int *quit)
   }
   if (k != '<')       { _dispatch_key(CACA_KEY_ESCAPE, quit); _dispatch_key('[', quit); _dispatch_key(k, quit); return; }
   for (i = 0; i < 32; i++) {
-    if (!_next_key(&k)) return;                   /* truncated report: drop it */
+    if (!_next_key_in(&k, SEQ_WAIT_US)) return;   /* truncated report: drop it */
     if      (k >= '0' && k <= '9') { if (field == 0) b = b*10 + (k-'0'); else if (field == 1) x = x*10 + (k-'0'); else y = y*10 + (k-'0'); }
     else if (k == ';')             field++;
     else if (k == 'M' || k == 'm') { fin = k; break; }
