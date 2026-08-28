@@ -126,6 +126,82 @@ const char *gtcaca_editor_text(gtcaca_editor_widget_t *w)
   return w->text ? w->text : "";
 }
 
+/* ── views onto one document ────────────────────────────────────────────────
+ * A view shares the rope and the undo history and keeps its own caret and
+ * scroll. Everything that is really a property of the *document* rather than
+ * of the view is therefore mirrored onto the peers whenever it changes: the
+ * length, the modified flag, and the undo stacks — whose arrays are realloc'd
+ * as they grow, so a peer holding yesterday's pointer would be reading freed
+ * memory. Each view keeps its own flat copy and its own style array, which is
+ * why they are only marked stale here rather than shared.
+ *
+ * All of this is a no-op for an editor with no views: its peer ring is itself. */
+static void _peers_sync(gtcaca_editor_widget_t *w)
+{
+  gtcaca_editor_widget_t *p;
+  for (p = w->peer; p && p != w; p = p->peer) {
+    p->rope = w->rope;
+    p->length = w->length;
+    p->modified = w->modified;
+    p->edit_count = w->edit_count;
+    p->line_count_cache = w->line_count_cache;
+    p->line_count_valid = w->line_count_valid;
+    p->flat_valid = 0;                 /* each view materialises its own copy */
+    p->colorize_dirty = 1;
+    p->fold_dirty = 1;
+    p->undo = w->undo; p->undo_count = w->undo_count; p->undo_cap = w->undo_cap;
+    p->redo = w->redo; p->redo_count = w->redo_count; p->redo_cap = w->redo_cap;
+    p->undo_group_depth = w->undo_group_depth;
+    p->undo_group_id    = w->undo_group_id;
+    p->undo_seq         = w->undo_seq;
+  }
+}
+
+/* An insert through one view moves the others' carets the way an Emacs marker
+   moves: a caret past the edit travels with the text, one sitting exactly where
+   the text lands stays put. A view scrolled below the edit keeps looking at the
+   same lines, so its first visible line follows the newlines added above it. */
+static void _peers_after_insert(gtcaca_editor_widget_t *w, int pos, const char *s, int len)
+{
+  gtcaca_editor_widget_t *p;
+  int nl = 0, i, eline = -1;
+  if (w->peer == w) return;
+  for (i = 0; i < len; i++) if (s[i] == '\n') nl++;
+  for (p = w->peer; p && p != w; p = p->peer) {
+    if (p->current_pos > pos) p->current_pos += len;
+    if (p->anchor      > pos) p->anchor      += len;
+    if (nl) {
+      if (eline < 0) eline = gtcaca_editor_line_from_position(w, pos);
+      if (eline < p->first_visible_line) p->first_visible_line += nl;
+    }
+    p->goal_col = -1;
+  }
+}
+
+/* The mirror of the above. `eline`/`nl` are the first line of the cut and how
+   many line breaks it took with it, both measured before the text went. */
+static void _peers_after_delete(gtcaca_editor_widget_t *w, int pos, int len, int eline, int nl)
+{
+  gtcaca_editor_widget_t *p;
+  if (w->peer == w) return;
+  for (p = w->peer; p && p != w; p = p->peer) {
+    if (p->current_pos > pos + len) p->current_pos -= len;
+    else if (p->current_pos > pos)  p->current_pos = pos;
+    if (p->anchor > pos + len)      p->anchor -= len;
+    else if (p->anchor > pos)       p->anchor = pos;
+    if (nl) {
+      if (eline + nl <= p->first_visible_line) p->first_visible_line -= nl;
+      else if (eline < p->first_visible_line)  p->first_visible_line = eline;
+    }
+    p->goal_col = -1;
+  }
+}
+
+int gtcaca_editor_has_views(gtcaca_editor_widget_t *w)
+{
+  return w && w->peer && w->peer != w;
+}
+
 /* Every edit goes through here: the rope changes, the flat copy is dropped. */
 static void _touched(gtcaca_editor_widget_t *w)
 {
@@ -135,6 +211,7 @@ static void _touched(gtcaca_editor_widget_t *w)
   w->fold_dirty = 1;
   w->line_count_valid = 0;
   w->edit_count++;
+  _peers_sync(w);
 }
 
 /* ── raw buffer ops (no undo, no caret adjust) ─────────────────────────────── */
@@ -145,15 +222,22 @@ static void _raw_insert(gtcaca_editor_widget_t *w, int pos, const char *s, int l
   pos = _clampi(pos, 0, w->length);
   gtcaca_rope_insert(w->rope, pos, s, len);
   _touched(w);
+  _peers_after_insert(w, pos, s, len);
 }
 
 static void _raw_delete(gtcaca_editor_widget_t *w, int pos, int len)
 {
+  int eline = 0, nl = 0;
   if (len <= 0) return;
   pos = _clampi(pos, 0, w->length);
   if (pos + len > w->length) len = w->length - pos;
+  if (w->peer != w) {                  /* the line span has to be read first */
+    eline = gtcaca_editor_line_from_position(w, pos);
+    nl    = gtcaca_editor_line_from_position(w, pos + len) - eline;
+  }
   gtcaca_rope_delete(w->rope, pos, len);
   _touched(w);
+  _peers_after_delete(w, pos, len, eline, nl);
 }
 
 /* ── undo / redo stacks ────────────────────────────────────────────────────── */
@@ -194,10 +278,12 @@ void gtcaca_editor_begin_undo_action(gtcaca_editor_widget_t *w)
 {
   if (w->undo_group_depth == 0) w->undo_group_id = ++w->undo_seq;
   w->undo_group_depth++;
+  _peers_sync(w);
 }
 void gtcaca_editor_end_undo_action(gtcaca_editor_widget_t *w)
 {
   if (w->undo_group_depth > 0) w->undo_group_depth--;
+  _peers_sync(w);
 }
 
 /* ── caret adjustment after edits ──────────────────────────────────────────── */
@@ -228,6 +314,7 @@ static void _insert_len(gtcaca_editor_widget_t *w, int pos, const char *s, int l
   _adjust_after_insert(w, pos, len);
   w->modified = 1;
   w->goal_col = -1;
+  _peers_sync(w);            /* the push above may have moved the undo array */
 }
 
 void gtcaca_editor_insert_text(gtcaca_editor_widget_t *w, int pos, const char *s)
@@ -253,6 +340,7 @@ void gtcaca_editor_delete_range(gtcaca_editor_widget_t *w, int pos, int len)
   _adjust_after_delete(w, pos, len);
   w->modified = 1;
   w->goal_col = -1;
+  _peers_sync(w);
 }
 
 /* ── line / column geometry ────────────────────────────────────────────────── */
@@ -569,6 +657,7 @@ void gtcaca_editor_undo(gtcaca_editor_widget_t *w)
   } while (group != 0 && w->undo_count > 0 && w->undo[w->undo_count - 1].group == group);
   w->modified = 1;
   w->goal_col = -1;
+  _peers_sync(w);
 }
 
 void gtcaca_editor_redo(gtcaca_editor_widget_t *w)
@@ -590,6 +679,7 @@ void gtcaca_editor_redo(gtcaca_editor_widget_t *w)
   } while (group != 0 && w->redo_count > 0 && w->redo[w->redo_count - 1].group == group);
   w->modified = 1;
   w->goal_col = -1;
+  _peers_sync(w);
 }
 
 int  gtcaca_editor_can_undo(gtcaca_editor_widget_t *w) { return w->undo_count > 0; }
@@ -599,6 +689,7 @@ void gtcaca_editor_empty_undo_buffer(gtcaca_editor_widget_t *w)
 {
   _stack_clear(&w->undo, &w->undo_count, &w->undo_cap);
   _stack_clear(&w->redo, &w->redo_count, &w->redo_cap);
+  _peers_sync(w);
 }
 
 /* ── whole-document text & state ───────────────────────────────────────────── */
@@ -622,6 +713,18 @@ void gtcaca_editor_set_text(gtcaca_editor_widget_t *w, const char *text)
   gtcaca_editor_annotation_clear_all(w);
   w->lines_meta_len = 0;   /* metadata is rebuilt for the new document */
   w->fold_dirty = 1;
+  {                        /* the other views are looking at a document that is
+                              no longer there: send them back to the top */
+    gtcaca_editor_widget_t *p;
+    for (p = w->peer; p && p != w; p = p->peer) {
+      p->current_pos = p->anchor = 0;
+      p->first_visible_line = p->x_offset = 0;
+      p->goal_col = -1;
+      p->lines_meta_len = 0;
+      gtcaca_editor_autoc_cancel(p);
+    }
+  }
+  _peers_sync(w);
 }
 
 int gtcaca_editor_get_text(gtcaca_editor_widget_t *w, char *buf, int len)
@@ -648,7 +751,7 @@ char gtcaca_editor_get_char_at(gtcaca_editor_widget_t *w, int pos)
   return gtcaca_rope_at(w->rope, pos);
 }
 
-void gtcaca_editor_set_save_point(gtcaca_editor_widget_t *w) { w->modified = 0; }
+void gtcaca_editor_set_save_point(gtcaca_editor_widget_t *w) { w->modified = 0; _peers_sync(w); }
 unsigned gtcaca_editor_get_edit_count(gtcaca_editor_widget_t *w) { return w ? w->edit_count : 0u; }
 
 int  gtcaca_editor_get_modify(gtcaca_editor_widget_t *w)     { return w->modified; }
@@ -870,24 +973,102 @@ gtcaca_editor_widget_t *gtcaca_editor_new(gtcaca_widget_t *parent, int x, int y,
   w->lines_meta_len = 0;
   w->fold_dirty = 1;
 
+  /* No views yet: the ring is the widget itself, so every peer walk in this
+     file is an empty loop until gtcaca_editor_new_view links one in. */
+  w->peer = w;
+  w->doc_owner = 1;
+
   CDL_APPEND(gmo.widgets_list, GTCACA_WIDGET(w));
   return w;
 }
 
+gtcaca_editor_widget_t *gtcaca_editor_new_view(gtcaca_editor_widget_t *src, gtcaca_widget_t *parent,
+                                               int x, int y, int width, int height)
+{
+  gtcaca_editor_widget_t *v;
+  if (!src) return NULL;
+  v = gtcaca_editor_new(parent, x, y, width, height);
+  if (!v) return NULL;
+
+  /* Share the document. The rope the constructor just made is dropped for
+     src's; the flat copy and the style array stay the view's own, marked stale
+     so they are built the first time this view needs them. */
+  gtcaca_rope_free(v->rope);
+  v->rope = src->rope;
+  v->doc_owner = 0;
+  v->peer = src->peer; src->peer = v;      /* link into the ring */
+
+  /* Look where src is looking, which is what makes a fresh split show the same
+     place in the file rather than the top of it. */
+  v->current_pos = src->current_pos;
+  v->anchor = src->anchor;
+  v->first_visible_line = src->first_visible_line;
+  v->x_offset = src->x_offset;
+  v->goal_col = -1;
+
+  /* Same language, same colours, same display options: a view of a file should
+     not look like a different file. */
+  v->langcfg = src->langcfg;
+  v->grammar = src->grammar;
+  v->colorize_enabled = src->colorize_enabled;
+  v->json_mode = src->json_mode;
+  memcpy(v->style_table, src->style_table, sizeof v->style_table);
+  v->sel_set = src->sel_set; v->sel_fore = src->sel_fore; v->sel_back = src->sel_back;
+  v->tab_width = src->tab_width;
+  v->show_line_numbers = src->show_line_numbers;
+  v->show_fold_margin = src->show_fold_margin;
+  v->annotation_visible = src->annotation_visible;
+  v->wrap = src->wrap;
+  v->read_only = src->read_only;
+  v->overtype = src->overtype;
+  v->view_ws = src->view_ws;
+  v->caret_line_visible = src->caret_line_visible;
+  v->caret_line_back_set = src->caret_line_back_set;
+  v->caret_line_back = src->caret_line_back;
+  v->bg12_set = src->bg12_set; v->bg12 = src->bg12;
+  v->fg12_set = src->fg12_set; v->fg12 = src->fg12;
+  v->edge_column = src->edge_column;
+  v->edge_colour = src->edge_colour;
+  v->color_focus_fg = src->color_focus_fg; v->color_focus_bg = src->color_focus_bg;
+  v->color_nonfocus_fg = src->color_nonfocus_fg; v->color_nonfocus_bg = src->color_nonfocus_bg;
+
+  _peers_sync(src);                        /* hand it the shared document state */
+  return v;
+}
+
 void gtcaca_editor_free(gtcaca_editor_widget_t *w)
 {
+  gtcaca_editor_widget_t *last = NULL;
   if (!w) return;
-  gtcaca_editor_empty_undo_buffer(w);
+
+  /* Unlink from the peer ring first. While other views are left the document
+     is theirs — the undo history and the rope must survive this free, and
+     ownership moves to a survivor if it was this one's. */
+  if (w->peer && w->peer != w) {
+    for (last = w->peer; last->peer != w; last = last->peer) ;
+    last->peer = w->peer;
+    if (w->doc_owner) w->peer->doc_owner = 1;
+    w->peer = w;
+    w->doc_owner = 0;
+  }
+
+  /* Out of the draw list before the memory goes: the next widget allocated
+     would otherwise walk this one while linking itself in. */
+  CDL_DELETE(gmo.widgets_list, GTCACA_WIDGET(w));
+
   gtcaca_editor_autoc_cancel(w);
   free(w->autoc.fillups);
   free(w->autoc.stops);
   gtcaca_editor_annotation_clear_all(w);
   free(w->lines_meta);
-  free(w->undo);
-  free(w->redo);
   free(w->styles);
-  gtcaca_rope_free(w->rope);
-  free(w->text);
+  free(w->text);                      /* the flat copy is this view's own */
+  if (w->doc_owner) {                 /* the last one out takes the document */
+    gtcaca_editor_empty_undo_buffer(w);
+    free(w->undo);
+    free(w->redo);
+    gtcaca_rope_free(w->rope);
+  }
   free(w);
 }
 

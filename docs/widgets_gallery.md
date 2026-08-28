@@ -213,7 +213,7 @@ A left-rooted horizontal tree joined by box-drawing connectors; any node folds
 A full text-editing widget: document model, caret/selection, undo, soft wrap,
 syntax colourization, code folding and annotations. Powers `cacamacs`.
 ![editor](images/editor.png)
-`gtcaca_editor_new(parent, x, y, width, height)` · `gtcaca_editor_set_text()` — full reference in [editor.md](editor.md)
+`gtcaca_editor_new(parent, x, y, width, height)` · `gtcaca_editor_set_text()` · `gtcaca_editor_new_view()` for a second window onto one document — full reference in [editor.md](editor.md)
 
 ### Dialog (modal)
 A centred message/confirm/choice box. Left/Right/Tab move, Enter chooses, Esc cancels.

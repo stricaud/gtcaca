@@ -247,10 +247,30 @@ struct _gtcaca_editor_widget_t {
   int                   line_count_cache;     /* cached newline count + 1 … */
   int                   line_count_valid;     /* … valid until the next text edit */
   unsigned              edit_count;           /* bumped by every text change */
+
+  /* Views onto one document (see gtcaca_editor_new_view). `peer` is a circular
+     list of the widgets sharing this document and points at the widget itself
+     when it has none, so walking the peers of a lone editor does nothing. The
+     rope and the undo history are the shared parts; the caret, the selection
+     and the scroll position belong to each view. `doc_owner` marks the widget
+     that frees the shared parts — it moves to a survivor if that one goes
+     first. */
+  struct _gtcaca_editor_widget_t *peer;
+  int                   doc_owner;
 };
 
 /* ── Construction ──────────────────────────────────────────────────────────── */
 gtcaca_editor_widget_t *gtcaca_editor_new(gtcaca_widget_t *parent, int x, int y, int width, int height);
+/* A second window onto the document `src` is showing — what Emacs does when
+   C-x 2 splits a window. The text, the undo history and the modified flag are
+   shared, so an edit made through one view is immediately the other's; the
+   caret, the selection and the scroll position are the view's own, and start
+   where `src` is looking. Language, styles and display options are copied.
+   Free the views in any order: the document goes with the last one. */
+gtcaca_editor_widget_t *gtcaca_editor_new_view(gtcaca_editor_widget_t *src, gtcaca_widget_t *parent,
+                                               int x, int y, int width, int height);
+/* Is this widget sharing its document with another view? */
+int  gtcaca_editor_has_views(gtcaca_editor_widget_t *w);
 void gtcaca_editor_free(gtcaca_editor_widget_t *w);
 void gtcaca_editor_draw(gtcaca_editor_widget_t *w);
 int  gtcaca_editor_key_cb_register(gtcaca_editor_widget_t *w, gtcaca_editor_key_cb_t cb, void *userdata);

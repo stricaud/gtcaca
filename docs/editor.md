@@ -54,6 +54,31 @@ gtcaca_editor_append_text(ed, "...", 3);
 gtcaca_editor_clear_all(ed);
 ```
 
+### Two windows onto one document
+
+`gtcaca_editor_new_view()` makes a second editor showing the document another
+one is showing — what Emacs does when `C-x 2` splits a window in two. The
+**text, the undo history and the modified flag are shared**; the **caret, the
+selection and the scroll position belong to each view**, and the new one starts
+where the source is looking. Language, styles and display options are copied.
+
+```c
+gtcaca_editor_widget_t *below = gtcaca_editor_new_view(ed, GTCACA_WIDGET(win2), x, y, w, h);
+
+gtcaca_editor_insert_text(ed, 0, "hi\n");        /* `below` shows it at once   */
+gtcaca_editor_undo(below);                       /* and can take it back again */
+gtcaca_editor_has_views(ed);                     /* 1 while another view lives  */
+```
+
+An edit through one view carries the others' carets with it the way a marker
+moves in Emacs: a caret past the edit travels with the text, one sitting exactly
+where an insertion lands stays put, and a view scrolled below the edit keeps
+looking at the same lines.
+
+Free the views in **any order** — each frees its own caret, styles and flat
+copy, and the last one out frees the document. An editor with no views pays
+nothing for any of this.
+
 Line/column queries mirror the usual editor-component API:
 
 ```c
