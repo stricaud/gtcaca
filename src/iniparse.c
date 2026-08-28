@@ -171,8 +171,12 @@ ini_t *ini_parse_buffer(char *buf, long size)
 	tmppos = 0;
 	//	printf("path:[%s]\n", keybuf);
 	//	printf("++=[%c]\n", *(s+1));
-	if (*(buf+1) == ' ') {
-	  buf++; /* skip the leading space after '=' */
+	if (pos + 1 < size && *(buf + 1) == ' ') {
+	  /* Skip the leading space after '='. `pos` steps with `buf` or the two
+	     drift apart by one for every pair in the file, and the `pos < size`
+	     loop then reads that many bytes past the end of the buffer — the
+	     mirror of the miscount noted in the UNKNOWN case above. */
+	  buf++; pos++;
 	}
 	reader = READ_VALUE;
 	break;
@@ -234,13 +238,19 @@ ini_t *ini_parse_file(char *filename)
   if (size < 0) { return NULL; }
 
   fp = fopen(filename, "r");
+  if (!fp) { return NULL; }
   buffer = malloc(size + 1);
   if (!buffer) {
     fprintf(stderr, "Error allocating our buffer!\n");
+    fclose(fp);
     return NULL;
   }
-  ret = fread(buffer, (size_t)size, 1, fp);
-  //  printf("buffer:%s\n", buffer);  
+  /* Read what is really there rather than trusting the stat: a short read left
+     the tail of the buffer uninitialised, and the parser reads one past its
+     last byte when it looks for the space after an '='. */
+  ret = fread(buffer, 1, (size_t)size, fp);
+  size = (long)ret;
+  buffer[size] = '\0';
   fclose(fp);
 
   ini = ini_parse_buffer(buffer, size);
