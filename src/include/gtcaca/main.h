@@ -67,6 +67,26 @@ int gtcaca_terminal_supports_blocks(void);
 void gtcaca_set_double_click_time(int ms);
 int  gtcaca_get_double_click_time(void);
 
+/* ── mouse modifiers ────────────────────────────────────────────────────────
+ * Which of Shift/Alt/Ctrl was down for the mouse event being delivered right
+ * now. An SGR report carries them in its button byte; gtcaca strips them out
+ * before working out which button was pressed, and keeps them here so a mouse
+ * callback can tell a plain click from a Shift-click (extend a selection),
+ * a Ctrl-click, and so on.
+ *
+ * Call it from inside a gtcaca_custom_mouse_cb_t: the value belongs to the
+ * event in flight and is cleared once the callback returns. Outside one it
+ * reads 0. It stays 0 on terminals that keep modified clicks for themselves
+ * (xterm and most of its imitators use Shift-click for their own selection
+ * when mouse reporting is on), so treat a modifier as a shortcut for something
+ * the user can also do another way rather than the only route to it. */
+enum {
+  GTCACA_MOD_SHIFT = 0x04,
+  GTCACA_MOD_ALT   = 0x08,   /* Meta/Option */
+  GTCACA_MOD_CTRL  = 0x10
+};
+int gtcaca_mouse_modifiers(void);
+
 /* ── pasting ────────────────────────────────────────────────────────────────
  * Terminals deliver a paste as plain keystrokes, so a 2000-line paste arrives
  * as 150,000 key events — and an editor that inserts one character at a time

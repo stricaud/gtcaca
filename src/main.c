@@ -238,6 +238,10 @@ void _gtcaca_widget_redraw(gtcaca_widget_t *widget)
 static int       g_present = -2;     /* -2 uninit, 0 = use libcaca, 1 = our renderer */
 static int       g_truecolor = 0;    /* 24-bit available (else 256-colour cube) */
 static int       g_mouse_sgr = 0;    /* re-assert SGR mouse on each redraw while the UI loop runs */
+/* Shift/Alt/Ctrl for the mouse event being dispatched, for
+   gtcaca_mouse_modifiers(). Set around a dispatch and cleared after it, so a
+   callback reads the modifiers of its own event and nothing else. */
+static int       g_mouse_mods = 0;
 static gtcaca_paste_cb_t g_paste_cb = NULL;
 static void             *g_paste_ud = NULL;
 
@@ -1231,6 +1235,10 @@ static int _next_key(int *k) { return _next_key_in(k, _esc_wait_us()); }
 
 static void _handle_sgr_mouse(int b, int x, int y, int press)
 {
+  /* Bits 2..4 of the button byte are Shift/Alt/Ctrl. They are not part of which
+     button was pressed, so they come out here and are published to the callback
+     through gtcaca_mouse_modifiers() for the duration of the dispatch. */
+  g_mouse_mods = b & (GTCACA_MOD_SHIFT | GTCACA_MOD_ALT | GTCACA_MOD_CTRL);
   if (b & 0x40) {                                /* wheel: 64 = up, 65 = down */
     _gtcaca_handle_mouse_press(x, y, (b & 1) ? 4 : 5);   /* down -> 4, up -> 5 */
     gtcaca_redraw();
@@ -1242,6 +1250,12 @@ static void _handle_sgr_mouse(int b, int x, int y, int press)
   } else {                                        /* button release */
     _gtcaca_handle_mouse_release(x, y);
   }
+  g_mouse_mods = 0;
+}
+
+int gtcaca_mouse_modifiers(void)
+{
+  return g_mouse_mods;
 }
 
 /* We just read an ESC. Peek ahead a few ms: if it begins an SGR mouse report,
