@@ -2,6 +2,7 @@
 #define _GTCACA_DIALOG_H_
 
 #include <stdint.h>
+#include <stddef.h>   /* size_t, for gtcaca_dialog_input */
 #include <gtcaca/main.h>
 #include <gtcaca/widget.h>
 
@@ -53,5 +54,12 @@ void gtcaca_dialog_free(gtcaca_dialog_widget_t *d);
 int  gtcaca_dialog_run(const char *title, const char *message, const char **buttons, int nbuttons);
 int  gtcaca_dialog_confirm(const char *title, const char *message);  /* OK/Cancel -> 1/0 */
 void gtcaca_dialog_message(const char *title, const char *message);  /* single OK */
+
+/* Ask for one line of text. The box carries a message, an entry pre-filled with
+   `initial` (may be NULL) and OK/Cancel; `secret` masks the typing. Returns 1
+   with the answer in `out`, or 0 if it was cancelled — `out` untouched then, so
+   a caller can leave whatever default it had in place. */
+int  gtcaca_dialog_input(const char *title, const char *message, const char *initial,
+                         int secret, char *out, size_t outsz);
 
 #endif /* _GTCACA_DIALOG_H_ */

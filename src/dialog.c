@@ -5,6 +5,7 @@
 #include <caca.h>
 
 #include <gtcaca/dialog.h>
+#include <gtcaca/entry.h>
 #include <gtcaca/main.h>
 
 gtcaca_dialog_widget_t *gtcaca_dialog_new(gtcaca_widget_t *parent, int x, int y, int width, int height)
@@ -171,4 +172,77 @@ void gtcaca_dialog_message(const char *title, const char *message)
 {
   const char *b[] = { "OK" };
   gtcaca_dialog_run(title, message, b, 1);
+}
+
+/* ── a dialog that asks for one line of text ────────────────────────────────
+ *
+ * gtcaca_dialog_run only ever answers "which button", which is the wrong shape
+ * for a question like "which key?". This is the same box with an entry on the
+ * line under the message: the entry keeps the focus so everything typed goes
+ * into it, Tab moves between OK and Cancel, Enter takes whichever is
+ * highlighted and Escape cancels outright.
+ *
+ * The entry is a widget in its own right and is appended to the widget list
+ * after the dialog, so gtcaca_redraw() paints it over the box rather than
+ * under it. */
+int gtcaca_dialog_input(const char *title, const char *message, const char *initial,
+                        int secret, char *out, size_t outsz)
+{
+  int cw = caca_get_canvas_width(gmo.cv), chh = caca_get_canvas_height(gmo.cv);
+  int lines, maxw, w, h, ew, res = 0;
+  gtcaca_dialog_widget_t *d;
+  gtcaca_entry_widget_t *e;
+  const char *btn[2] = { "OK", "Cancel" };
+  caca_event_t ev;
+
+  if (!out || outsz == 0) return 0;
+
+  measure(message ? message : "", &lines, &maxw);
+  ew = maxw > 44 ? maxw : 44;                    /* room for an email or a key id */
+  w = ew + 8;
+  if (title && (int)strlen(title) + 6 > w) w = (int)strlen(title) + 6;
+  if (w > cw - 2) w = cw - 2;
+  if (w < 24) w = 24;
+  h = lines + 5;                                 /* message, entry, gap, buttons */
+  if (h > chh - 2) h = chh - 2;
+  if (h < 7) h = 7;
+
+  d = gtcaca_dialog_new(NULL, (cw - w) / 2, (chh - h) / 2, w, h);
+  if (!d) return 0;
+  gtcaca_dialog_set(d, title, message, btn, 2);
+
+  e = gtcaca_entry_new(NULL, d->x + 2, d->y + 1 + lines, w - 4);
+  if (!e) { gtcaca_dialog_free(d); return 0; }
+  e->has_focus = 1;
+  gtcaca_entry_set_secret(e, secret ? 1 : 0);
+  if (initial && *initial) gtcaca_entry_set_text(e, initial);
+
+  for (;;) {
+    int key;
+    gtcaca_redraw();
+    if (!caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &ev, -1)) continue;
+    key = caca_get_event_key_ch(&ev);
+
+    if (key == CACA_KEY_ESCAPE || key == 7 /* C-g */) { res = 0; break; }
+    if (key == CACA_KEY_RETURN || key == 10) {
+      if (d->sel == 0) {                         /* OK */
+        snprintf(out, outsz, "%s", gtcaca_entry_get_text(e));
+        res = 1;
+      }
+      break;
+    }
+    if (key == CACA_KEY_TAB) { d->sel = (d->sel + 1) % 2; continue; }
+    /* everything else is typing: the entry owns Left/Right/Home/End too, so
+       they edit the answer rather than moving between the buttons. */
+    e->private_key_cb(e, key, NULL);
+  }
+
+  /* Wipe before the widget is freed: a masked answer must not be left lying in
+     a freed allocation for the next thing to reuse. */
+  if (secret) memset(e->text, 0, sizeof e->text);
+  CDL_DELETE(gmo.widgets_list, GTCACA_WIDGET(e));
+  free(e);
+  gtcaca_dialog_free(d);
+  gtcaca_redraw();
+  return res;
 }
