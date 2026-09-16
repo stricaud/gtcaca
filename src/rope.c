@@ -342,21 +342,62 @@ int gtcaca_rope_line_start(const gtcaca_rope_t *r, int line)
   return off + n->len;
 }
 
+/* Leaf-wise scan for `byte`.
+ *
+ * These used to call gtcaca_rope_at() once per byte, on the reasoning that a
+ * caller only ever scans a line. A line can be the whole file — one minified
+ * JSON object, one log record — and at a tree descent per byte that is
+ * O(n log n) to cross, which is what made moving the caret on such a file take
+ * a tenth of a second per keystroke. Walking the leaves lets memchr do the
+ * work a chunk at a time instead. */
+static int leaf_find(const rnode_t *n, int pos, int from, char byte, int *out)
+{
+  if (!n) return 0;
+  if (is_leaf(n)) {
+    int s = from > pos ? from - pos : 0;
+    const char *hit;
+    if (s >= n->len) return 0;
+    hit = memchr(n->buf + s, byte, (size_t)(n->len - s));
+    if (!hit) return 0;
+    *out = pos + (int)(hit - n->buf);
+    return 1;
+  }
+  {
+    int lb = nbytes(n->left);
+    if (from < pos + lb && leaf_find(n->left, pos, from, byte, out)) return 1;
+    return leaf_find(n->right, pos + lb, from, byte, out);
+  }
+}
+
+static int leaf_rfind(const rnode_t *n, int pos, int upto, char byte, int *out)
+{
+  if (!n || upto <= pos) return 0;
+  if (is_leaf(n)) {
+    int e = upto - pos, i;
+    if (e > n->len) e = n->len;
+    for (i = e - 1; i >= 0; i--)
+      if (n->buf[i] == byte) { *out = pos + i; return 1; }
+    return 0;
+  }
+  {
+    int lb = nbytes(n->left);
+    if (leaf_rfind(n->right, pos + lb, upto, byte, out)) return 1;
+    return leaf_rfind(n->left, pos, upto, byte, out);
+  }
+}
+
 int gtcaca_rope_find(const gtcaca_rope_t *r, int from, char byte)
 {
-  int total = gtcaca_rope_len(r), i;
+  int total = gtcaca_rope_len(r), hit = 0;
   if (from < 0) from = 0;
-  for (i = from; i < total; i++)                 /* chunk-wise would be faster;
-                                                    callers scan a line at most */
-    if (gtcaca_rope_at(r, i) == byte) return i;
-  return total;
+  if (!r || from >= total) return total;
+  return leaf_find(r->root, 0, from, byte, &hit) ? hit : total;
 }
 
 int gtcaca_rope_rfind(const gtcaca_rope_t *r, int from, char byte)
 {
-  int i, total = gtcaca_rope_len(r);
+  int total = gtcaca_rope_len(r), hit = 0;
   if (from > total) from = total;
-  for (i = from - 1; i >= 0; i--)
-    if (gtcaca_rope_at(r, i) == byte) return i;
-  return -1;
+  if (!r || from <= 0) return -1;
+  return leaf_rfind(r->root, 0, from, byte, &hit) ? hit : -1;
 }

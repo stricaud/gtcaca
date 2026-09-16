@@ -12,6 +12,14 @@
 
 static int _clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+/* How much of the rope to pull into a stack buffer at a time when a scan has to
+   cross a whole line. A sliding window, not a limit: the scan refills it as it
+   advances, so a line of any length is read in full — it only decides how often
+   the walk drops back into the tree. Big enough that the descent is amortised
+   to nothing, small enough to sit on the stack of a function called for every
+   visible line of every draw. */
+#define GTCACA_ROPE_BLOCK 4096
+
 /* ── UTF-8 / character-width helpers ───────────────────────────────────────────
    The buffer stays a byte array (w->text); these let the rest of the widget
    step, delete, measure and draw whole UTF-8 characters instead of bytes.     */
@@ -372,19 +380,66 @@ int gtcaca_editor_position_from_line(gtcaca_editor_widget_t *w, int line)
 
 int gtcaca_editor_get_line_end_position(gtcaca_editor_widget_t *w, int line)
 {
-  int p = gtcaca_editor_position_from_line(w, line);
-  return gtcaca_rope_find(w->rope, p, '\n');
+  /* The end of line N is the byte before the start of line N+1 — and the rope
+     caches a newline count per node, so that start is a tree descent rather
+     than a scan. Searching forward for the '\n' instead meant every caller
+     (the draw loop runs one per visible line) walked the whole line, which on
+     a file that is one long line is the whole file. */
+  if (line < 0) line = 0;
+  if (line >= gtcaca_rope_lines(w->rope)) return w->length;   /* no '\n' after it */
+  return gtcaca_rope_line_start(w->rope, line + 1) - 1;
 }
 
-/* visual column of byte position pos within its line, expanding tabs */
+/* visual column of byte position pos within its line, expanding tabs
+ *
+ * Inherently a walk from the start of the line, so the only thing to get right
+ * is the cost of a byte. Reading them a block at a time turns a tree descent
+ * per byte into a memcpy per few thousand, which is what a line of a hundred
+ * kilobytes needs: this runs on every draw, for the caret and for the row
+ * count of every wrapped line. */
 static int _visual_col(gtcaca_editor_widget_t *w, int pos)
 {
   int start = gtcaca_editor_position_from_line(
                 w, gtcaca_editor_line_from_position(w, pos));
-  int i = start, col = 0;
+  char blk[GTCACA_ROPE_BLOCK];
+  int i = start, col = 0, have = 0, base = start;
+
   while (i < pos) {
-    if (gtcaca_rope_at(w->rope, i) == '\t') { col += w->tab_width - (col % w->tab_width); i++; }
-    else { col += _char_width_at(w, i); i += _char_len_at(w, i); }
+    unsigned char b;
+    int clen, k;
+    if (i < base || i >= base + have) {          /* refill around i */
+      base = i;
+      have = pos - i;
+      if (have > (int)sizeof blk) have = (int)sizeof blk;
+      have = gtcaca_rope_copy(w->rope, base, have, blk);
+      if (have <= 0) break;
+    }
+    b = (unsigned char)blk[i - base];
+    if (b == '\t') { col += w->tab_width - (col % w->tab_width); i++; continue; }
+    /* A character may straddle the block edge; _cp_at reads it from the rope,
+       which is correct at any position and rare enough not to matter. */
+    clen = _utf8_seq_len(b);
+    if (clen == 1) { col += _cp_width(b); i++; continue; }
+    if (i + clen > base + have || i + clen > pos) {
+      col += _char_width_at(w, i); i += _char_len_at(w, i); continue;
+    }
+    for (k = 1; k < clen; k++)
+      if (!_is_utf8_cont((unsigned char)blk[i - base + k])) break;
+    if (k < clen) {
+      /* Malformed: _char_len_at counts only the bytes actually present and
+         _cp_at falls back to the lead byte, and a truncated sequence has to
+         advance by exactly as many bytes as they say or the column drifts.
+         Rare enough to pay for the rope reads. */
+      col += _char_width_at(w, i); i += _char_len_at(w, i); continue;
+    }
+    {
+      size_t consumed = 0;
+      char seq[8];
+      memcpy(seq, blk + (i - base), (size_t)clen);
+      seq[clen] = '\0';
+      col += _cp_width(caca_utf8_to_utf32(seq, &consumed));
+      i += clen;
+    }
   }
   return col;
 }
@@ -1319,7 +1374,17 @@ void gtcaca_editor_draw(gtcaca_editor_widget_t *w)
     vcol = 0;
     pos = line_start;
     while (pos < line_end) {
-      unsigned char b = (unsigned char)gtcaca_rope_at(w->rope, pos);
+      unsigned char b;
+      /* Stop once the line has run past the window. Every cell after this one
+         is off-screen, so _cell_pos would reject it and the loop would go on
+         reading the rope for nothing — a hundred thousand times over on a file
+         that is one long line. What follows the loop is safe: the edge marker
+         only draws past the text, the rectangle's virtual space is already off
+         to the right, and an end-of-line caret this far out is not visible
+         either. */
+      if (w->wrap) { if (row + vcol / text_w >= text_h) break; }
+      else if (vcol >= w->x_offset + text_w) break;
+      b = (unsigned char)gtcaca_rope_at(w->rope, pos);
       int is_tab = (b == '\t');
       int clen, cwid, draw_cells, k;
       uint32_t cp;
