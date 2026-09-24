@@ -1223,11 +1223,18 @@ static int _esc_wait_us(void)
   return cached;
 }
 
+/* Same encoding the main loop uses: a printable non-ASCII key carries its
+   codepoint in the event's utf32 field (.ch is 0 there), so reading .ch alone
+   turned every accented letter into a 0. Inside a bracketed paste that 0 became
+   a NUL in the middle of the text, and the paste was cut short at the first
+   non-ASCII character. */
 static int _next_key_in(int *k, int usec)
 {
   caca_event_t e;
+  uint32_t u;
   if (!caca_get_event(gmo.dp, CACA_EVENT_KEY_PRESS, &e, usec)) return 0;
-  *k = caca_get_event_key_ch(&e);
+  u = caca_get_event_key_utf32(&e);
+  *k = (u >= 0x80) ? (int)(u | GTCACA_KEY_UNICODE) : caca_get_event_key_ch(&e);
   return 1;
 }
 
@@ -1273,7 +1280,7 @@ static void _read_bracketed_paste(void)
 
   for (;;) {
     if (!_next_key_in(&k, PASTE_WAIT_US)) break;  /* really gone quiet: take what we have */
-    if (len + 8 > cap) {
+    if (len + 16 > cap) {
       char *bigger = realloc(buf, cap * 2);
       if (!bigger) break;
       buf = bigger; cap *= 2;
@@ -1293,15 +1300,22 @@ static void _read_bracketed_paste(void)
       tail = 0;
     }
     if (k == '\r') k = '\n';                      /* terminals send CR for newlines */
-    if (k >= 0 && k < 0x80) buf[len++] = (char)k;
+    if (k > 0 && k < 0x80) buf[len++] = (char)k;
     else if (k > 0) {                             /* a non-ASCII codepoint: re-encode */
       uint32_t cp = (uint32_t)(k & ~GTCACA_KEY_UNICODE);
-      if (cp < 0x800)        { buf[len++] = (char)(0xc0 | (cp >> 6));
+      if (cp < 0x80)         { buf[len++] = (char)cp; }
+      else if (cp < 0x800)   { buf[len++] = (char)(0xc0 | (cp >> 6));
                                buf[len++] = (char)(0x80 | (cp & 0x3f)); }
       else if (cp < 0x10000) { buf[len++] = (char)(0xe0 | (cp >> 12));
                                buf[len++] = (char)(0x80 | ((cp >> 6) & 0x3f));
                                buf[len++] = (char)(0x80 | (cp & 0x3f)); }
+      else if (cp < 0x110000){ buf[len++] = (char)(0xf0 | (cp >> 18));
+                               buf[len++] = (char)(0x80 | ((cp >> 12) & 0x3f));
+                               buf[len++] = (char)(0x80 | ((cp >> 6) & 0x3f));
+                               buf[len++] = (char)(0x80 | (cp & 0x3f)); }
     }
+    /* k == 0 is not a character; letting it through would put a NUL in the
+       middle of the text, and every consumer stops at that. */
   }
   buf[len] = '\0';
 
