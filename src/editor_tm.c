@@ -28,6 +28,30 @@
 #define TM_MAX_GROUPS 32
 #define TM_MAX_STACK  64
 
+/* Longest line we will tokenize. Selecting the leftmost match re-searches every
+   pattern of the active context from each new position to end-of-line, so the
+   work on one line grows with its length squared — and a stock grammar like
+   VSCode's JavaScript one carries hundreds of patterns. A minified script or an
+   embedded blob ("var k='<57KB of hex>'") then wedges the editor for minutes
+   before the first frame is ever drawn. Past this width a line keeps the colour
+   of the enclosing context and is not tokenized, which is what VSCode does too
+   (`editor.maxTokenizationLineLength`, same default). Override with
+   $GTCACA_MAX_TOKENIZE_LINE; 0 or less means no limit. */
+#define TM_MAX_LINE   20000
+
+static int tm_max_line(void)
+{
+  static int cached = -1;
+  if (cached < 0) {
+    const char *e = getenv("GTCACA_MAX_TOKENIZE_LINE");
+    char *end;
+    long v;
+    cached = TM_MAX_LINE;
+    if (e && *e) { v = strtol(e, &end, 10); if (!*end) cached = v > 0 ? (int)v : 0; }
+  }
+  return cached;
+}
+
 enum { RULE_MATCH, RULE_BEGINEND, RULE_INCLUDE };
 
 typedef struct { int group; int style; } tm_cap;
@@ -491,6 +515,7 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
   const char *t = gtcaca_editor_text(w);
   int len = w->length, line, line_count;
   /* context stack: rule index of the active begin/end (-1 = root) + its style */
+  int max_line = tm_max_line();
   int stack[TM_MAX_STACK]; int sp = 0;
   int style_stack[TM_MAX_STACK];
   regex_t *end_stack[TM_MAX_STACK];   /* per-context end regex when it has back-refs (else NULL) */
@@ -516,6 +541,10 @@ void _gtcaca_editor_colorize_tm(gtcaca_editor_widget_t *w)
   for (line = 0; line < line_count; line++) {
     int le = ls;
     while (le < len && t[le] != '\n') le++;
+    /* Too wide to tokenize: paint it in the enclosing context's colour and move
+       on, leaving the stack untouched so a multi-line string or comment running
+       through this line still closes on the line that ends it. */
+    if (max_line > 0 && le - ls > max_line) { _fill(w, ls, le, style_stack[sp]); ls = le + 1; continue; }
     int pos = ls;
     int prev_pos = -1, stall = 0;   /* break any zero-width match loop */
 
